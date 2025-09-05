@@ -1,0 +1,17 @@
+:root{ --brand:#0ea5e9; --bg:#f8fafc; --card:#ffffff; --ink:#0f172a }
+*{ box-sizing:border-box }
+html,body,#root{ height:100% }
+body{ margin:0; font-family:system-ui,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink) }
+.header{ position:sticky; top:0; background:var(--card); padding:12px 16px; border-bottom:1px solid #e5e7eb }
+.container{ max-width:980px; margin:0 auto; padding:16px }
+.card{ background:var(--card); padding:16px; border-radius:12px; box-shadow:0 6px 20px rgba(2,6,23,.06) }
+.grid{ display:grid; gap:12px }
+.btn{ display:inline-block; padding:10px 14px; border-radius:10px; background:var(--brand); color:white; border:none; cursor:pointer; font-weight:600 }
+.input{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid #cbd5e1 }
+.row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+.page-title{ margin:8px 0 16px; font-size:24px }
+.nav{ display:flex; gap:8px; flex-wrap:wrap }
+.nav a{ text-decoration:none; background:#e2e8f0; padding:8px 10px; border-radius:10px; color:#0f172a }
+.nav a.active{ background:var(--brand); color:white }
+.small{ font-size:12px; opacity:.7 }
+.result{ font-size:18px; font-weight:700 }
