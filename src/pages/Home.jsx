@@ -59,11 +59,12 @@ export default function Home() {
         to="/levelling"
       />
       {/* ➕ New Review Button for Levelling */}
-      <Btn
-        icon="📝"
-        label="Levelling Review"
-        desc="Saved levelling resulevellingreview="/levelling-review"
-      />
+<Btn
+  icon="📝"
+  label="Levelling Review"
+  desc="Saved levelling results"
+  to="/levelling-review"   // ✅ hyphen ပါ
+/>
     </div>
   );
 }
