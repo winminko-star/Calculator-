@@ -1,34 +1,41 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth } from "./firebase";
+
 import NavBar from "./components/NavBar";
-import AuthLogin from "./pages/AuthLogin";
 import Home from "./pages/Home";
+import AuthLogin from "./pages/AuthLogin";
 import Drawing2D from "./pages/Drawing2D";
 import AllReview from "./pages/AllReview";
 import RightTriangle from "./pages/RightTriangle";
 import CircleCenter from "./pages/CircleCenter";
 import Levelling from "./pages/Levelling";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "./firebase";
-import { useEffect, useState } from "react";
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => { setUser(u); setReady(true); });
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u || null);
+      setReady(true);
+    });
     return () => unsub();
   }, []);
 
-  if (!ready) return null; // or a tiny loader
+  // ← ဒီကောက်ချက်টাই မင်းမေးတာ
+  if (!ready) {
+    return <div className="container">Loading…</div>; // null ပြန်မပို့တော့
+  }
 
   return (
     <BrowserRouter>
       {user && <NavBar user={user} onLogout={() => signOut(auth)} />}
       <div className="container">
         <Routes>
-          {/* Login: user ရှိထားရင် Home သို့ သွား */}
+          {/* Login page: login ထဲကနေ အစောင့်အောင် user ရှိရင် Home သို့ */}
           <Route path="/login" element={!user ? <AuthLogin /> : <Navigate to="/" replace />} />
 
           {/* Protected routes */}
@@ -45,4 +52,4 @@ export default function App() {
       </div>
     </BrowserRouter>
   );
-}
+          }
