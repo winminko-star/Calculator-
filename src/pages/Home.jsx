@@ -6,17 +6,15 @@ export default function Home() {
   const go = (path) => () => navigate(path);
 
   return (
-    <div className="grid">
-      <div className="card">
-        <div className="page-title">🏠 Home</div>
-        <p className="small">
-          အောက်က menu တွေကနေ မိမိ သွားချင်တဲ့ tool ကိုရွေးပါ။ (Login အောင်မြင်ပြီးသားဖြစ်နေသင့်)
-        </p>
-      </div>
+    <div className="grid" style={{ gap: 12 }}>
+      {/* top intro card removed for compact view */}
 
       <div
         className="grid"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}
+        style={{
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 12,
+        }}
       >
         <button className="card btn" onClick={go("/drawing2d")} style={{ textAlign: "left" }}>
           <div style={{ fontSize: 20, fontWeight: 700 }}>🧭 2D Drawing (E,N)</div>
