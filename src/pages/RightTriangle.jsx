@@ -1,116 +1,81 @@
+// src/pages/RightTriangle.jsx
 import React, { useState, useEffect } from "react";
 import "../index.css";
-import triImg from "../assets/right-triangle.png"; // ပုံကို public/assets ထဲသို့ ထည့်
+
+// --- Diagram (inline SVG: no external file needed) ---
+function Diagram() {
+  return (
+    <svg viewBox="0 0 330 220" width="100%" style={{ display: "block" }}>
+      <rect x="0" y="0" width="330" height="220" rx="12" fill="#fff" stroke="#e5e7eb" />
+      <g stroke="#000" strokeWidth="2" fill="none">
+        <path d="M30,180 L300,180 L300,40 Z" />
+        <path d="M286,180 h14 v-14" />
+      </g>
+      <g fontFamily="system-ui, sans-serif" fontSize="14" fill="#000">
+        <text x="20" y="195">A</text>
+        <text x="305" y="35">B</text>
+        <text x="305" y="195">C</text>
+        <text x="165" y="195">b</text>
+        <text x="310" y="110" transform="rotate(-90 310 110)">a</text>
+        <text x="165" y="95" transform="rotate(-62 165 95)">h</text>
+      </g>
+    </svg>
+  );
+}
 
 export default function RightTriangle() {
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
-  const [h, setH] = useState("");
-  const [Adeg, setAdeg] = useState("");
-  const [Bdeg, setBdeg] = useState("");
-  const [results, setResults] = useState(null);
+  const [a, setA] = useState(""), [b, setB] = useState(""),
+        [h, setH] = useState(""), [Adeg, setAdeg] = useState(""),
+        [Bdeg, setBdeg] = useState(""), [results, setResults] = useState(null);
 
   useEffect(() => {
-    calculate();
-  }, [a, b, h, Adeg, Bdeg]);
+    const A = parseFloat(a) || null;
+    const B = parseFloat(b) || null;
+    const H = parseFloat(h) || null;
+    const angA = parseFloat(Adeg) || null;
+    const angB = parseFloat(Bdeg) || null;
 
-  const toRad = (deg) => (deg * Math.PI) / 180;
-  const toDeg = (rad) => (rad * 180) / Math.PI;
+    let ra=A, rb=B, rh=H, rA=angA, rB=angB;
 
-  const calculate = () => {
-    let A = parseFloat(a) || null;
-    let B = parseFloat(b) || null;
-    let H = parseFloat(h) || null;
-    let angleA = parseFloat(Adeg) || null;
-    let angleB = parseFloat(Bdeg) || null;
+    if (ra && rb && !rh) rh = Math.hypot(ra, rb);
+    if (ra && rh && !rb) rb = Math.sqrt(rh*rh - ra*ra);
+    if (rb && rh && !ra) ra = Math.sqrt(rh*rh - rb*rb);
 
-    // သုံးဘက်ထဲ ၂ဘက်ရိုက်လိုက်ရင် H တွက်
-    if (A && B && !H) H = Math.sqrt(A * A + B * B);
-    if (A && H && !B) B = Math.sqrt(H * H - A * A);
-    if (B && H && !A) A = Math.sqrt(H * H - B * B);
+    if (ra && rb && !rA) rA = Math.atan2(ra, rb) * 180/Math.PI;
+    if (ra && rb && !rB) rB = 90 - rA;
+    if (rA && !rB) rB = 90 - rA;
+    if (rB && !rA) rA = 90 - rB;
 
-    // ထောင့်တွက်
-    if (A && B && !angleA) angleA = toDeg(Math.atan(A / B));
-    if (A && B && !angleB) angleB = toDeg(Math.atan(B / A));
-
-    // ထောင့်ပြည့်စုံ
-    if (angleA && !angleB) angleB = 90 - angleA;
-    if (angleB && !angleA) angleA = 90 - angleB;
-
-    // Hypotenuse မရှိရင် သတ်မှတ်
-    if (!H && A && B) H = Math.sqrt(A * A + B * B);
-
-    if (A || B || H || angleA || angleB) {
+    if (ra || rb || rh || rA || rB) {
       setResults({
-        a: A ? A.toFixed(3) : null,
-        b: B ? B.toFixed(3) : null,
-        h: H ? H.toFixed(3) : null,
-        angleA: angleA ? angleA.toFixed(2) : null,
-        angleB: angleB ? angleB.toFixed(2) : null,
+        a: ra?.toFixed(3), b: rb?.toFixed(3), h: rh?.toFixed(3),
+        A: rA?.toFixed(2), B: rB?.toFixed(2)
       });
+    } else {
+      setResults(null);
     }
-  };
+  }, [a,b,h,Adeg,Bdeg]);
 
   return (
     <div className="container">
       <div className="card">
         <div className="page-title">📐 Right Triangle Calculator</div>
-        <img src={triImg} alt="Right triangle diagram" style={{ maxWidth: "100%", marginBottom: "12px" }} />
-
-        <div className="grid">
-          <label>
-            a (vertical):
-            <input
-              className="input"
-              type="number"
-              value={a}
-              onChange={(e) => setA(e.target.value)}
-              placeholder="side a"
-            />
+        <Diagram />
+        <div className="grid" style={{ gap: 12, marginTop: 12 }}>
+          <label> a (vertical):
+            <input className="input" type="number" value={a} onChange={(e)=>setA(e.target.value)} placeholder="side a"/>
           </label>
-
-          <label>
-            b (base):
-            <input
-              className="input"
-              type="number"
-              value={b}
-              onChange={(e) => setB(e.target.value)}
-              placeholder="side b"
-            />
+          <label> b (base):
+            <input className="input" type="number" value={b} onChange={(e)=>setB(e.target.value)} placeholder="side b"/>
           </label>
-
-          <label>
-            h (hypotenuse):
-            <input
-              className="input"
-              type="number"
-              value={h}
-              onChange={(e) => setH(e.target.value)}
-              placeholder="side h"
-            />
+          <label> h (hypotenuse):
+            <input className="input" type="number" value={h} onChange={(e)=>setH(e.target.value)} placeholder="side h"/>
           </label>
-
-          <label>
-            ∠A (deg):
-            <input
-              className="input"
-              type="number"
-              value={Adeg}
-              onChange={(e) => setAdeg(e.target.value)}
-              placeholder="angle A"
-            />
+          <label> ∠A (deg):
+            <input className="input" type="number" value={Adeg} onChange={(e)=>setAdeg(e.target.value)} placeholder="angle A"/>
           </label>
-
-          <label>
-            ∠B (deg):
-            <input
-              className="input"
-              type="number"
-              value={Bdeg}
-              onChange={(e) => setBdeg(e.target.value)}
-              placeholder="angle B"
-            />
+          <label> ∠B (deg):
+            <input className="input" type="number" value={Bdeg} onChange={(e)=>setBdeg(e.target.value)} placeholder="angle B"/>
           </label>
         </div>
       </div>
@@ -118,13 +83,13 @@ export default function RightTriangle() {
       {results && (
         <div className="card">
           <div className="page-title">✅ Results</div>
-          <ul>
-            {results.a && <li>a = {results.a}</li>}
-            {results.b && <li>b = {results.b}</li>}
-            {results.h && <li>h = {results.h}</li>}
-            {results.angleA && <li>∠A = {results.angleA}°</li>}
-            {results.angleB && <li>∠B = {results.angleB}°</li>}
-          </ul>
+          <div className="small">
+            {results.a && <>a = {results.a}<br/></>}
+            {results.b && <>b = {results.b}<br/></>}
+            {results.h && <>h = {results.h}<br/></>}
+            {results.A && <>∠A = {results.A}°<br/></>}
+            {results.B && <>∠B = {results.B}°</>}
+          </div>
         </div>
       )}
     </div>
