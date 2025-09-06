@@ -226,4 +226,4 @@ export default function Drawing2D(){
       </div>
     </div>
   )
-    }
+}
