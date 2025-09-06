@@ -9,6 +9,12 @@ import Drawing2D from "./pages/Drawing2D";
 import AllReview from "./pages/AllReview";
 import AuthLogin from "./pages/AuthLogin";
 
+// New pages
+import RightTriangle from "./pages/RightTriangle";
+import CircleCenter from "./pages/CircleCenter";
+import Levelling from "./pages/Levelling";
+
+// simple route guard
 function Private({ user, children }) {
   const location = useLocation();
   if (!user) {
@@ -27,13 +33,15 @@ export default function App() {
 
   return (
     <>
+      {/* Login မပြီးသေးရင် Navbar မပြ */}
       {user && <NavBar user={user} onLogout={() => signOut(auth)} />}
+
       <div className="container">
         <Routes>
-          {/* login always accessible */}
+          {/* Login အမြဲလမ်းလ麼 */}
           <Route path="/login" element={<AuthLogin />} />
 
-          {/* after login → home page first */}
+          {/* Login အောင်ရင် Home ကို ပထမဆုံး မြင် */}
           <Route
             path="/"
             element={
@@ -42,6 +50,8 @@ export default function App() {
               </Private>
             }
           />
+
+          {/* Tools (all private) */}
           <Route
             path="/drawing2d"
             element={
@@ -58,7 +68,32 @@ export default function App() {
               </Private>
             }
           />
+          <Route
+            path="/righttriangle"
+            element={
+              <Private user={user}>
+                <RightTriangle />
+              </Private>
+            }
+          />
+          <Route
+            path="/circlecenter"
+            element={
+              <Private user={user}>
+                <CircleCenter />
+              </Private>
+            }
+          />
+          <Route
+            path="/levelling"
+            element={
+              <Private user={user}>
+                <Levelling />
+              </Private>
+            }
+          />
 
+          {/* fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
