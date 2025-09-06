@@ -1,4 +1,5 @@
-levellingreviewingreview React from "react";
+// src/pages/Home.jsx
+import React from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function Home() {
@@ -7,6 +8,7 @@ export default function Home() {
   const Btn = ({ icon, label, desc, to }) => (
     <button
       className="btn"
+      onClick={() => navigate(to)}
       style={{
         display: "block",
         width: "100%",
@@ -17,12 +19,11 @@ export default function Home() {
         background: "#0ea5e9",
         color: "#fff",
       }}
-      onClick={() => navigate(to)}
     >
       <div style={{ fontWeight: 700, fontSize: 16 }}>
         {icon} {label}
       </div>
-      <div style={{ fontSize: 12, opacity: 0.9 }}>{desc}</div>
+      {desc && <div className="small" style={{ color: "#e0f2fe" }}>{desc}</div>}
     </button>
   );
 
@@ -58,13 +59,13 @@ export default function Home() {
         desc="Rise/Fall, RL, misclosure…"
         to="/levelling"
       />
-      {/* ➕ New Review Button for Levelling */}
-<Btn
-  icon="📝"
-  label="Levelling Review"
-  desc="Saved levelling results"
-  to="/levelling-review"   // ✅ hyphen ပါ
-/>
+      {/* New: Levelling Review */}
+      <Btn
+        icon="📝"
+        label="Levelling Review"
+        desc="Saved levelling results"
+        to="/levelling-review"
+      />
     </div>
   );
-}
+      }
