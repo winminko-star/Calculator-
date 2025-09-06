@@ -44,7 +44,7 @@ export default function AuthLogin() {
       <div className="card">
         <div className="page-title">🔐 Owner Login</div>
         <form onSubmit={onSubmit} className="grid">
-          <input className="input" type="email" placeholder={`Email (${ALLOWED_EMAIL})`} value={email} onChange={(e)=>setEmail(e.target.value)} required />
+          <input className="input" type="email" placeholder={you@example.com} value={email} onChange={(e)=>setEmail(e.target.value)} required />
           <input className="input" type="password" placeholder="Password" value={pw} onChange={(e)=>setPw(e.target.value)} required />
           {err && <div className="small" style={{ color: "#b91c1c" }}>{err}</div>}
           <button className="btn" disabled={busy}>{busy ? "Please wait…" : "Login"}</button>
