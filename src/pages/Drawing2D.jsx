@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
 
@@ -29,36 +29,59 @@ export default function Drawing2D() {
   // UI state
   const [mode, setMode] = useState("line");   // 'line' | 'angle'
   const [selected, setSelected] = useState([]); // clicked point ids
-  const [scale, setScale] = useState(4);      // px per unit
+  const [scale, setScale] = useState(4);      // px per unit (CSS px)
 
   const canvasRef = useRef(null);
+  const ctxRef = useRef(null);
+  const sizeRef = useRef({ wCss: 900, hCss: 520 }); // CSS pixel size
+
+  // ---- resize for DPR (sharp lines + correct coords) ----
+  useLayoutEffect(() => {
+    const cvs = canvasRef.current;
+    if (!cvs) return;
+    const dpr = window.devicePixelRatio || 1;
+
+    const rect = cvs.getBoundingClientRect();
+    const wCss = Math.max(320, Math.floor(rect.width || 900));
+    const hCss = Math.max(260, Math.floor(rect.height || 520));
+
+    sizeRef.current = { wCss, hCss };
+
+    // set backing store size (physical pixels)
+    cvs.width = Math.floor(wCss * dpr);
+    cvs.height = Math.floor(hCss * dpr);
+    const ctx = cvs.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw using CSS pixels
+    ctxRef.current = ctx;
+  });
 
   // ---- draw everything ----
   useEffect(() => {
+    const ctx = ctxRef.current;
     const cvs = canvasRef.current;
-    if (!cvs) return;
-    const ctx = cvs.getContext("2d");
-    const w = cvs.width, h = cvs.height;
-    const origin = { x: w / 2, y: h / 2 };
+    if (!ctx || !cvs) return;
+
+    const { wCss, hCss } = sizeRef.current;
+    const origin = { x: wCss / 2, y: hCss / 2 };
     const toScreen = (p) => ({ x: origin.x + p.x * scale, y: origin.y - p.y * scale });
 
     try {
-      ctx.clearRect(0, 0, w, h);
+      ctx.clearRect(0, 0, wCss, hCss);
 
       // grid
       ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 1;
-      const step = scale * 10;
-      for (let gx = origin.x % step; gx < w; gx += step) {
-        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
+      const step = Math.max(scale * 10, 20);
+      for (let gx = origin.x % step; gx < wCss; gx += step) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, hCss); ctx.stroke();
       }
-      for (let gy = origin.y % step; gy < h; gy += step) {
-        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+      for (let gy = origin.y % step; gy < hCss; gy += step) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(wCss, gy); ctx.stroke();
       }
 
       // axes
       ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(0, origin.y); ctx.lineTo(w, origin.y); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, origin.y); ctx.lineTo(wCss, origin.y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, hCss); ctx.stroke();
 
       // lines with length
       ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2;
@@ -72,7 +95,7 @@ export default function Drawing2D() {
         ctx.fillText(`${l.len}`, (s1.x + s2.x) / 2 + 6, (s1.y + s2.y) / 2 - 6);
       });
 
-      // angles (arc + degree at vertex b)
+      // angles
       angles.forEach((t) => {
         const a = points.find((p) => p.id === t.a);
         const b = points.find((p) => p.id === t.b);
@@ -114,31 +137,35 @@ export default function Drawing2D() {
     setE(""); setN(""); setLabel("");
   };
 
-  // ---- pick nearest point on click ----
-  const pickPointAt = (clientX, clientY) => {
+  // ---- click/tap handler (pointer events) ----
+  const handlePointer = (evt) => {
+    // prevent touch scroll on tap
+    evt.preventDefault?.();
+
     const cvs = canvasRef.current;
-    if (!cvs) return null;
+    if (!cvs) return;
+
     const rect = cvs.getBoundingClientRect();
-    const w = cvs.width, h = cvs.height;
-    const origin = { x: w / 2, y: h / 2 };
-    const mx = clientX - rect.left, my = clientY - rect.top;
+    // prefer offsetX/Y (already CSS px inside transformed context)
+    const mx = typeof evt.offsetX === "number" ? evt.offsetX : evt.clientX - rect.left;
+    const my = typeof evt.offsetY === "number" ? evt.offsetY : evt.clientY - rect.top;
+
+    const { wCss, hCss } = sizeRef.current;
+    const origin = { x: wCss / 2, y: hCss / 2 };
     const wx = (mx - origin.x) / scale;
     const wy = (origin.y - my) / scale;
 
-    let nearest = null, best = Infinity;
+    // find nearest point within hit radius
+    const hitR = 10 / scale; // easier on phone
+    let pick = null, best = Infinity;
     for (const p of points) {
       const d = Math.hypot(p.x - wx, p.y - wy);
-      if (d < best && d < 6 / scale) { best = d; nearest = p; }
+      if (d < best && d <= hitR) { best = d; pick = p; }
     }
-    return nearest;
-  };
-
-  const onCanvasClick = (e) => {
-    const p = pickPointAt(e.clientX, e.clientY);
-    if (!p) return;
+    if (!pick) return;
 
     setSelected((sel) => {
-      const next = [...sel, p.id];
+      const next = [...sel, pick.id];
 
       if (mode === "line" && next.length === 2) {
         const [aId, bId] = next;
@@ -173,10 +200,14 @@ export default function Drawing2D() {
   const saveToFirebase = async () => {
     const cvs = canvasRef.current;
     if (!cvs) return;
+
+    // export at 2x for clarity (DPR-safe)
+    const dpr = window.devicePixelRatio || 1;
+    const { wCss, hCss } = sizeRef.current;
     const tmp = document.createElement("canvas");
-    tmp.width = cvs.width * 2; tmp.height = cvs.height * 2;
+    tmp.width = wCss * 2 * dpr; tmp.height = hCss * 2 * dpr;
     const tctx = tmp.getContext("2d");
-    tctx.scale(2, 2);
+    tctx.setTransform(2 * dpr, 0, 0, 2 * dpr, 0, 0);
     tctx.drawImage(cvs, 0, 0);
     const dataUrl = tmp.toDataURL("image/png", 0.92);
 
@@ -223,26 +254,28 @@ export default function Drawing2D() {
               onChange={(e) => setScale(Number(e.target.value))} />
 
             <button className="btn" onClick={() => { setPoints([]); setLines([]); setAngles([]); setSelected([]); }}>
-              🧹 Clear
-            </button>
+              🧹 Clear</button>
             <button className="btn" onClick={saveToFirebase}>💾 Save</button>
           </div>
         </div>
 
         <p className="small" style={{ marginTop: 6 }}>
-          Canvas မှာ point ပေါ်ကို click လုပ်နိုင်ပါတယ် — Line mode: point 2 ခုရွေးရင် line ထည့်ပြီး length ပြ • Angle mode: point 3 ခုရွေးရင် degree ပြ
+          Canvas မှာ point ကို tap လုပ်ပြီး ရွေးနိုင်ပါတယ် — Line mode: point 2 ခု → line + length • Angle mode: point 3 ခု → degree
         </p>
 
-        <canvas
-          ref={canvasRef}
-          width={900}
-          height={520}
-          onClick={onCanvasClick}
-          style={{
-            width: "100%", maxWidth: 900, background: "#fff",
-            borderRadius: 12, border: "1px solid #e5e7eb", cursor: "crosshair"
-          }}
-        />
+        <div style={{ width: "100%" }}>
+          <canvas
+            ref={canvasRef}
+            width={900}
+            height={520}
+            onPointerDown={handlePointer}
+            style={{
+              width: "100%", maxWidth: 900, background: "#fff",
+              borderRadius: 12, border: "1px solid #e5e7eb",
+              touchAction: "none", cursor: "crosshair"
+            }}
+          />
+        </div>
       </div>
 
       <div className="card">
@@ -267,4 +300,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-    }
+                  }
