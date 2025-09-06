@@ -1,3 +1,4 @@
+// src/components/NavBar.jsx
 import React from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 
@@ -5,19 +6,33 @@ export default function NavBar({ user, onLogout }) {
   const navigate = useNavigate();
   const loc = useLocation();
 
-  // brand တစ်ကြောင်း + horizontal scroll chips
   return (
     <div className="header" style={{ padding: 8 }}>
       <div className="container" style={{ padding: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        {/* Brand + Logout */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
           <strong style={{ fontSize: 16 }}>WMK Calc</strong>
 
           {user && (
             <button
               className="btn"
-              style={{ height: 36, padding: "0 12px", background: "#ef4444" }}
+              style={{
+                height: 36,
+                padding: "0 12px",
+                background: "#ef4444",
+              }}
               onClick={async () => {
-                try { await onLogout?.(); } finally { navigate("/login", { replace: true }); }
+                try {
+                  await onLogout?.();
+                } finally {
+                  navigate("/login", { replace: true });
+                }
               }}
             >
               Logout
@@ -25,6 +40,7 @@ export default function NavBar({ user, onLogout }) {
           )}
         </div>
 
+        {/* Navigation Chips */}
         <nav
           className="nav"
           style={{
@@ -42,6 +58,7 @@ export default function NavBar({ user, onLogout }) {
           <Chip to="/righttriangle" label="Right Triangle" />
           <Chip to="/circlecenter" label="Circle Center" />
           <Chip to="/levelling" label="Levelling" />
+          <Chip to="/levelling-review" label="Levelling Review" /> {/* အသစ်ထည့်ထားတဲ့ Tab */}
         </nav>
       </div>
     </div>
@@ -68,4 +85,4 @@ function Chip({ to, label }) {
       {label}
     </NavLink>
   );
-}
+                                }
