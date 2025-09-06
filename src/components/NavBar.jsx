@@ -1,45 +1,71 @@
 import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 
 export default function NavBar({ user, onLogout }) {
   const navigate = useNavigate();
+  const loc = useLocation();
 
+  // brand တစ်ကြောင်း + horizontal scroll chips
   return (
-    <div className="header">
-      <div className="container">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <strong>WMK Calc</strong>
-          <nav className="nav">
-            <NavLink to="/" end>
-              Home
-            </NavLink>
-            <NavLink to="/drawing2d">2D Drawing</NavLink>
-            <NavLink to="/review">All Review</NavLink>
-            <NavLink to="/righttriangle">Right Triangle</NavLink>
-            <NavLink to="/circlecenter">Circle Center</NavLink>
-            <NavLink to="/levelling">Levelling</NavLink>
+    <div className="header" style={{ padding: 8 }}>
+      <div className="container" style={{ padding: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <strong style={{ fontSize: 16 }}>WMK Calc</strong>
 
-            {user ? (
-              <button
-                className="btn"
-                type="button"
-                onClick={async () => {
-                  try {
-                    await onLogout?.();
-                  } finally {
-                    navigate("/login", { replace: true });
-                  }
-                }}
-                style={{ marginLeft: 8 }}
-              >
-                Logout
-              </button>
-            ) : (
-              <NavLink to="/login">Login</NavLink>
-            )}
-          </nav>
+          {user && (
+            <button
+              className="btn"
+              style={{ height: 36, padding: "0 12px", background: "#ef4444" }}
+              onClick={async () => {
+                try { await onLogout?.(); } finally { navigate("/login", { replace: true }); }
+              }}
+            >
+              Logout
+            </button>
+          )}
         </div>
+
+        <nav
+          className="nav"
+          style={{
+            display: "flex",
+            gap: 8,
+            overflowX: "auto",
+            whiteSpace: "nowrap",
+            WebkitOverflowScrolling: "touch",
+            paddingTop: 8,
+          }}
+        >
+          <Chip to="/" label="Home" />
+          <Chip to="/drawing2d" label="2D Drawing" />
+          <Chip to="/review" label="All Review" />
+          <Chip to="/righttriangle" label="Right Triangle" />
+          <Chip to="/circlecenter" label="Circle Center" />
+          <Chip to="/levelling" label="Levelling" />
+        </nav>
       </div>
     </div>
+  );
+}
+
+function Chip({ to, label }) {
+  return (
+    <NavLink
+      to={to}
+      style={({ isActive }) => ({
+        display: "inline-block",
+        padding: "8px 12px",
+        borderRadius: 9999,
+        border: "1px solid #e5e7eb",
+        background: isActive ? "#0ea5e9" : "#f1f5f9",
+        color: isActive ? "#fff" : "#0f172a",
+        fontWeight: 600,
+        textDecoration: "none",
+        flex: "0 0 auto",
+      })}
+      end={to === "/"}
+    >
+      {label}
+    </NavLink>
   );
 }
