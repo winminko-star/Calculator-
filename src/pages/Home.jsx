@@ -1,4 +1,4 @@
-import React from "react";
+levellingreviewingreview React from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function Home() {
@@ -62,8 +62,7 @@ export default function Home() {
       <Btn
         icon="📝"
         label="Levelling Review"
-        desc="Saved levelling results"
-        to="/levellingreview"
+        desc="Saved levelling resulevellingreview="/levelling-review"
       />
     </div>
   );
