@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, onValue, remove } from "firebase/database";
+import { useNavigate } from "react-router-dom";
 
 /** Zoom + Pan viewer (pinch / drag / wheel / buttons) */
-function ZoomPanViewer({ src, height = 320, background = "#fff" }) {
+function ZoomPanViewer({ src, height = 360, background = "#fff" }) {
   const wrapRef = useRef(null);
   const imgRef = useRef(null);
   const [loaded, setLoaded] = useState(false);
@@ -21,32 +22,25 @@ function ZoomPanViewer({ src, height = 320, background = "#fff" }) {
     const wrap = wrapRef.current, img = imgRef.current;
     if (!wrap || !img) return;
     const W = wrap.clientWidth, H = wrap.clientHeight;
-    const { w, h } = natural;
-    if (!w || !h) return;
+    const { w, h } = natural; if (!w || !h) return;
     const s = Math.min(W / w, H / h);
-    setScale(s);
-    // center
-    setTx((W - w * s) / 2);
-    setTy((H - h * s) / 2);
+    setScale(s); setTx((W - w * s) / 2); setTy((H - h * s) / 2);
   };
 
-  // on image load
   const onImgLoad = (e) => {
     const i = e.currentTarget;
     setNatural({ w: i.naturalWidth, h: i.naturalHeight });
     setLoaded(true);
-    // next tick → fit
     setTimeout(fit, 0);
   };
 
-  // keep fitting when container resizes
   useEffect(() => {
     const r = new ResizeObserver(() => fit());
     if (wrapRef.current) r.observe(wrapRef.current);
     return () => r.disconnect();
   }, [natural.w, natural.h]);
 
-  // pointer gesture (drag / pinch)
+  // pointer gesture
   const pointers = useRef(new Map());
   const onPointerDown = (e) => {
     e.preventDefault();
@@ -60,64 +54,40 @@ function ZoomPanViewer({ src, height = 320, background = "#fff" }) {
 
     const pts = [...pointers.current.values()];
     if (pts.length === 1) {
-      // drag pan
-      setTx((v) => v + (e.clientX - prev.x));
-      setTy((v) => v + (e.clientY - prev.y));
+      setTx(v => v + (e.clientX - prev.x));
+      setTy(v => v + (e.clientY - prev.y));
     } else if (pts.length >= 2) {
       const [p1, p2] = pts;
-      const prevKeys = [...pointers.current.keys()];
-      const k1 = prevKeys[0], k2 = prevKeys[1];
-      const p1Prev = pointers.current.get(k1) || p1;
-      const p2Prev = pointers.current.get(k2) || p2;
+      const dPrev = Math.hypot(p1.x - prev.x, p1.y - prev.y) || 1;
+      const dNow  = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
+      const wrap = wrapRef.current, rect = wrap.getBoundingClientRect();
+      const mid = { x: (p1.x + p2.x)/2 - rect.left, y: (p1.y + p2.y)/2 - rect.top };
 
-      const dPrev = Math.hypot((p1Prev.x - p2Prev.x), (p1Prev.y - p2Prev.y)) || 1;
-      const dNow = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
-      const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-
-      setScale((s) => {
+      setScale(s => {
         const ns = Math.min(MAX, Math.max(MIN, s * (dNow / dPrev)));
-        // keep focal point stationary
-        const wrap = wrapRef.current;
-        const rect = wrap.getBoundingClientRect();
-        const fx = mid.x - rect.left;
-        const fy = mid.y - rect.top;
-        const beforeX = (fx - tx) / s;
-        const beforeY = (fy - ty) / s;
-        const afterX = beforeX * ns;
-        const afterY = beforeY * ns;
-        setTx((v) => v + (fx - (afterX + tx)));
-        setTy((v) => v + (fy - (afterY + ty)));
+        const wx = (mid.x - tx) / s, wy = (mid.y - ty) / s;
+        const afterX = wx * ns, afterY = wy * ns;
+        setTx(v => v + (mid.x - (afterX + tx)));
+        setTy(v => v + (mid.y - (afterY + ty)));
         return ns;
       });
     }
   };
-  const onPointerUp = (e) => {
-    pointers.current.delete(e.pointerId);
-  };
-
-  // wheel zoom (desktop)
+  const onPointerUp = (e) => { pointers.current.delete(e.pointerId); };
   const onWheel = (e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const wrap = wrapRef.current;
-    const rect = wrap.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-
-    setScale((s) => {
+    const wrap = wrapRef.current, rect = wrap.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    setScale(s => {
       const ns = Math.min(MAX, Math.max(MIN, s * delta));
-      const beforeX = (mx - tx) / s;
-      const beforeY = (my - ty) / s;
-      const afterX = beforeX * ns;
-      const afterY = beforeY * ns;
-      setTx((v) => v + (mx - (afterX + tx)));
-      setTy((v) => v + (my - (afterY + ty)));
+      const wx = (mx - tx) / s, wy = (my - ty) / s;
+      const afterX = wx * ns, afterY = wy * ns;
+      setTx(v => v + (mx - (afterX + tx)));
+      setTy(v => v + (my - (afterY + ty)));
       return ns;
     });
   };
-
-  const reset = () => { setScale(1); setTx(0); setTy(0); };
-  const fitClick = () => fit();
 
   return (
     <div className="grid" style={{ gap: 6 }}>
@@ -129,14 +99,10 @@ function ZoomPanViewer({ src, height = 320, background = "#fff" }) {
         onPointerCancel={onPointerUp}
         onWheel={onWheel}
         style={{
-          width: "100%",
-          height,
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          overflow: "hidden",
-          background,
-          touchAction: "none", // 🔑 for touch gestures
-          position: "relative",
+          width: "100%", height,
+          border: "1px solid #e5e7eb", borderRadius: 12,
+          overflow: "hidden", background,
+          touchAction: "none", position: "relative",
         }}
       >
         <img
@@ -152,7 +118,9 @@ function ZoomPanViewer({ src, height = 320, background = "#fff" }) {
             transformOrigin: "0 0",
             willChange: "transform",
             display: loaded ? "block" : "none",
+            width: "auto", height: "auto",
           }}
+          loading="lazy"
         />
         {!loaded && (
           <div className="small" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
@@ -162,10 +130,9 @@ function ZoomPanViewer({ src, height = 320, background = "#fff" }) {
       </div>
 
       <div className="row" style={{ justifyContent: "center" }}>
-        <button className="btn" onClick={() => setScale((s) => Math.max(MIN, s * 0.8))}>－</button>
-        <button className="btn" onClick={() => setScale((s) => Math.min(MAX, s * 1.25))}>＋</button>
-        <button className="btn" onClick={fitClick}>🧭 Fit</button>
-        <button className="btn" onClick={reset}>↺ Reset</button>
+        <button className="btn" onClick={() => setScale(s => Math.max(MIN, s * 0.8))}>－</button>
+        <button className="btn" onClick={() => setScale(s => Math.min(MAX, s * 1.25))}>＋</button>
+        <button className="btn" onClick={() => { setTx(0); setTy(0); setScale(1); }}>↺ Reset</button>
       </div>
     </div>
   );
@@ -173,6 +140,7 @@ function ZoomPanViewer({ src, height = 320, background = "#fff" }) {
 
 export default function AllReview() {
   const [items, setItems] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const r = dbRef(db, "drawings");
@@ -195,6 +163,15 @@ export default function AllReview() {
     await remove(dbRef(db, `drawings/${id}`));
   };
 
+  const openIn2D = (it) => {
+    if (!it.state) {
+      alert("This item has no raw data. Save again from 2D to enable editing.");
+      return;
+    }
+    localStorage.setItem("wmk_restore", JSON.stringify(it.state));
+    navigate("/drawing2d");
+  };
+
   return (
     <div className="grid">
       <div className="card">
@@ -204,20 +181,21 @@ export default function AllReview() {
 
         {items.map((it) => (
           <div key={it.id} className="card" style={{ padding: 10, marginBottom: 10 }}>
-            {/* ⭐ New viewer with pinch-zoom + pan */}
-            <ZoomPanViewer src={it.thumbUrl || it.dataUrl} height={320} />
+            {/* full image (same view as saved) */}
+            <ZoomPanViewer src={it.dataUrl} height={360} />
 
             <div className="small" style={{ marginTop: 8 }}>
               {new Date(it.createdAt || Date.now()).toLocaleString()} ·{" "}
               {(it.meta?.points ?? 0)} pts · {(it.meta?.lines ?? 0)} lines · {(it.meta?.triples ?? 0)} ∠
             </div>
 
-            <button className="btn" onClick={() => del(it.id)} style={{ marginTop: 8, background: "#0284c7" }}>
-              🗑 Delete
-            </button>
+            <div className="row" style={{ marginTop: 8 }}>
+              <button className="btn" onClick={() => openIn2D(it)}>✏️ Open in 2D</button>
+              <button className="btn" onClick={() => del(it.id)} style={{ background: "#ef4444" }}>🗑 Delete</button>
+            </div>
           </div>
         ))}
       </div>
     </div>
   );
-}
+    }
