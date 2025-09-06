@@ -1,157 +1,138 @@
 // src/pages/RightTriangle.jsx
-import React, { useEffect, useMemo, useState } from "react";
-
-// ---------- UI helpers ----------
-function Field({ label, value, onChange, placeholder }) {
-  return (
-    <div className="grid" style={{ gap: 6 }}>
-      <div className="small" style={{ fontWeight: 600 }}>{label}</div>
-      <input
-        className="input"
-        type="number"
-        inputMode="decimal"
-        step="any"
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-      />
-    </div>
-  );
-}
-const isNum = (x) => Number.isFinite(x);
-const dfix = (x, n=3) => (isNum(x) ? x.toFixed(n) : "");
-
-// ---------- Inline SVG Diagram (no image file needed) ----------
-function Diagram({ Adeg }) {
-  // fixed triangle A(24,180) C(300,180) B(300,36)
-  return (
-    <svg viewBox="0 0 330 220" width="100%" style={{ display: "block" }}>
-      {/* light grid */}
-      <defs>
-        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-          <rect width="20" height="20" fill="#fff" />
-          <path d="M20 0H0V20" stroke="#e5e7eb" strokeWidth="1" />
-        </pattern>
-      </defs>
-      <rect x="0" y="0" width="330" height="220" rx="12" fill="url(#grid)" />
-
-      {/* triangle lines */}
-      <g stroke="#0f172a" strokeWidth="2" fill="none">
-        <path d="M24,180 L300,180 L300,36 Z" />
-        {/* right mark at C */}
-        <path d="M286,180 h14 v-14" />
-      </g>
-
-      {/* labels */}
-      <g fill="#0f172a" fontFamily="system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif" fontSize="14">
-        <text x="16" y="196">A</text>
-        <text x="306" y="32">B</text>
-        <text x="306" y="196">C</text>
-
-        <text x="160" y="196">b</text>
-        <text x="310" y="110" transform="rotate(-90 310 110)">a</text>
-        <text x="168" y="92" transform="rotate(-62 168 92)">h</text>
-
-        {isNum(Adeg) && <text x="54" y="175">α={Adeg.toFixed(2)}°</text>}
-      </g>
-    </svg>
-  );
-}
-
-// ---------- Solver ----------
-const rad = (d) => (d * Math.PI) / 180;
-const deg = (r) => (r * 180) / Math.PI;
-
-/** solve from any 2 independent values */
-function solve({ a, b, h, A, B }) {
-  // normalize inputs
-  if (!isNum(A) && isNum(B)) A = 90 - B;
-  if (isNum(A) && (A <= 0 || A >= 90)) return { err: "∠A must be 0–90 (exclusive)" };
-
-  // 2 sides
-  if (isNum(a) && isNum(b)) {
-    h = Math.hypot(a, b); A = deg(Math.atan2(a, b)); B = 90 - A;
-  } else if (isNum(a) && isNum(h)) {
-    if (a >= h) return { err: "h must be longest (h > a)" };
-    b = Math.sqrt(h*h - a*a); A = deg(Math.asin(a/h)); B = 90 - A;
-  } else if (isNum(b) && isNum(h)) {
-    if (b >= h) return { err: "h must be longest (h > b)" };
-    a = Math.sqrt(h*h - b*b); A = deg(Math.atan2(a, b)); B = 90 - A;
-  }
-  // 1 side + angle
-  else if (isNum(A)) {
-    if (isNum(a)) { b = a / Math.tan(rad(A)); h = a / Math.sin(rad(A)); }
-    else if (isNum(b)) { a = b * Math.tan(rad(A)); h = b / Math.cos(rad(A)); }
-    else if (isNum(h)) { a = h * Math.sin(rad(A)); b = h * Math.cos(rad(A)); }
-    else return { err: "Provide a side with the angle" };
-    B = 90 - A;
-  } else {
-    return { err: "Provide any two: (two sides) or (one side + one acute angle)" };
-  }
-
-  if (!(a > 0 && b > 0 && h > 0)) return { err: "Invalid dimensions" };
-  if (!(h > a && h > b)) return { err: "h must be longest" };
-
-  return { a, b, h, A, B, C: 90 };
-}
+import React, { useState, useEffect } from "react";
+import "../index.css";
 
 export default function RightTriangle() {
-  // raw text states
-  const [ta, setTa] = useState("");
-  const [tb, setTb] = useState("");
-  const [th, setTh] = useState("");
-  const [tA, settA] = useState("");
-  const [tB, settB] = useState("");
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  const [h, setH] = useState("");
+  const [Adeg, setAdeg] = useState("");
+  const [Bdeg, setBdeg] = useState("");
+  const [results, setResults] = useState({});
 
-  // parse
-  const nums = useMemo(() => {
-    const p = (s) => {
-      const v = parseFloat(String(s).replace(",", "."));
-      return Number.isFinite(v) ? v : undefined;
-    };
-    return { a: p(ta), b: p(tb), h: p(th), A: p(tA), B: p(tB) };
-  }, [ta, tb, th, tA, tB]);
+  useEffect(() => {
+    const A = parseFloat(a);
+    const B = parseFloat(b);
+    const H = parseFloat(h);
+    const angA = parseFloat(Adeg);
+    const angB = parseFloat(Bdeg);
+    let res = {};
 
-  const out = useMemo(() => solve(nums), [nums]);
+    // ---- Pythagoras ----
+    if (A && B) {
+      res.h = Math.sqrt(A * A + B * B);
+      res.Adeg = (Math.atan2(A, B) * 180) / Math.PI;
+      res.Bdeg = 90 - res.Adeg;
+    } else if (A && H) {
+      res.b = Math.sqrt(H * H - A * A);
+      res.Adeg = (Math.asin(A / H) * 180) / Math.PI;
+      res.Bdeg = 90 - res.Adeg;
+    } else if (B && H) {
+      res.a = Math.sqrt(H * H - B * B);
+      res.Adeg = (Math.atan2(res.a, B) * 180) / Math.PI;
+      res.Bdeg = 90 - res.Adeg;
+    } else if (angA) {
+      if (A && angA) {
+        res.h = A / Math.sin((angA * Math.PI) / 180);
+        res.b = res.h * Math.cos((angA * Math.PI) / 180);
+        res.Bdeg = 90 - angA;
+      } else if (B && angA) {
+        res.h = B / Math.cos((angA * Math.PI) / 180);
+        res.a = res.h * Math.sin((angA * Math.PI) / 180);
+        res.Bdeg = 90 - angA;
+      }
+    }
 
-  // show angle A on diagram when known
-  const AforDiagram = isNum(nums.A) ? nums.A : (isNum(nums.B) ? 90 - nums.B : undefined);
+    setResults(res);
+  }, [a, b, h, Adeg, Bdeg]);
 
   return (
-    <div className="container grid" style={{ gap: 16 }}>
-      {/* Diagram (inline SVG) */}
-      <div className="card">
-        <Diagram Adeg={AforDiagram} />
+    <div className="container">
+      <h2 className="page-title">📐 Right Triangle Calculator</h2>
+
+      {/* Triangle diagram */}
+      <div className="card" style={{ textAlign: "center" }}>
+        <svg viewBox="0 0 330 220" width="100%" height="180">
+          <g stroke="#000" strokeWidth="2" fill="none">
+            <path d="M30,180 L300,180 L300,40 Z" />
+            <path d="M286,180 h14 v-14" />
+          </g>
+          <g fontFamily="system-ui, sans-serif" fontSize="14" fill="#000">
+            <text x="20" y="195">A</text>
+            <text x="305" y="35">B</text>
+            <text x="305" y="195">C</text>
+            <text x="160" y="195">b</text>
+            <text x="310" y="110" transform="rotate(-90 310 110)">a</text>
+            <text x="160" y="95" transform="rotate(-62 160 95)">h</text>
+          </g>
+        </svg>
       </div>
 
-      {/* Inputs (labels on top, inputs below) */}
-      <div className="card grid" style={{ gap: 12 }}>
-        <Field label="a (vertical)" value={ta} onChange={(e)=>setTa(e.target.value)} placeholder="side a" />
-        <Field label="b (base)"    value={tb} onChange={(e)=>setTb(e.target.value)} placeholder="side b" />
-        <Field label="h (hypotenuse)" value={th} onChange={(e)=>setTh(e.target.value)} placeholder="side h" />
-        <Field label="∠A (deg)" value={tA} onChange={(e)=>settA(e.target.value)} placeholder="angle A" />
-        <Field label="∠B (deg)" value={tB} onChange={(e)=>settB(e.target.value)} placeholder="angle B" />
-        <div className="small" style={{ color:"#334155" }}>
-          Hint: enter <b>any two</b> independent values. ∠C is fixed at 90°.
-        </div>
+      {/* Inputs */}
+      <div className="card grid">
+        <label>
+          a (vertical):
+          <input
+            className="input"
+            type="number"
+            value={a}
+            onChange={(e) => setA(e.target.value)}
+            placeholder="side a"
+          />
+        </label>
+        <label>
+          b (base):
+          <input
+            className="input"
+            type="number"
+            value={b}
+            onChange={(e) => setB(e.target.value)}
+            placeholder="side b"
+          />
+        </label>
+        <label>
+          h (hypotenuse):
+          <input
+            className="input"
+            type="number"
+            value={h}
+            onChange={(e) => setH(e.target.value)}
+            placeholder="side h"
+          />
+        </label>
+        <label>
+          ∠A (deg):
+          <input
+            className="input"
+            type="number"
+            value={Adeg}
+            onChange={(e) => setAdeg(e.target.value)}
+            placeholder="angle A"
+          />
+        </label>
+        <label>
+          ∠B (deg):
+          <input
+            className="input"
+            type="number"
+            value={Bdeg}
+            onChange={(e) => setBdeg(e.target.value)}
+            placeholder="angle B"
+          />
+        </label>
       </div>
 
       {/* Results */}
       <div className="card">
-        <div className="page-title">✅ Results</div>
-        {out.err ? (
-          <div className="small" style={{ color:"#b91c1c" }}>⚠ {out.err}</div>
-        ) : (
-          <div className="small">
-            a = {dfix(out.a)} <br />
-            b = {dfix(out.b)} <br />
-            h = {dfix(out.h)} <br />
-            ∠A = {dfix(out.A,2)}° <br />
-            ∠B = {dfix(out.B,2)}° <br />
-            ∠C = 90°
-          </div>
-        )}
+        <h3>✅ Results</h3>
+        <div className="small">
+          {results.a && <div>a = {results.a.toFixed(3)}</div>}
+          {results.b && <div>b = {results.b.toFixed(3)}</div>}
+          {results.h && <div>h = {results.h.toFixed(3)}</div>}
+          {results.Adeg && <div>∠A = {results.Adeg.toFixed(2)}°</div>}
+          {results.Bdeg && <div>∠B = {results.Bdeg.toFixed(2)}°</div>}
+        </div>
       </div>
     </div>
   );
-      }
+        }
