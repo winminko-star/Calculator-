@@ -15,7 +15,7 @@ const angleDeg = (a, b, c) => {
   return +(Math.acos(cos) * 180 / Math.PI).toFixed(2);
 };
 
-// ---------- export helpers (draw with given transform) ----------
+// ---------- scene renderer (uses current view: zoom/tx/ty) ----------
 function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
   // grid
   ctx.clearRect(0, 0, wCss, hCss);
@@ -74,7 +74,6 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
   });
 }
 
-// ============================================================
 export default function Drawing2D() {
   // data
   const [points, setPoints] = useState([]);
@@ -85,16 +84,33 @@ export default function Drawing2D() {
   const [E, setE] = useState("");
   const [N, setN] = useState("");
   const [label, setLabel] = useState("");
+  const [title, setTitle] = useState("");
 
   // modes / selection
   const [mode, setMode] = useState("line"); // 'line' | 'angle'
   const [selected, setSelected] = useState([]);
   const [refresh, setRefresh] = useState(0);
 
-  // view transform
-  const [zoom, setZoom] = useState(60);
+  // view transform (zoom is “units→pixels”)
+  const BASE_ZOOM = 60;        // slider = 0  နေရာမှာ zoom
+  const [zoom, setZoom] = useState(BASE_ZOOM);
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
+
+  // slider state (−20 .. +50)
+  const MIN_S = -20, MAX_S = 50;
+  const [sval, setSval] = useState(0); // slider value
+
+  // slider ↔ zoom mapping (log scale for smoothness)
+  const sliderToZoom = (s) => {
+    // zoom = BASE_ZOOM * 2^(s/10); clamp to sane range
+    const z = BASE_ZOOM * Math.pow(2, s / 10);
+    return Math.min(600, Math.max(10, z));
+  };
+  const zoomToSlider = (z) => {
+    const s = 10 * Math.log2((z || BASE_ZOOM) / BASE_ZOOM);
+    return Math.min(MAX_S, Math.max(MIN_S, Math.round(s)));
+  };
 
   // canvas
   const wrapRef = useRef(null);
@@ -138,7 +154,7 @@ export default function Drawing2D() {
     };
   }, []);
 
-  // 🔁 Restore from AllReview → localStorage
+  // Restore from AllReview → localStorage
   useEffect(() => {
     try {
       const raw = localStorage.getItem("wmk_restore");
@@ -149,7 +165,7 @@ export default function Drawing2D() {
       if (st.lines) setLines(st.lines);
       if (st.angles) setAngles(st.angles);
       if (st.view) {
-        if (typeof st.view.zoom === "number") setZoom(st.view.zoom);
+        if (typeof st.view.zoom === "number") { setZoom(st.view.zoom); setSval(zoomToSlider(st.view.zoom)); }
         if (typeof st.view.tx === "number") setTx(st.view.tx);
         if (typeof st.view.ty === "number") setTy(st.view.ty);
       }
@@ -158,10 +174,6 @@ export default function Drawing2D() {
       console.warn("restore failed", e);
     }
   }, []);
-
-  // world<->screen
-  const W2S = (p) => ({ x: p.x * zoom + sizeRef.current.wCss/2 + tx, y: sizeRef.current.hCss/2 - p.y*zoom + ty });
-  const S2W = (sx, sy) => ({ x: (sx - sizeRef.current.wCss/2 - tx)/zoom, y: (sizeRef.current.hCss/2 - sy + ty)/zoom });
 
   // draw live
   useEffect(() => {
@@ -179,7 +191,7 @@ export default function Drawing2D() {
     setE(""); setN(""); setLabel("");
   };
 
-  // gestures
+  // gestures (pan / pinch / tap)
   const onPointerDown = (e) => {
     e.currentTarget.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
@@ -200,11 +212,12 @@ export default function Drawing2D() {
       const mid = { x: (p1.x + p2.x)/2 - rect.left, y: (p1.y + p2.y)/2 - rect.top };
 
       setZoom(z => {
-        const nz = Math.min(300, Math.max(10, z * (distNow / distPrev)));
+        const nz = Math.min(600, Math.max(10, z * (distNow / distPrev)));
         const wx = (mid.x - tx) / z, wy = (mid.y - ty) / z;
         const afterX = wx * nz, afterY = wy * nz;
         setTx(v => v + (mid.x - (afterX + tx)));
         setTy(v => v + (mid.y - (afterY + ty)));
+        setSval(zoomToSlider(nz));
         return nz;
       });
     }
@@ -213,14 +226,16 @@ export default function Drawing2D() {
     const down = pointers.current.get(e.pointerId);
     pointers.current.delete(e.pointerId);
 
+    // quick tap -> select nearest point
     if (down && Date.now() - down.t < 200 && pointers.current.size === 0) {
       const rect = e.currentTarget.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const world = S2W(mx, my);
+      const x = (mx - sizeRef.current.wCss/2 - tx)/zoom;
+      const y = (sizeRef.current.hCss/2 - my + ty)/zoom;
       const hitR = 12 / zoom;
       let pick=null, best=Infinity;
       for (const p of points) {
-        const d = Math.hypot(p.x - world.x, p.y - world.y);
+        const d = Math.hypot(p.x - x, p.y - y);
         if (d < best && d <= hitR) { best = d; pick = p; }
       }
       if (!pick) return;
@@ -248,7 +263,7 @@ export default function Drawing2D() {
     }
   };
 
-  // view helpers
+  // Fit/Reset/Clear
   const fitView = () => {
     if (points.length === 0) return;
     const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
@@ -257,57 +272,41 @@ export default function Drawing2D() {
     const w=maxX-minX || 1, h=maxY-minY || 1, pad=0.5;
     const { wCss,hCss }=sizeRef.current;
     const z = Math.min((wCss*0.9)/(w+pad*2), (hCss*0.9)/(h+pad*2));
-    setZoom(Math.min(300, Math.max(10, z)));
+    const nz = Math.min(600, Math.max(10, z));
+    setZoom(nz); setSval(zoomToSlider(nz));
     const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
-    setTx(-cx*z); setTy(cy*z);
+    setTx(-cx*nz); setTy(cy*nz);
   };
-  const resetView = () => { setZoom(60); setTx(0); setTy(0); };
+  const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
   const clearAll = () => { setPoints([]); setLines([]); setAngles([]); setSelected([]); };
 
-  // ---------- SAVE (use CURRENT VIEW & store raw state) ----------
+  // ---------- SAVE (no image) — Title + raw state only ----------
   const saveToFirebase = async () => {
-    const { wCss, hCss } = sizeRef.current;
-    const dpr = window.devicePixelRatio || 1;
-
-    // hi-res offscreen (current view)
-    const off = document.createElement("canvas");
-    off.width  = wCss * 2 * dpr;
-    off.height = hCss * 2 * dpr;
-    const octx = off.getContext("2d");
-    octx.setTransform(2 * dpr, 0, 0, 2 * dpr, 0, 0);
-    drawScene(octx, wCss, hCss, zoom, tx, ty, points, lines, angles);
-    const dataUrl = off.toDataURL("image/png", 0.92);
-
-    // thumbnail (same view)
-    const thumbMaxW = 600;
-    const scale = thumbMaxW / wCss;
-    const thumb = document.createElement("canvas");
-    thumb.width = thumbMaxW;
-    thumb.height = Math.round(hCss * scale);
-    const tctx = thumb.getContext("2d");
-    tctx.setTransform(scale, 0, 0, scale, 0, 0);
-    drawScene(tctx, wCss, hCss, zoom, tx, ty, points, lines, angles);
-    let thumbUrl; try { thumbUrl = thumb.toDataURL("image/webp", 0.85); } catch { thumbUrl = thumb.toDataURL("image/jpeg", 0.85); }
-
     const now = Date.now();
     const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
-
     await set(push(dbRef(db, "drawings")), {
       createdAt: now,
       expiresAt,
-      dataUrl,
-      thumbUrl,
-      state: { points, lines, angles, view: { zoom, tx, ty } }, // ⭐ raw data + current view
+      title: title || "Untitled",
+      state: { points, lines, angles, view: { zoom, tx, ty } }, // raw + current view
       meta: { points: points.length, lines: lines.length, triples: angles.length },
     });
-
     alert("Saved ✅");
+  };
+
+  // slider change
+  const onSliderChange = (v) => {
+    const s = Number(v);
+    setSval(s);
+    const nz = sliderToZoom(s);
+    // keep center under finger? (simple center-preserving not needed here)
+    setZoom(nz);
   };
 
   return (
     <div className="grid">
-      {/* Canvas */}
-      <div className="card" style={{ padding: 8 }}>
+      {/* Canvas (with vertical scale slider overlay at right) */}
+      <div className="card" style={{ padding: 8, position: "relative" }}>
         <div ref={wrapRef} style={{ width: "100%" }}>
           <canvas
             ref={canvasRef}
@@ -318,10 +317,48 @@ export default function Drawing2D() {
             style={{ display:"block", width:"100%", background:"#fff", borderRadius:12, border:"1px solid #e5e7eb", touchAction:"none", cursor:"crosshair" }}
           />
         </div>
+
+        {/* vertical slider (−20 .. +50) */}
+        <div style={{
+          position: "absolute", right: 8, top: 12, bottom: 12,
+          width: 44, display: "grid", placeItems: "center",
+          background: "#f1f5f9", border: "1px solid #e5e7eb", borderRadius: 12
+        }}>
+          <div className="small" style={{ marginBottom: 4 }}>Scale</div>
+          <input
+            type="range"
+            min={MIN_S}
+            max={MAX_S}
+            step={1}
+            value={sval}
+            onChange={(e)=>onSliderChange(e.target.value)}
+            style={{
+              writingMode: "bt-lr",
+              WebkitAppearance: "slider-vertical",
+              height: "80%", width: 24
+            }}
+          />
+          <div className="small" style={{ marginTop: 4 }}>
+            {Math.round(zoom)} px/u
+          </div>
+        </div>
       </div>
 
       {/* Controls */}
       <div className="card" style={{ position:"sticky", bottom:8, zIndex:10 }}>
+        {/* Title */}
+        <div className="row" style={{ marginBottom: 8 }}>
+          <input
+            className="input"
+            placeholder="Title (e.g. P83 pipe)"
+            value={title}
+            onChange={(e)=>setTitle(e.target.value)}
+            style={{ flex: "1 1 260px" }}
+          />
+          <button className="btn" onClick={saveToFirebase}>💾 Save</button>
+        </div>
+
+        {/* Add point */}
         <div className="row">
           <input className="input" type="number" inputMode="decimal" step="any" placeholder="E" value={E} onChange={(e)=>setE(e.target.value)}/>
           <input className="input" type="number" inputMode="decimal" step="any" placeholder="N" value={N} onChange={(e)=>setN(e.target.value)}/>
@@ -337,7 +374,6 @@ export default function Drawing2D() {
             <button className="btn" onClick={fitView}>🧭 Fit</button>
             <button className="btn" onClick={resetView}>↺ Reset</button>
             <button className="btn" onClick={clearAll}>🧹 Clear</button>
-            <button className="btn" onClick={saveToFirebase}>💾 Save</button>
           </div>
         </div>
       </div>
@@ -355,7 +391,7 @@ export default function Drawing2D() {
 
       <div className="card">
         <div className="page-title">Angles</div>
-        {angles.length===0 && <div className="small">No angles yet.</div>}
+      {angles.length===0 && <div className="small">No angles yet.</div>}
         {angles.map(t=>(
           <div key={t.id} className="small">
             #{t.id} — ∠ at <b>{t.b}</b> from <b>{t.a}</b>→<b>{t.b}</b>→<b>{t.c}</b> = <b>{t.deg}°</b>
@@ -364,4 +400,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-                        }
+  }
