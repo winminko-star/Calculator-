@@ -1,102 +1,48 @@
-import React, { useEffect, useState } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "./firebase";
-
+// src/App.jsx
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import NavBar from "./components/NavBar";
+import AuthLogin from "./pages/AuthLogin";
 import Home from "./pages/Home";
 import Drawing2D from "./pages/Drawing2D";
 import AllReview from "./pages/AllReview";
-import AuthLogin from "./pages/AuthLogin";
-
-// New pages
 import RightTriangle from "./pages/RightTriangle";
 import CircleCenter from "./pages/CircleCenter";
 import Levelling from "./pages/Levelling";
-
-// simple route guard
-function Private({ user, children }) {
-  const location = useLocation();
-  if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  }
-  return children;
-}
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth } from "./firebase";
+import { useEffect, useState } from "react";
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    const unsub = onAuthStateChanged(auth, (u) => { setUser(u); setReady(true); });
     return () => unsub();
   }, []);
 
-  return (
-    <>
-      {/* Login မပြီးသေးရင် Navbar မပြ */}
-      {user && <NavBar user={user} onLogout={() => signOut(auth)} />}
+  if (!ready) return null; // or a tiny loader
 
+  return (
+    <BrowserRouter>
+      {user && <NavBar user={user} onLogout={() => signOut(auth)} />}
       <div className="container">
         <Routes>
-          {/* Login အမြဲလမ်းလ麼 */}
-          <Route path="/login" element={<AuthLogin />} />
+          {/* Login: user ရှိထားရင် Home သို့ သွား */}
+          <Route path="/login" element={!user ? <AuthLogin /> : <Navigate to="/" replace />} />
 
-          {/* Login အောင်ရင် Home ကို ပထမဆုံး မြင် */}
-          <Route
-            path="/"
-            element={
-              <Private user={user}>
-                <Home />
-              </Private>
-            }
-          />
-
-          {/* Tools (all private) */}
-          <Route
-            path="/drawing2d"
-            element={
-              <Private user={user}>
-                <Drawing2D />
-              </Private>
-            }
-          />
-          <Route
-            path="/review"
-            element={
-              <Private user={user}>
-                <AllReview />
-              </Private>
-            }
-          />
-          <Route
-            path="/righttriangle"
-            element={
-              <Private user={user}>
-                <RightTriangle />
-              </Private>
-            }
-          />
-          <Route
-            path="/circlecenter"
-            element={
-              <Private user={user}>
-                <CircleCenter />
-              </Private>
-            }
-          />
-          <Route
-            path="/levelling"
-            element={
-              <Private user={user}>
-                <Levelling />
-              </Private>
-            }
-          />
+          {/* Protected routes */}
+          <Route path="/" element={user ? <Home /> : <Navigate to="/login" replace />} />
+          <Route path="/drawing2d" element={user ? <Drawing2D /> : <Navigate to="/login" replace />} />
+          <Route path="/review" element={user ? <AllReview /> : <Navigate to="/login" replace />} />
+          <Route path="/righttriangle" element={user ? <RightTriangle /> : <Navigate to="/login" replace />} />
+          <Route path="/circlecenter" element={user ? <CircleCenter /> : <Navigate to="/login" replace />} />
+          <Route path="/levelling" element={user ? <Levelling /> : <Navigate to="/login" replace />} />
 
           {/* fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />
         </Routes>
       </div>
-    </>
+    </BrowserRouter>
   );
-            }
+}
