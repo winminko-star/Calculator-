@@ -67,21 +67,43 @@ function solve3x3(A,b){
 }
 
 /* ========== SVG Preview (Triplet center + one circle + radii lines) ========== */
+/* ★ Only this part changed: bounds now include center±radius, so circle never crops */
 function Preview({ points, tCenter, radius }) {
-  // bounds (fit all points + center)
-  const xs = points.map(p=>p.e).concat(tCenter?.cx ?? []);
-  const ys = points.map(p=>p.n).concat(tCenter?.cy ?? []);
-  const minX = Math.min(...xs, 0), maxX = Math.max(...xs, 10);
-  const minY = Math.min(...ys, 0), maxY = Math.max(...ys, 10);
+  // bounds include full circle
+  const xs = [
+    ...points.map(p => p.e),
+    ...(tCenter && Number.isFinite(radius) ? [tCenter.cx - radius, tCenter.cx + radius] : []),
+    ...(tCenter ? [tCenter.cx] : []),
+  ];
+  const ys = [
+    ...points.map(p => p.n),
+    ...(tCenter && Number.isFinite(radius) ? [tCenter.cy - radius, tCenter.cy + radius] : []),
+    ...(tCenter ? [tCenter.cy] : []),
+  ];
+
+  const minX = xs.length ? Math.min(...xs) : 0;
+  const maxX = xs.length ? Math.max(...xs) : 10;
+  const minY = ys.length ? Math.min(...ys) : 0;
+  const maxY = ys.length ? Math.max(...ys) : 10;
 
   const pad = 10, w = 360, h = 260;
-  const sx = (w - 2*pad) / (maxX - minX || 1);
-  const sy = (h - 2*pad) / (maxY - minY || 1);
-  const k = (sx + sy) / 2; // scale for radius
-  const toSvg = (x,y)=>({ X: pad + (x - minX)*sx, Y: h - pad - (y - minY)*sy });
+  const spanX = Math.max(maxX - minX, 1e-6);
+  const spanY = Math.max(maxY - minY, 1e-6);
+
+  // little inner margins
+  const innerPadX = 0.06 * spanX;
+  const innerPadY = 0.06 * spanY;
+
+  const sx = (w - 2*pad) / (spanX + 2*innerPadX);
+  const sy = (h - 2*pad) / (spanY + 2*innerPadY);
+  const k  = (sx + sy) / 2;
+  const x0 = minX - innerPadX;
+  const y0 = minY - innerPadY;
+
+  const toSvg = (x,y) => ({ X: pad + (x - x0) * sx, Y: h - pad - (y - y0) * sy });
 
   const C = tCenter ? toSvg(tCenter.cx, tCenter.cy) : null;
-  const R = Number.isFinite(radius) ? radius * k : null;
+  const R = tCenter && Number.isFinite(radius) ? Math.max(radius * k, 0) : null;
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" style={{ display:"block" }}>
@@ -96,12 +118,12 @@ function Preview({ points, tCenter, radius }) {
         ))}
       </g>
 
-      {/* circle (one) */}
+      {/* circle */}
       {C && Number.isFinite(R) && (
         <circle cx={C.X} cy={C.Y} r={R} fill="none" stroke="#0ea5e9" strokeWidth="2" />
       )}
 
-      {/* radii lines from center to each point */}
+      {/* radii */}
       {C && points.map((p)=> {
         const P = toSvg(p.e, p.n);
         return <line key={"r"+p.id} x1={C.X} y1={C.Y} x2={P.X} y2={P.Y} stroke="#94a3b8" strokeWidth="1.5" />;
@@ -143,7 +165,7 @@ export default function CircleCenter() {
   };
   const clearAll = () => setPts([]);
 
-  // Triplet center: average of all circumcenters (robust)
+  // Triplet center (average of all circumcenters)
   const tCenter = useMemo(() => {
     if (pts.length < 3) return null;
     const cs = [];
@@ -165,14 +187,14 @@ export default function CircleCenter() {
     return pts.map(p => ({ id:p.id, r: Math.hypot(p.e - tCenter.cx, p.n - tCenter.cy) }));
   }, [pts, tCenter]);
 
-  // One circle radius (median of per-point radii -> stable)
+  // One circle radius (median of radii)
   const circleR = useMemo(() => {
     if (!radii.length) return undefined;
     const arr = radii.map(x=>x.r).sort((a,b)=>a-b);
     return arr[Math.floor(arr.length/2)];
   }, [radii]);
 
-  // Best-fit center (text only; not drawn)
+  // Best-fit center (text only)
   const lCenter = useMemo(() => leastSquaresCenter(pts), [pts]);
 
   return (
@@ -237,4 +259,4 @@ export default function CircleCenter() {
       </div>
     </div>
   );
-                           }
+      }
