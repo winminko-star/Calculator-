@@ -2,9 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
 
-// -------- helpers --------
-const safeId = () =>
-  (crypto?.randomUUID?.() || Math.random().toString(36)).slice(0, 8);
+const safeId = () => (crypto?.randomUUID?.() || Math.random().toString(36)).slice(0, 8);
 const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
 const angleDeg = (a, b, c) => {
   const v1 = { x: a.x - b.x, y: a.y - b.y };
@@ -18,72 +16,56 @@ const angleDeg = (a, b, c) => {
 
 export default function Drawing2D() {
   // data
-  const [points, setPoints] = useState([]);   // {id,label,x,y}
-  const [lines, setLines] = useState([]);     // {id,p1,p2,len}
-  const [angles, setAngles] = useState([]);   // {id,a,b,c,deg}
+  const [points, setPoints] = useState([]);
+  const [lines, setLines] = useState([]);
+  const [angles, setAngles] = useState([]);
 
   // inputs
-  const [E, setE] = useState("");
-  const [N, setN] = useState("");
-  const [label, setLabel] = useState("");
+  const [E, setE] = useState(""); const [N, setN] = useState(""); const [label, setLabel] = useState("");
 
-  // UI state
-  const [mode, setMode] = useState("line");   // 'line' | 'angle'
-  const [selected, setSelected] = useState([]); // clicked point ids
-  const [scale, setScale] = useState(6);      // px per unit (CSS)
-  const [refresh, setRefresh] = useState(0);  // redraw trigger on resize/visibility
+  // modes & view
+  const [mode, setMode] = useState("line");       // 'line' | 'angle'
+  const [selected, setSelected] = useState([]);
+  const [refresh, setRefresh] = useState(0);
+
+  // view transform (world→screen): s = (x*zoom + tx, y*zoom + ty)
+  const [zoom, setZoom] = useState(60);           // px per unit (start big for phone)
+  const [tx, setTx] = useState(0);                // translate X (px)
+  const [ty, setTy] = useState(0);                // translate Y (px)
 
   // canvas
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const ctxRef = useRef(null);
-  const sizeRef = useRef({ wCss: 360, hCss: 420 }); // phone-first CSS size
+  const sizeRef = useRef({ wCss: 360, hCss: 420 });
+  const pointers = useRef(new Map());             // pointerId -> {x,y}
 
-  // ---------- stable sizing (mount + resize/orientation) ----------
+  // sizing
   useEffect(() => {
-    const cvs = canvasRef.current;
-    const wrap = wrapRef.current;
+    const cvs = canvasRef.current, wrap = wrapRef.current;
     if (!cvs || !wrap) return;
-
     const applySize = () => {
       const dpr = window.devicePixelRatio || 1;
-      const parentW = Math.max(320, Math.floor(wrap.clientWidth || 360));
-      // taller on phone; clamp reasonable range
-      let hCss = Math.min(Math.max(Math.floor(parentW * 1.0), 360), 640);
-
-      sizeRef.current = { wCss: parentW, hCss };
-      // CSS size
-      cvs.style.width = parentW + "px";
-      cvs.style.height = hCss + "px";
-      // backing store (physical px)
-      cvs.width = Math.floor(parentW * dpr);
-      cvs.height = Math.floor(hCss * dpr);
-
+      const w = Math.max(320, Math.floor(wrap.clientWidth || 360));
+      const h = Math.min(Math.max(Math.floor(w * 1.0), 360), 640);
+      sizeRef.current = { wCss: w, hCss: h };
+      cvs.style.width = w + "px";
+      cvs.style.height = h + "px";
+      cvs.width = Math.floor(w * dpr);
+      cvs.height = Math.floor(h * dpr);
       const ctx = cvs.getContext("2d");
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw using CSS px
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctxRef.current = ctx;
-
-      // trigger redraw after sizing
-      setRefresh((r) => r + 1);
+      setRefresh(r => r + 1);
     };
-
     applySize();
-
-    // debounce resize (address bar hide/show & rotation)
     let t;
-    const onResize = () => {
-      clearTimeout(t);
-      t = setTimeout(applySize, 60);
-    };
+    const onResize = () => { clearTimeout(t); t = setTimeout(applySize, 60); };
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
-
-    // redraw when returning to tab/app
-    const onVis = () =>
-      document.visibilityState === "visible" && setRefresh((r) => r + 1);
+    const onVis = () => document.visibilityState === "visible" && setRefresh(r => r + 1);
     window.addEventListener("visibilitychange", onVis);
     window.addEventListener("pageshow", onVis);
-
     return () => {
       clearTimeout(t);
       window.removeEventListener("resize", onResize);
@@ -93,369 +75,247 @@ export default function Drawing2D() {
     };
   }, []);
 
-  // ---------- draw ----------
+  // world<->screen helpers
+  const W2S = (p) => ({ x: p.x * zoom + sizeRef.current.wCss / 2 + tx, y: sizeRef.current.hCss / 2 - (p.y * zoom) + ty });
+  const S2W = (sx, sy) => ({ x: (sx - sizeRef.current.wCss / 2 - tx) / zoom, y: (sizeRef.current.hCss / 2 - sy + ty) / zoom });
+
+  // draw
   useEffect(() => {
-    const ctx = ctxRef.current;
-    const cvs = canvasRef.current;
-    if (!ctx || !cvs) return;
-
+    const ctx = ctxRef.current; if (!ctx) return;
     const { wCss, hCss } = sizeRef.current;
-    const origin = { x: wCss / 2, y: hCss / 2 };
-    const toScreen = (p) => ({
-      x: origin.x + p.x * scale,
-      y: origin.y - p.y * scale,
-    });
 
-    // clear
     ctx.clearRect(0, 0, wCss, hCss);
 
-    // grid
-    ctx.strokeStyle = "#e5e7eb";
-    ctx.lineWidth = 1;
-    const step = Math.max(scale * 10, 24);
-    for (let gx = origin.x % step; gx < wCss; gx += step) {
-      ctx.beginPath();
-      ctx.moveTo(gx, 0);
-      ctx.lineTo(gx, hCss);
-      ctx.stroke();
-    }
-    for (let gy = origin.y % step; gy < hCss; gy += step) {
-      ctx.beginPath();
-      ctx.moveTo(0, gy);
-      ctx.lineTo(wCss, gy);
-      ctx.stroke();
-    }
+    // grid (snap every 10 units)
+    const step = Math.max(zoom * 1, 24); // 1u
+    ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 1;
+    const origin = { x: wCss / 2 + tx % step, y: hCss / 2 + ty % step };
+    for (let gx = origin.x; gx < wCss; gx += step) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, hCss); ctx.stroke(); }
+    for (let gx = origin.x; gx > 0; gx -= step)   { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, hCss); ctx.stroke(); }
+    for (let gy = origin.y; gy < hCss; gy += step){ ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(wCss, gy); ctx.stroke(); }
+    for (let gy = origin.y; gy > 0; gy -= step)   { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(wCss, gy); ctx.stroke(); }
 
     // axes
-    ctx.strokeStyle = "#94a3b8";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, origin.y);
-    ctx.lineTo(wCss, origin.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(origin.x, 0);
-    ctx.lineTo(origin.x, hCss);
-    ctx.stroke();
+    ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, hCss/2 + ty); ctx.lineTo(wCss, hCss/2 + ty); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(wCss/2 + tx, 0); ctx.lineTo(wCss/2 + tx, hCss); ctx.stroke();
 
-    // lines + length
-    ctx.strokeStyle = "#0ea5e9";
-    ctx.lineWidth = 2;
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "13px system-ui";
-    lines.forEach((l) => {
-      const p1 = points.find((p) => p.id === l.p1);
-      const p2 = points.find((p) => p.id === l.p2);
-      if (!p1 || !p2) return;
-      const s1 = toScreen(p1),
-        s2 = toScreen(p2);
-      ctx.beginPath();
-      ctx.moveTo(s1.x, s1.y);
-      ctx.lineTo(s2.x, s2.y);
-      ctx.stroke();
-      ctx.fillText(
-        `${l.len}`,
-        (s1.x + s2.x) / 2 + 6,
-        (s1.y + s2.y) / 2 - 6
-      );
+    // lines with length
+    ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2; ctx.fillStyle = "#0f172a"; ctx.font = "13px system-ui";
+    lines.forEach(l => {
+      const a = points.find(p => p.id === l.p1), b = points.find(p => p.id === l.p2);
+      if (!a || !b) return;
+      const s1 = W2S(a), s2 = W2S(b);
+      ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
+      ctx.fillText(`${l.len}`, (s1.x+s2.x)/2 + 6, (s1.y+s2.y)/2 - 6);
     });
 
-    // angles + label + arc
-    angles.forEach((t) => {
-      const a = points.find((p) => p.id === t.a);
-      const b = points.find((p) => p.id === t.b);
-      const c = points.find((p) => p.id === t.c);
-      if (!a || !b || !c) return;
-      const sb = toScreen(b);
-      ctx.fillStyle = "#0f172a";
-      ctx.fillText(`${t.deg}°`, sb.x + 10, sb.y - 10);
-
-      const a1 = Math.atan2(a.y - b.y, a.x - b.x);
-      const a2 = Math.atan2(c.y - b.y, c.x - b.x);
-      let start = a1,
-        end = a2;
-      while (end - start > Math.PI) start += 2 * Math.PI;
-      while (start - end > Math.PI) end += 2 * Math.PI;
-      ctx.beginPath();
-      ctx.strokeStyle = "#22c55e";
-      ctx.lineWidth = 2;
-      ctx.arc(sb.x, sb.y, 22, -end, -start, true);
-      ctx.stroke();
+    // angles
+    angles.forEach(t=>{
+      const a = points.find(p=>p.id===t.a), b=points.find(p=>p.id===t.b), c=points.find(p=>p.id===t.c);
+      if(!a||!b||!c) return;
+      const sb = W2S(b);
+      ctx.fillStyle="#0f172a"; ctx.fillText(`${t.deg}°`, sb.x+10, sb.y-10);
+      const a1=Math.atan2(a.y-b.y, a.x-b.x), a2=Math.atan2(c.y-b.y, c.x-b.x);
+      let start=a1, end=a2; while(end-start>Math.PI) start+=2*Math.PI; while(start-end>Math.PI) end+=2*Math.PI;
+      ctx.beginPath(); ctx.strokeStyle="#22c55e"; ctx.lineWidth=2; ctx.arc(sb.x, sb.y, 22, -end, -start, true); ctx.stroke();
     });
 
     // points
-    points.forEach((p) => {
-      const s = toScreen(p);
-      ctx.fillStyle = "#ef4444";
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#0f172a";
-      ctx.fillText(p.label ?? p.id, s.x + 6, s.y - 6);
+    points.forEach(p=>{
+      const s=W2S(p);
+      ctx.fillStyle="#ef4444"; ctx.beginPath(); ctx.arc(s.x, s.y, 4, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle="#0f172a"; ctx.fillText(p.label ?? p.id, s.x+6, s.y-6);
     });
-  }, [points, lines, angles, scale, refresh]); // <-- refresh included
+  }, [points, lines, angles, zoom, tx, ty, refresh]);
 
-  // ---------- add point ----------
+  // add point
   const addPoint = () => {
-    if (E === "" || N === "") return;
-    const x = Number(E),
-      y = Number(N);
-    if (Number.isNaN(x) || Number.isNaN(y)) return;
+    if (E==="" || N==="") return;
+    const x = Number(E), y = Number(N); if (Number.isNaN(x) || Number.isNaN(y)) return;
     const id = safeId();
-    setPoints((arr) => [...arr, { id, label: label || id, x, y }]);
-    setE("");
-    setN("");
-    setLabel("");
+    setPoints(a => [...a, { id, label: label || id, x, y }]);
+    setE(""); setN(""); setLabel("");
   };
 
-  // ---------- pointer (tap/click) ----------
-  const onPointerDown = (evt) => {
-    evt.preventDefault?.();
-    const cvs = canvasRef.current;
-    if (!cvs) return;
-    const rect = cvs.getBoundingClientRect();
-    const mx = (evt.clientX ?? evt.touches?.[0]?.clientX) - rect.left;
-    const my = (evt.clientY ?? evt.touches?.[0]?.clientY) - rect.top;
+  // pointer handlers (pan / pinch / tap-select)
+  const onPointerDown = (e) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
+  };
+  const onPointerMove = (e) => {
+    const prev = pointers.current.get(e.pointerId);
+    if (!prev) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: prev.t });
 
-    const { wCss, hCss } = sizeRef.current;
-    const origin = { x: wCss / 2, y: hCss / 2 };
-    const wx = (mx - origin.x) / scale;
-    const wy = (origin.y - my) / scale;
+    const pts = [...pointers.current.values()];
+    if (pts.length === 1) {
+      // pan
+      setTx(v => v + (e.clientX - prev.x));
+      setTy(v => v + (e.clientY - prev.y));
+    } else if (pts.length >= 2) {
+      // pinch zoom around midpoint
+      const [p1, p2] = pts;
+      const [o1, o2] = [prev, p2.t===prev.t? p2 : pts[0]]; // safe
+      const distPrev = Math.hypot((o1?.x ?? 0) - (o2?.x ?? 0), (o1?.y ?? 0) - (o2?.y ?? 0)) || 1;
+      const distNow  = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
+      const mid = { x: (p1.x + p2.x)/2, y: (p1.y + p2.y)/2 };
 
-    // nearest point (bigger radius for phone)
-    const hitR = 12 / scale;
-    let pick = null,
-      best = Infinity;
-    for (const p of points) {
-      const d = Math.hypot(p.x - wx, p.y - wy);
-      if (d < best && d <= hitR) {
-        best = d;
-        pick = p;
-      }
+      const scale = Math.max(0.2, Math.min(5, distNow / distPrev));
+      setZoom(z => {
+        const newZ = Math.min(300, Math.max(10, z * scale));
+        // keep focal point under finger
+        const before = S2W(mid.x, mid.y);
+        const afterSx = before.x * newZ + sizeRef.current.wCss/2 + tx;
+        const afterSy = sizeRef.current.hCss/2 - (before.y * newZ) + ty;
+        setTx(v => v + (mid.x - afterSx));
+        setTy(v => v + (mid.y - afterSy));
+        return newZ;
+      });
     }
-    if (!pick) return;
+  };
+  const onPointerUp = (e) => {
+    const down = pointers.current.get(e.pointerId);
+    pointers.current.delete(e.pointerId);
 
-    setSelected((sel) => {
-      const next = [...sel, pick.id];
+    // tap to select (only if it was a quick tap & no multi-touch)
+    if (down && Date.now() - down.t < 200 && pointers.current.size === 0) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const world = S2W(mx, my);
 
-      if (mode === "line" && next.length === 2) {
-        const [aId, bId] = next;
-        if (aId !== bId) {
-          const a = points.find((x) => x.id === aId);
-          const b = points.find((x) => x.id === bId);
-          const id = safeId();
-          setLines((ls) => [
-            ...ls,
-            { id, p1: a.id, p2: b.id, len: dist(a, b).toFixed(3) },
-          ]);
-        }
-        return [];
+      // nearest point in small radius
+      const hitR = 12 / zoom;
+      let pick=null, best=Infinity;
+      for (const p of points) {
+        const d = Math.hypot(p.x - world.x, p.y - world.y);
+        if (d < best && d <= hitR) { best = d; pick = p; }
       }
+      if (!pick) return;
 
-      if (mode === "angle" && next.length === 3) {
-        const [aId, bId, cId] = next;
-        if (new Set(next).size === 3) {
-          const a = points.find((x) => x.id === aId);
-          const b = points.find((x) => x.id === bId);
-          const c = points.find((x) => x.id === cId);
-          const id = safeId();
-          setAngles((ag) => [
-            ...ag,
-            { id, a: a.id, b: b.id, c: c.id, deg: angleDeg(a, b, c) },
-          ]);
+      setSelected(sel=>{
+        const next=[...sel, pick.id];
+
+        if (mode==="line" && next.length===2) {
+          const [aId,bId]=next; if (aId!==bId) {
+            const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
+            const id=safeId(); setLines(ls=>[...ls,{id,p1:a.id,p2:b.id,len:dist(a,b).toFixed(3)}]);
+          }
+          return [];
         }
-        return [];
-      }
-
-      return next;
-    });
+        if (mode==="angle" && next.length===3) {
+          const [aId,bId,cId]=next;
+          if (new Set(next).size===3) {
+            const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId), c=points.find(x=>x.id===cId);
+            const id=safeId(); setAngles(ag=>[...ag,{id,a:a.id,b:b.id,c:c.id,deg:angleDeg(a,b,c)}]);
+          }
+          return [];
+        }
+        return next;
+      });
+    }
   };
 
-  // ---------- delete line ----------
-  const deleteLine = (id) => setLines((ls) => ls.filter((l) => l.id !== id));
+  // save (full + thumb)
+  const saveToFirebase = async () => {
+    const cvs = canvasRef.current; if (!cvs) return;
+    const dpr = window.devicePixelRatio || 1;
+    const { wCss, hCss } = sizeRef.current;
 
-  // ---------- save (DB only, base64 PNG + JPEG thumbnail) ----------
-const saveToFirebase = async () => {
-  const cvs = canvasRef.current;
-  if (!cvs) return;
+    // draw current canvas to offscreen at 2x
+    const full = document.createElement("canvas");
+    full.width = wCss * 2 * dpr; full.height = hCss * 2 * dpr;
+    const fctx = full.getContext("2d"); fctx.setTransform(2*dpr,0,0,2*dpr,0,0);
+    fctx.drawImage(cvs, 0, 0);
+    const dataUrl = full.toDataURL("image/png", 0.92);
 
-  const dpr = window.devicePixelRatio || 1;
-  const { wCss, hCss } = sizeRef.current;
+    // thumb ~600px width
+    const maxW = 600, ratio = full.width / maxW;
+    const thumb = document.createElement("canvas");
+    thumb.width = maxW; thumb.height = Math.round(full.height / ratio);
+    const tctx = thumb.getContext("2d"); tctx.drawImage(full, 0, 0, thumb.width, thumb.height);
+    let thumbUrl; try { thumbUrl = thumb.toDataURL("image/webp", 0.85); } catch { thumbUrl = thumb.toDataURL("image/jpeg", 0.85); }
 
-  // Full-res (2x) snapshot
-  const full = document.createElement("canvas");
-  full.width = wCss * 2 * dpr;
-  full.height = hCss * 2 * dpr;
-  const fctx = full.getContext("2d");
-  fctx.setTransform(2 * dpr, 0, 0, 2 * dpr, 0, 0);
-  fctx.drawImage(cvs, 0, 0);
-  const dataUrl = full.toDataURL("image/png", 0.92); // full image
+    const now = Date.now(), expiresAt = now + 90*24*60*60*1000;
+    await set(push(dbRef(db, "drawings")), {
+      createdAt: now, expiresAt, dataUrl, thumbUrl,
+      meta: { points: points.length, lines: lines.length, triples: angles.length },
+    });
+    alert("Saved ✅");
+  };
 
-  // Thumbnail (max width 600px, keep ratio)
-  const maxW = 600;
-  const ratio = full.width / maxW;
-  const thumb = document.createElement("canvas");
-  thumb.width = maxW;
-  thumb.height = Math.round(full.height / ratio);
-  const tctx = thumb.getContext("2d");
-  tctx.drawImage(full, 0, 0, thumb.width, thumb.height);
-  // JPEG/webp = size small (fallback to jpeg)
-  let thumbUrl;
-  try {
-    thumbUrl = thumb.toDataURL("image/webp", 0.85);
-  } catch {
-    thumbUrl = thumb.toDataURL("image/jpeg", 0.85);
-  }
-
-  const now = Date.now();
-  const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
-
-  await set(push(dbRef(db, "drawings")), {
-    createdAt: now,
-    expiresAt,
-    dataUrl,     // full
-    thumbUrl,    // small for list
-    meta: { points: points.length, lines: lines.length, triples: angles.length },
-  });
-
-  alert("Saved ✅");
-};
+  const fitView = () => {
+    if (points.length === 0) return;
+    const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
+    const minX=Math.min(...xs), maxX=Math.max(...xs);
+    const minY=Math.min(...ys), maxY=Math.max(...ys);
+    const w=maxX-minX || 1, h=maxY-minY || 1;
+    const pad=0.5;
+    const { wCss,hCss }=sizeRef.current;
+    const z = Math.min((wCss*0.8)/(w+pad*2), (hCss*0.8)/(h+pad*2));
+    setZoom(Math.min(300, Math.max(10, z)));
+    // center
+    const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+    setTx(-cx*z); setTy(cy*z);
+  };
+  const resetView = () => { setZoom(60); setTx(0); setTy(0); };
 
   return (
     <div className="grid">
-      {/* Canvas */}
       <div className="card" style={{ padding: 8 }}>
         <div ref={wrapRef} style={{ width: "100%" }}>
           <canvas
             ref={canvasRef}
             onPointerDown={onPointerDown}
-            style={{
-              display: "block",
-              width: "100%",
-              background: "#fff",
-              borderRadius: 12,
-              border: "1px solid #e5e7eb",
-              touchAction: "none",
-              cursor: "crosshair",
-            }}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            style={{ display:"block", width:"100%", background:"#fff", borderRadius:12, border:"1px solid #e5e7eb", touchAction:"none", cursor:"crosshair" }}
           />
         </div>
       </div>
 
-      {/* Controls (phone-first, big tap targets) */}
-      <div
-        className="card"
-        style={{
-          position: "sticky",
-          bottom: 8,
-          zIndex: 10,
-          backdropFilter: "blur(4px)",
-        }}
-      >
+      {/* Controls */}
+      <div className="card" style={{ position:"sticky", bottom:8, zIndex:10 }}>
         <div className="row">
-          <input
-            className="input"
-            type="number"
-            inputMode="decimal"
-            step="any"
-            placeholder="E"
-            value={E}
-            onChange={(e) => setE(e.target.value)}
-          />
-          <input
-            className="input"
-            type="number"
-            inputMode="decimal"
-            step="any"
-            placeholder="N"
-            value={N}
-            onChange={(e) => setN(e.target.value)}
-          />
-          <input
-            className="input"
-            placeholder="Label"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-          />
-          <button className="btn" onClick={addPoint}>
-            ➕ Add
-          </button>
+          <input className="input" type="number" inputMode="decimal" step="any" placeholder="E"
+            value={E} onChange={(e)=>setE(e.target.value)}/>
+          <input className="input" type="number" inputMode="decimal" step="any" placeholder="N"
+            value={N} onChange={(e)=>setN(e.target.value)}/>
+          <input className="input" placeholder="Label" value={label} onChange={(e)=>setLabel(e.target.value)}/>
+          <button className="btn" onClick={addPoint}>➕ Add</button>
         </div>
 
-        <div className="row" style={{ marginTop: 8 }}>
-          <button
-            className="btn"
-            onClick={() => {
-              setMode("line");
-              setSelected([]);
-            }}
-            style={{ background: mode === "line" ? "#0ea5e9" : "#64748b" }}
-          >
-            📏 Line
-          </button>
-          <button
-            className="btn"
-            onClick={() => {
-              setMode("angle");
-              setSelected([]);
-            }}
-            style={{ background: mode === "angle" ? "#0ea5e9" : "#64748b" }}
-          >
-            ∠ Angle
-          </button>
+        <div className="row" style={{ marginTop:8 }}>
+          <button className="btn" onClick={()=>{ setMode("line"); setSelected([]); }} style={{ background: mode==="line" ? "#0ea5e9" : "#64748b" }}>📏 Line</button>
+          <button className="btn" onClick={()=>{ setMode("angle"); setSelected([]); }} style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b" }}>∠ Angle</button>
 
-          <div className="small" style={{ marginLeft: "auto" }}>
-            Scale: {scale}px/u
+          <div className="row" style={{ marginLeft:"auto" }}>
+            <button className="btn" onClick={fitView}>🧭 Fit</button>
+            <button className="btn" onClick={resetView}>↺ Reset</button>
+            <button className="btn" onClick={()=>{ setPoints([]); setLines([]); setAngles([]); setSelected([]); }}>🧹 Clear</button>
+            <button className="btn" onClick={saveToFirebase}>💾 Save</button>
           </div>
-          <input
-            type="range"
-            min="3"
-            max="12"
-            value={scale}
-            onChange={(e) => setScale(Number(e.target.value))}
-            style={{ width: 120 }}
-          />
-
-          <button
-            className="btn"
-            onClick={() => {
-              setPoints([]);
-              setLines([]);
-              setAngles([]);
-              setSelected([]);
-            }}
-          >
-            🧹 Clear
-          </button>
-          <button className="btn" onClick={saveToFirebase}>
-            💾 Save
-          </button>
         </div>
       </div>
 
       {/* Lists */}
       <div className="card">
         <div className="page-title">Lines</div>
-        {lines.length === 0 && <div className="small">No lines yet.</div>}
-        {lines.map((l) => (
-          <div key={l.id} className="row" style={{ justifyContent: "space-between" }}>
-            <div>
-              #{l.id} — {l.p1} ↔ {l.p2} — <b>{l.len}</b>
-            </div>
-            <button className="btn" onClick={() => deleteLine(l.id)}>
-              🗑 Delete
-            </button>
+        {lines.length===0 && <div className="small">No lines yet.</div>}
+        {lines.map(l=>(
+          <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
+            <div>#{l.id} — {l.p1} ↔ {l.p2} — <b>{l.len}</b></div>
           </div>
         ))}
       </div>
 
       <div className="card">
         <div className="page-title">Angles</div>
-        {angles.length === 0 && <div className="small">No angles yet.</div>}
-        {angles.map((t) => (
+        {angles.length===0 && <div className="small">No angles yet.</div>}
+        {angles.map(t=>(
           <div key={t.id} className="small">
-            #{t.id} — ∠ at <b>{t.b}</b> from <b>{t.a}</b>→<b>{t.b}</b>→<b>{t.c}</b> ={" "}
-            <b>{t.deg}°</b>
+            #{t.id} — ∠ at <b>{t.b}</b> from <b>{t.a}</b>→<b>{t.b}</b>→<b>{t.c}</b> = <b>{t.deg}°</b>
           </div>
         ))}
       </div>
