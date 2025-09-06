@@ -274,36 +274,52 @@ export default function Drawing2D() {
   // ---------- delete line ----------
   const deleteLine = (id) => setLines((ls) => ls.filter((l) => l.id !== id));
 
-  // ---------- save (DB only, base64 PNG) ----------
-  const saveToFirebase = async () => {
-    const cvs = canvasRef.current;
-    if (!cvs) return;
-    const dpr = window.devicePixelRatio || 1;
-    const { wCss, hCss } = sizeRef.current;
+  // ---------- save (DB only, base64 PNG + JPEG thumbnail) ----------
+const saveToFirebase = async () => {
+  const cvs = canvasRef.current;
+  if (!cvs) return;
 
-    const tmp = document.createElement("canvas");
-    tmp.width = wCss * 2 * dpr;
-    tmp.height = hCss * 2 * dpr;
-    const tctx = tmp.getContext("2d");
-    tctx.setTransform(2 * dpr, 0, 0, 2 * dpr, 0, 0);
-    tctx.drawImage(cvs, 0, 0);
-    const dataUrl = tmp.toDataURL("image/png", 0.92);
+  const dpr = window.devicePixelRatio || 1;
+  const { wCss, hCss } = sizeRef.current;
 
-    const now = Date.now();
-    const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
+  // Full-res (2x) snapshot
+  const full = document.createElement("canvas");
+  full.width = wCss * 2 * dpr;
+  full.height = hCss * 2 * dpr;
+  const fctx = full.getContext("2d");
+  fctx.setTransform(2 * dpr, 0, 0, 2 * dpr, 0, 0);
+  fctx.drawImage(cvs, 0, 0);
+  const dataUrl = full.toDataURL("image/png", 0.92); // full image
 
-    await set(push(dbRef(db, "drawings")), {
-      createdAt: now,
-      expiresAt,
-      dataUrl,
-      meta: {
-        points: points.length,
-        lines: lines.length,
-        triples: angles.length,
-      },
-    });
-    alert("Saved ✅");
-  };
+  // Thumbnail (max width 600px, keep ratio)
+  const maxW = 600;
+  const ratio = full.width / maxW;
+  const thumb = document.createElement("canvas");
+  thumb.width = maxW;
+  thumb.height = Math.round(full.height / ratio);
+  const tctx = thumb.getContext("2d");
+  tctx.drawImage(full, 0, 0, thumb.width, thumb.height);
+  // JPEG/webp = size small (fallback to jpeg)
+  let thumbUrl;
+  try {
+    thumbUrl = thumb.toDataURL("image/webp", 0.85);
+  } catch {
+    thumbUrl = thumb.toDataURL("image/jpeg", 0.85);
+  }
+
+  const now = Date.now();
+  const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
+
+  await set(push(dbRef(db, "drawings")), {
+    createdAt: now,
+    expiresAt,
+    dataUrl,     // full
+    thumbUrl,    // small for list
+    meta: { points: points.length, lines: lines.length, triples: angles.length },
+  });
+
+  alert("Saved ✅");
+};
 
   return (
     <div className="grid">
