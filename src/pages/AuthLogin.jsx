@@ -26,14 +26,14 @@ export default function AuthLogin() {
         return;
       }
       const cred = await signInWithEmailAndPassword(auth, email.trim(), pw);
-      if (cred.user.email.toLowerCase() !== ALLOWED_EMAIL.toLowerCase()) {
+      if (cred.user.email?.toLowerCase() !== ALLOWED_EMAIL.toLowerCase()) {
         await signOut(auth);
         setErr("Unauthorized user.");
         return;
       }
       navigate(redirectTo, { replace: true });
     } catch (e) {
-      setErr(e.message || "Login failed");
+      setErr(e?.message || "Login failed");
     } finally {
       setBusy(false);
     }
@@ -44,26 +44,12 @@ export default function AuthLogin() {
       <div className="card">
         <div className="page-title">🔐 Owner Login</div>
         <form onSubmit={onSubmit} className="grid">
-          <input
-            className="input"
-            type="email"
-            placeholder={`Email (${ALLOWED_EMAIL})`}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            className="input"
-            type="password"
-            placeholder="Password"
-            value={pw}
-            onChange={(e) => setPw(e.target.value)}
-          />
-          {err && <div className="small" style={{ color: "red" }}>{err}</div>}
-          <button className="btn" disabled={busy}>
-            {busy ? "Please wait…" : "Login"}
-          </button>
+          <input className="input" type="email" placeholder={`Email (${ALLOWED_EMAIL})`} value={email} onChange={(e)=>setEmail(e.target.value)} required />
+          <input className="input" type="password" placeholder="Password" value={pw} onChange={(e)=>setPw(e.target.value)} required />
+          {err && <div className="small" style={{ color: "#b91c1c" }}>{err}</div>}
+          <button className="btn" disabled={busy}>{busy ? "Please wait…" : "Login"}</button>
         </form>
       </div>
     </div>
   );
-}
+          }
