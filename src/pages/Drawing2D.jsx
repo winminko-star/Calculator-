@@ -3,14 +3,15 @@ import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
 
-const UNIT = "mm"; // default unit
+const UNIT_LABEL = "mm";          // UI ပြသရန် unit
+const MM_PER_UNIT = 1000;         // 1 unit = 1000 mm  ✅
 
-// ---------- small helpers ----------
+/* ---------- helpers ---------- */
 const safeId = () =>
   (crypto?.randomUUID?.() || Math.random().toString(36)).slice(0, 8);
-const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+const distUnits = (a, b) => Math.hypot(b.x - a.x, b.y - a.y); // distance in "units"
 
-// ---------- angle in degrees: ALWAYS the smaller (0..180) ----------
+// Smaller angle (0..180°)
 const angleDeg = (a, b, c) => {
   const v1 = { x: a.x - b.x, y: a.y - b.y };
   const v2 = { x: c.x - b.x, y: c.y - b.y };
@@ -46,14 +47,16 @@ function drawLabelPill(ctx, x, y, text) {
   ctx.lineWidth = 2;
   ctx.fill();
   ctx.stroke();
-mm ctx.fillStyle = "#0f172a";
+
+  ctx.fillStyle = "#0f172a";
   ctx.fillText(text, bx + padX, by + h - padY - 2);
 }
 
-// ---------- scene renderer (uses current view: zoom/tx/ty) ----------
+/* ---------- scene renderer (uses current view: zoom/tx/ty) ---------- */
 function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
-  // grid
   ctx.clearRect(0, 0, wCss, hCss);
+
+  // grid
   const step = Math.max(zoom * 1, 24);
   const originX = wCss / 2 + tx;
   const originY = hCss / 2 + ty;
@@ -71,23 +74,23 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
 
   const W2S = (p) => ({ x: p.x * zoom + wCss/2 + tx, y: hCss/2 - p.y * zoom + ty });
 
-  // lines + length
+  // lines + length (display in mm)
   ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2; ctx.fillStyle = "#0f172a"; ctx.font = "13px system-ui";
   lines.forEach(l => {
     const a = points.find(p => p.id === l.p1), b = points.find(p => p.id === l.p2);
     if (!a || !b) return;
     const s1 = W2S(a), s2 = W2S(b);
     ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
-    ctx.fillText(`${l.len} ${UNIT}`, (s1.x + s2.x)/2 + 6, (s1.y + s2.y)/2 - 6);
+    const mm = (l.lenUnits * MM_PER_UNIT).toFixed(0); // mm text
+    ctx.fillText(`${mm} ${UNIT_LABEL}`, (s1.x + s2.x)/2 + 6, (s1.y + s2.y)/2 - 6);
   });
 
-  // angles: NO ARC — only bold label near vertex (smaller angle already)
+  // angles: bold label only (smaller angle already)
   angles.forEach(t=>{
     const a = points.find(p=>p.id===t.a), b=points.find(p=>p.id===t.b), c=points.find(p=>p.id===t.c);
     if(!a||!b||!c) return;
     const sb = W2S(b);
-    const offset = 10;
-    drawLabelPill(ctx, sb.x + offset, sb.y - offset, `${t.deg}°`);
+    drawLabelPill(ctx, sb.x + 10, sb.y - 10, `${t.deg}°`);
   });
 
   // points (bigger + white halo)
@@ -110,12 +113,12 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
 export default function Drawing2D() {
   // data
   const [points, setPoints] = useState([]);
-  const [lines, setLines] = useState([]);
+  const [lines, setLines] = useState([]);   // {id,p1,p2,lenUnits}
   const [angles, setAngles] = useState([]);
 
   // inputs
-  const [E, setE] = useState("");
-  const [N, setN] = useState("");
+  const [E, setE] = useState("");      // mm input
+  const [N, setN] = useState("");      // mm input
   const [label, setLabel] = useState("");
   const [title, setTitle] = useState("");
 
@@ -124,26 +127,19 @@ export default function Drawing2D() {
   const [selected, setSelected] = useState([]);
   const [refresh, setRefresh] = useState(0);
 
-  // view transform (zoom is “units→pixels”, here 1 unit = 1000 mm)
-  const BASE_ZOOM = 60;        // slider = 0  နေရာမှာ zoom
+  // view transform (zoom = pixels per UNIT, 1 unit = 1000 mm)
+  const BASE_ZOOM = 60;
   const [zoom, setZoom] = useState(BASE_ZOOM);
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
-  const [autoFit, setAutoFit] = useState(true); // ✅ auto-fit toggle (default ON)
+  const [autoFit, setAutoFit] = useState(true);
 
   // slider state (−20 .. +50)
   const MIN_S = -20, MAX_S = 50;
-  const [sval, setSval] = useState(0); // slider value
+  const [sval, setSval] = useState(0);
 
-  // slider ↔ zoom mapping (log scale)
-  const sliderToZoom = (s) => {
-    const z = BASE_ZOOM * Math.pow(2, s / 10);
-    return Math.min(600, Math.max(10, z));
-  };
-  const zoomToSlider = (z) => {
-    const s = 10 * Math.log2((z || BASE_ZOOM) / BASE_ZOOM);
-    return Math.min(MAX_S, Math.max(MIN_S, Math.round(s)));
-  };
+  const sliderToZoom = (s) => Math.min(600, Math.max(10, BASE_ZOOM * Math.pow(2, s / 10)));
+  const zoomToSlider = (z) => Math.min(MAX_S, Math.max(MIN_S, Math.round(10 * Math.log2((z || BASE_ZOOM)/BASE_ZOOM))));
 
   // canvas
   const wrapRef = useRef(null);
@@ -195,7 +191,16 @@ export default function Drawing2D() {
       localStorage.removeItem("wmk_restore");
       const st = JSON.parse(raw);
       if (st.points) setPoints(st.points);
-      if (st.lines) setLines(st.lines);
+      if (st.lines) {
+        // normalize older saves (string len) -> lenUnits
+        const fixed = st.lines.map(l => ({
+          ...l,
+          lenUnits: typeof l.lenUnits === "number"
+            ? l.lenUnits
+            : (typeof l.len === "string" ? Number(l.len) : l.len) || 0
+        }));
+        setLines(fixed);
+      }
       if (st.angles) setAngles(st.angles);
       if (st.view) {
         if (typeof st.view.zoom === "number") { setZoom(st.view.zoom); setSval(zoomToSlider(st.view.zoom)); }
@@ -214,14 +219,13 @@ export default function Drawing2D() {
     drawScene(ctx, sizeRef.current.wCss, sizeRef.current.hCss, zoom, tx, ty, points, lines, angles);
   }, [points, lines, angles, zoom, tx, ty, refresh]);
 
-  // ---------- Fit/Reset/Clear ----------
+  /* ---------- Fit/Reset/Clear ---------- */
   const fitView = (pts = points) => {
     if (!pts || pts.length === 0) return;
     const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
-    const w = maxX - minX;
-    const h = maxY - minY;
+    const w = maxX - minX, h = maxY - minY;
     const { wCss, hCss } = sizeRef.current;
 
     if (w === 0 && h === 0) {
@@ -253,19 +257,20 @@ export default function Drawing2D() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, autoFit, sizeRef.current.wCss, sizeRef.current.hCss]);
 
-  // add point
+  /* ---------- Add point (INPUT IN mm → store in UNITS) ---------- */
   const addPoint = () => {
     if (E === "" || N === "") return;
-    const x = Number(E), y = Number(N);
-    if (Number.isNaN(x) || Number.isNaN(y)) return;
+    const xUnits = Number(E) / MM_PER_UNIT;   // scale down ✅
+    const yUnits = Number(N) / MM_PER_UNIT;
+    if (!isFinite(xUnits) || !isFinite(yUnits)) return;
     const id = safeId();
-    const next = [...points, { id, label: label || id, x, y }];
+    const next = [...points, { id, label: label || id, x: xUnits, y: yUnits }];
     setPoints(next);
     setE(""); setN(""); setLabel("");
     if (autoFit) setTimeout(() => fitView(next), 0);
   };
 
-  // gestures (pan / pinch / tap)
+  /* ---------- Gestures (pan / pinch / tap to select) ---------- */
   const onPointerDown = (e) => {
     e.currentTarget.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
@@ -320,7 +325,8 @@ export default function Drawing2D() {
         if (mode==="line" && next.length===2) {
           const [aId,bId]=next; if (aId!==bId) {
             const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
-            setLines(ls=>[...ls,{ id:safeId(), p1:a.id, p2:b.id, len:dist(a,b).toFixed(3) }]);
+            const lenU = distUnits(a,b); // in units
+            setLines(ls=>[...ls,{ id:safeId(), p1:a.id, p2:b.id, lenUnits: lenU }]);
           }
           return [];
         }
@@ -337,7 +343,7 @@ export default function Drawing2D() {
     }
   };
 
-  // ---------- SAVE (no image) — Title + raw state only ----------
+  /* ---------- SAVE (no image) — Title + raw state only ---------- */
   const saveToFirebase = async () => {
     const now = Date.now();
     const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
@@ -345,8 +351,9 @@ export default function Drawing2D() {
       createdAt: now,
       expiresAt,
       title: title || "Untitled",
-      unit: UNIT, // save unit metadata
-      state: { points, lines, angles, view: { zoom, tx, ty } },
+      unitLabel: UNIT_LABEL,
+      mmPerUnit: MM_PER_UNIT,                    // ✅ save scale meta
+      state: { points, lines, angles, view: { zoom, tx, ty } }, // points are in UNITS
       meta: { points: points.length, lines: lines.length, triples: angles.length },
     });
     alert("Saved ✅");
@@ -356,8 +363,7 @@ export default function Drawing2D() {
   const onSliderChange = (v) => {
     const s = Number(v);
     setSval(s);
-    const nz = sliderToZoom(s);
-    setZoom(nz);
+    setZoom(sliderToZoom(s));
   };
 
   return (
@@ -382,10 +388,13 @@ export default function Drawing2D() {
         {/* vertical slider (−20 .. +50) */}
         <div style={{
           position: "absolute", right: 8, top: 12, bottom: 12,
-          width: 52, display: "grid", placeItems: "center",
+          width: 56, display: "grid", placeItems: "center", gap: 6,
           background: "#f1f5f9", border: "1px solid #e5e7eb", borderRadius: 12, padding: 6
         }}>
-          <div className="small" style={{ marginBottom: 4 }}>Scale (px/{UNIT})</div>
+          <div className="small" style={{ textAlign:"center" }}>
+            Scale<br/>(px/u)
+            <div style={{ fontSize: 10, opacity: 0.8 }}>1u={MM_PER_UNIT}{UNIT_LABEL}</div>
+          </div>
           <input
             type="range"
             min={MIN_S}
@@ -396,11 +405,11 @@ export default function Drawing2D() {
             style={{
               writingMode: "bt-lr",
               WebkitAppearance: "slider-vertical",
-              height: "78%", width: 24
+              height: "74%", width: 24
             }}
           />
-          <div className="small" style={{ marginTop: 4 }}>
-            {Math.round(zoom)} px/{UNIT}
+          <div className="small" style={{ textAlign:"center" }}>
+            {Math.round(zoom)} px/u
           </div>
         </div>
       </div>
@@ -419,10 +428,12 @@ export default function Drawing2D() {
           <button className="btn" onClick={saveToFirebase}>💾 Save</button>
         </div>
 
-        {/* Add point */}
+        {/* Add point (mm inputs) */}
         <div className="row">
-          <input className="input" type="number" inputMode="decimal" step="any" placeholder={`E (${UNIT})`} value={E} onChange={(e)=>setE(e.target.value)}/>
-          <input className="input" type="number" inputMode="decimal" step="any" placeholder={`N (${UNIT})`} value={N} onChange={(e)=>setN(e.target.value)}/>
+          <input className="input" type="number" inputMode="decimal" step="any"
+                 placeholder={`E (${UNIT_LABEL})`} value={E} onChange={(e)=>setE(e.target.value)}/>
+          <input className="input" type="number" inputMode="decimal" step="any"
+                 placeholder={`N (${UNIT_LABEL})`} value={N} onChange={(e)=>setN(e.target.value)}/>
           <input className="input" placeholder="Label" value={label} onChange={(e)=>setLabel(e.target.value)}/>
           <button className="btn" onClick={addPoint}>➕ Add</button>
         </div>
@@ -435,14 +446,8 @@ export default function Drawing2D() {
             <button className="btn" onClick={fitView}>🧭 Fit</button>
             <button className="btn" onClick={resetView}>↺ Reset</button>
             <button className="btn" onClick={clearAll}>🧹 Clear</button>
-
-            {/* Auto-fit toggle */}
             <label className="row" style={{ gap: 8, marginLeft: 8 }}>
-              <input
-                type="checkbox"
-                checked={autoFit}
-                onChange={(e) => setAutoFit(e.target.checked)}
-              />
+              <input type="checkbox" checked={autoFit} onChange={(e) => setAutoFit(e.target.checked)} />
               <span className="small">Auto fit</span>
             </label>
           </div>
@@ -455,7 +460,10 @@ export default function Drawing2D() {
         {lines.length===0 && <div className="small">No lines yet.</div>}
         {lines.map(l=>(
           <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
-            <div>#{l.id} — {l.p1} ↔ {l.p2} — <b>{l.len} {UNIT}</b></div>
+            <div>
+              #{l.id} — {l.p1} ↔ {l.p2} —{" "}
+              <b>{(l.lenUnits * MM_PER_UNIT).toFixed(0)} {UNIT_LABEL}</b>
+            </div>
           </div>
         ))}
       </div>
@@ -471,4 +479,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-                  }
+}
