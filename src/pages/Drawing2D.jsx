@@ -14,6 +14,17 @@ const safeId = () =>
   (crypto?.randomUUID?.() || Math.random().toString(36)).slice(0, 8);
 const distMm = (a, b) => Math.hypot(b.x - a.x, b.y - a.y); // distance in mm
 
+// A, B, C … AA, AB …
+function indexToLabel(i) {
+  let s = "";
+  i = Math.max(0, i);
+  do {
+    s = String.fromCharCode(65 + (i % 26)) + s;
+    i = Math.floor(i / 26) - 1;
+  } while (i >= 0);
+  return s;
+}
+
 // Smaller angle (0..180°)
 const angleDeg = (a, b, c) => {
   const v1 = { x: a.x - b.x, y: a.y - b.y };
@@ -60,7 +71,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, highlig
   ctx.clearRect(0, 0, wCss, hCss);
 
   // grid
-  const step = Math.max(zoom * 1, 24); // 1mm grid, but never denser than 24px
+  const step = Math.max(zoom * 1, 24);
   const originX = wCss / 2 + tx;
   const originY = hCss / 2 + ty;
 
@@ -70,18 +81,15 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, highlig
   for (let gy = originY % step; gy < hCss; gy += step){ ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(wCss, gy); ctx.stroke(); }
   for (let gy = originY % step; gy > 0; gy -= step)   { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(wCss, gy); ctx.stroke(); }
 
-  // axes (screen center axes)
+  // axes
   ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(0, hCss/2 + ty); ctx.lineTo(wCss, hCss/2 + ty); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(wCss/2 + tx, 0); ctx.lineTo(wCss/2 + tx, hCss); ctx.stroke();
 
   // world(mm) → screen(px)
-  const W2S = (p) => ({
-    x: wCss/2 + p.x * zoom + tx,
-    y: hCss/2 - p.y * zoom + ty
-  });
+  const W2S = (p) => ({ x: wCss/2 + p.x * zoom + tx, y: hCss/2 - p.y * zoom + ty });
 
-  // lines + length (show in mm)
+  // lines + length
   ctx.font = "13px system-ui";
   lines.forEach(l => {
     const a = points.find(p => p.id === l.p1), b = points.find(p => p.id === l.p2);
@@ -97,7 +105,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, highlig
     ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, midX, midY);
   });
 
-  // angles: label only (no arc)
+  // angles (pill text only)
   angles.forEach(t=>{
     const a = points.find(p=>p.id===t.a),
           b = points.find(p=>p.id===t.b),
@@ -107,10 +115,9 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, highlig
     drawLabelPill(ctx, sb.x + 10, sb.y - 10, `${t.deg}°`);
   });
 
-  // points (bigger + white halo + label)
+  // points
   points.forEach(p=>{
-    const s = W2S(p);
-    const r = 6;
+    const s = W2S(p), r = 6;
     ctx.lineWidth = 2; ctx.strokeStyle = "#ffffff";
     ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI*2); ctx.stroke();
     ctx.fillStyle = "#ef4444";
@@ -124,7 +131,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, highlig
   });
 }
 
-/* ---------- distance from point to line segment (in px, screen space) ---------- */
+/* ---------- screen-distance to line segment ---------- */
 function pointToSegDistPx(px, py, ax, ay, bx, by) {
   const vx = bx - ax, vy = by - ay;
   const wx = px - ax, wy = py - ay;
@@ -146,7 +153,6 @@ export default function Drawing2D() {
   /* ---------- inputs ---------- */
   const [E, setE] = useState("");   // mm
   const [N, setN] = useState("");   // mm
-  const [label, setLabel] = useState("");
   const [title, setTitle] = useState("");
 
   /* ---------- modes / selection ---------- */
@@ -165,21 +171,15 @@ export default function Drawing2D() {
   const [ty, setTy] = useState(0);
   const [autoFit, setAutoFit] = useState(true);
 
-  // slider state (−200 .. +80) in log scale (0.01 step)
+  // slider (−200..+80)
   const MIN_S = -200, MAX_S = 80;
   const [sval, setSval] = useState(0);
 
-  // UI highlight when Erase mode
+  // ui hover for erase
   const [hoverLineId, setHoverLineId] = useState(null);
 
-  const sliderToZoom = (s) => {
-    const z = BASE_ZOOM * Math.pow(2, s / 10);
-    return Math.min(MAX_Z, Math.max(MIN_Z, z));
-  };
-  const zoomToSlider = (z) => {
-    const s = 10 * Math.log2((z || BASE_ZOOM) / BASE_ZOOM);
-    return Math.min(MAX_S, Math.max(MIN_S, Math.round(s * 100) / 100));
-  };
+  const sliderToZoom = (s) => Math.min(MAX_Z, Math.max(MIN_Z, BASE_ZOOM * Math.pow(2, s / 10)));
+  const zoomToSlider = (z) => Math.min(MAX_S, Math.max(MIN_S, Math.round(10 * Math.log2((z || BASE_ZOOM) / BASE_ZOOM) * 100) / 100));
 
   /* ---------- canvas ---------- */
   const wrapRef = useRef(null);
@@ -192,7 +192,6 @@ export default function Drawing2D() {
   useEffect(() => {
     const cvs = canvasRef.current, wrap = wrapRef.current;
     if (!cvs || !wrap) return;
-
     const applySize = () => {
       const dpr = window.devicePixelRatio || 1;
       const w = Math.max(320, Math.floor(wrap.clientWidth || 360));
@@ -205,16 +204,9 @@ export default function Drawing2D() {
       ctxRef.current = ctx;
       setRefresh(r => r + 1);
     };
-
     applySize();
     let t;
-    const onResize = () => {
-      clearTimeout(t);
-      t = setTimeout(() => {
-        applySize();
-        if (autoFit) fitView(points); // refit on rotate/resize
-      }, 60);
-    };
+    const onResize = () => { clearTimeout(t); t = setTimeout(() => { applySize(); if (autoFit) fitView(points); }, 60); };
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
     const onVis = () => document.visibilityState === "visible" && setRefresh(r => r + 1);
@@ -229,7 +221,7 @@ export default function Drawing2D() {
     };
   }, [autoFit, points]);
 
-  // Restore from AllReview → localStorage
+  // restore from AllReview
   useEffect(() => {
     try {
       const raw = localStorage.getItem("wmk_restore");
@@ -245,9 +237,7 @@ export default function Drawing2D() {
         if (typeof st.view.ty === "number") setTy(st.view.ty);
       }
       setTimeout(() => setRefresh(r => r + 1), 0);
-    } catch (e) {
-      console.warn("restore failed", e);
-    }
+    } catch (e) { console.warn("restore failed", e); }
   }, []);
 
   // draw live
@@ -267,7 +257,6 @@ export default function Drawing2D() {
     const { wCss, hCss } = sizeRef.current;
 
     if (w === 0 && h === 0) {
-      // single point — center and zoom big
       const targetZ = Math.min(wCss, hCss) * 0.5;
       const nz = Math.min(MAX_Z, Math.max(MIN_Z, targetZ));
       setZoom(nz); setSval(zoomToSlider(nz));
@@ -283,9 +272,7 @@ export default function Drawing2D() {
     const nz = Math.min(MAX_Z, Math.max(MIN_Z, Math.min(zX, zY)));
 
     setZoom(nz); setSval(zoomToSlider(nz));
-
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     setTx(-cx * nz);
     setTy(+cy * nz);
   };
@@ -293,21 +280,18 @@ export default function Drawing2D() {
   const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
   const clearAll = () => { setPoints([]); setLines([]); setAngles([]); setSelected([]); };
 
-  // auto-fit whenever points change (and toggle ON)
-  useEffect(() => {
-    if (autoFit) fitView(points);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [points, autoFit]);
+  useEffect(() => { if (autoFit) fitView(points); }, [points, autoFit]); // eslint-disable-line
 
-  /* ---------- Add point ---------- */
+  /* ---------- Add point (auto label) ---------- */
   const addPoint = () => {
     if (E === "" || N === "") return;
     const x = Number(E), y = Number(N);
     if (!isFinite(x) || !isFinite(y)) return;
     const id = safeId();
-    const next = [...points, { id, label: label || id, x, y }];
+    const label = indexToLabel(points.length); // A, B, C …
+    const next = [...points, { id, label, x, y }];
     setPoints(next);
-    setE(""); setN(""); setLabel("");
+    setE(""); setN("");
     if (autoFit) setTimeout(() => fitView(next), 0);
   };
 
@@ -316,34 +300,28 @@ export default function Drawing2D() {
   const removeLastLine = () => setLines((ls) => ls.slice(0, -1));
   const clearLinesOnly = () => setLines([]);
 
-  // Hit-test for nearest line in px threshold (screen coords)
+  // Hit-test nearest line in px
   const hitTestLine = (mx, my) => {
     const { wCss, hCss } = sizeRef.current;
-    // world→screen helper
     const W2S = (p) => ({ x: wCss/2 + p.x*zoom + tx, y: hCss/2 - p.y*zoom + ty });
     let best = { id: null, d: Infinity };
     lines.forEach(l => {
-      const a = points.find(p=>p.id===l.p1);
-      const b = points.find(p=>p.id===l.p2);
+      const a = points.find(p=>p.id===l.p1), b = points.find(p=>p.id===l.p2);
       if (!a || !b) return;
       const s1 = W2S(a), s2 = W2S(b);
       const d = pointToSegDistPx(mx, my, s1.x, s1.y, s2.x, s2.y);
       if (d < best.d) best = { id: l.id, d };
     });
-    const tol = 10; // px
-    return best.d <= tol ? best.id : null;
+    return best.d <= 10 ? best.id : null; // 10px tolerance
   };
 
   /* ---------- Gestures (pan / pinch / erase / tap-select) ---------- */
   const onPointerDown = (e) => {
     e.currentTarget.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
-
     if (mode === "eraseLine") {
       const rect = e.currentTarget.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const id = hitTestLine(mx, my);
-      setHoverLineId(id);
+      setHoverLineId(hitTestLine(e.clientX - rect.left, e.clientY - rect.top));
     }
   };
 
@@ -359,7 +337,6 @@ export default function Drawing2D() {
       const [p1, p2] = pts;
       const distPrev = Math.hypot(p1.x - prev.x, p1.y - prev.y) || 1;
       const distNow  = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
-
       const w = sizeRef.current.wCss, h = sizeRef.current.hCss;
       const wrap = wrapRef.current, rect = wrap.getBoundingClientRect();
       const mid = { x: (p1.x + p2.x)/2 - rect.left, y: (p1.y + p2.y)/2 - rect.top };
@@ -376,12 +353,9 @@ export default function Drawing2D() {
         return nz;
       });
     }
-
     if (mode === "eraseLine") {
       const rect = e.currentTarget.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const id = hitTestLine(mx, my);
-      setHoverLineId(id);
+      setHoverLineId(hitTestLine(e.clientX - rect.left, e.clientY - rect.top));
     }
   };
 
@@ -399,11 +373,10 @@ export default function Drawing2D() {
       return;
     }
 
-    // quick tap -> select nearest point
     if (down && Date.now() - down.t < 200 && pointers.current.size === 0) {
       const x = (mx - sizeRef.current.wCss/2 - tx)/zoom;
       const y = (sizeRef.current.hCss/2 - my + ty)/zoom;
-      const hitR = 12 / zoom; // 12px → mm
+      const hitR = 12 / zoom;
       let pick=null, best=Infinity;
       for (const p of points) {
         const d = Math.hypot(p.x - x, p.y - y);
@@ -413,12 +386,10 @@ export default function Drawing2D() {
 
       setSelected(sel=>{
         const next=[...sel, pick.id];
-
         if (mode==="line" && next.length===2) {
           const [aId,bId]=next; if (aId!==bId) {
             const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
-            const len = distMm(a,b);
-            setLines(ls=>[...ls,{ id:safeId(), p1:a.id, p2:b.id, lenMm: len }]);
+            setLines(ls=>[...ls,{ id:safeId(), p1:a.id, p2:b.id, lenMm: distMm(a,b) }]);
           }
           return [];
         }
@@ -435,7 +406,7 @@ export default function Drawing2D() {
     }
   };
 
-  /* ---------- SAVE (no image) — Title + raw state only ---------- */
+  /* ---------- SAVE (no image) ---------- */
   const saveToFirebase = async () => {
     const now = Date.now();
     const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
@@ -451,11 +422,7 @@ export default function Drawing2D() {
   };
 
   // slider change
-  const onSliderChange = (v) => {
-    const s = Number(v);
-    setSval(s);
-    setZoom(sliderToZoom(s));
-  };
+  const onSliderChange = (v) => { const s = Number(v); setSval(s); setZoom(sliderToZoom(s)); };
   return (
     <div className="grid">
       {/* Canvas (with vertical scale slider overlay at right) */}
@@ -470,12 +437,13 @@ export default function Drawing2D() {
             style={{
               display:"block", width:"100%", background:"#fff",
               borderRadius:12, border:"1px solid #e5e7eb",
-              touchAction:"none", cursor: mode==="eraseLine" ? "not-allowed" : "crosshair"
+              touchAction:"none",
+              cursor: mode==="eraseLine" ? "not-allowed" : "crosshair"
             }}
           />
         </div>
 
-        {/* vertical slider (−200 .. +80, step 0.01) */}
+        {/* vertical slider */}
         <div style={{
           position: "absolute", right: 8, top: 12, bottom: 12,
           width: 56, display: "grid", placeItems: "center", gap: 6,
@@ -503,9 +471,8 @@ export default function Drawing2D() {
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Title + Save */}
       <div className="card" style={{ position:"sticky", bottom:8, zIndex:10 }}>
-        {/* Title */}
         <div className="row" style={{ marginBottom: 8 }}>
           <input
             className="input"
@@ -518,47 +485,39 @@ export default function Drawing2D() {
         </div>
 
         {/* Add point (mm inputs) */}
-        <div className="row">
+        <div className="row" style={{ marginBottom: 8 }}>
           <input className="input" type="number" inputMode="decimal" step="any"
                  placeholder={`E (${UNIT_LABEL})`} value={E} onChange={(e)=>setE(e.target.value)}/>
           <input className="input" type="number" inputMode="decimal" step="any"
                  placeholder={`N (${UNIT_LABEL})`} value={N} onChange={(e)=>setN(e.target.value)}/>
-          <input className="input" placeholder="Label" value={label} onChange={(e)=>setLabel(e.target.value)}/>
           <button className="btn" onClick={addPoint}>➕ Add</button>
         </div>
 
-        <div className="row" style={{ marginTop:8, alignItems:"center", flexWrap:"wrap", gap:8 }}>
-          <button className="btn" onClick={()=>{ setMode("line"); setSelected([]); setHoverLineId(null); }}
-                  style={{ background: mode==="line" ? "#0ea5e9" : "#64748b" }}>
-            📏 Line
-          </button>
-          <button className="btn" onClick={()=>{ setMode("angle"); setSelected([]); setHoverLineId(null); }}
-                  style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b" }}>
-            ∠ Angle
-          </button>
-          <button className="btn" onClick={()=>{ setMode("eraseLine"); setSelected([]); }}
-                  style={{ background: mode==="eraseLine" ? "#ef4444" : "#64748b" }}>
-            🧽 Erase Line (tap)
-          </button>
+        {/* Tools — single horizontal scroll row */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            overflowX: "auto",
+            whiteSpace: "nowrap",
+            WebkitOverflowScrolling: "touch",
+            paddingBottom: 4,
+          }}
+        >
+          <ToolbarBtn active={mode==="line"} onClick={()=>{ setMode("line"); setSelected([]); setHoverLineId(null); }}>📏 Line</ToolbarBtn>
+          <ToolbarBtn active={mode==="angle"} onClick={()=>{ setMode("angle"); setSelected([]); setHoverLineId(null); }}>∠ Angle</ToolbarBtn>
+          <ToolbarBtn active={mode==="eraseLine"} danger onClick={()=>{ setMode("eraseLine"); setSelected([]); }}>🧽 Erase line (tap)</ToolbarBtn>
 
-          <div className="row" style={{ marginLeft:"auto", alignItems:"center", gap:8 }}>
-            <button className="btn" onClick={fitView}>🧭 Fit</button>
-            <button className="btn" onClick={resetView}>↺ Reset</button>
-            <button className="btn" onClick={clearAll}>🧹 Clear All</button>
+          <ToolbarBtn onClick={fitView}>🧭 Fit</ToolbarBtn>
+          <ToolbarBtn onClick={resetView}>↺ Reset</ToolbarBtn>
+          <ToolbarBtn danger onClick={clearAll}>🧹 Clear All</ToolbarBtn>
+          <ToolbarBtn warn onClick={removeLastLine}>⤺ Remove last line</ToolbarBtn>
+          <ToolbarBtn danger onClick={clearLinesOnly}>✖ Clear lines</ToolbarBtn>
 
-            {/* line-only tools */}
-            <button className="btn" onClick={removeLastLine} style={{ background:"#f59e0b" }}>
-              ⤺ Remove last line
-            </button>
-            <button className="btn" onClick={clearLinesOnly} style={{ background:"#ef4444" }}>
-              ✖ Clear lines
-            </button>
-
-            <label className="row" style={{ gap: 8, marginLeft: 8 }}>
-              <input type="checkbox" checked={autoFit} onChange={(e) => setAutoFit(e.target.checked)} />
-              <span className="small">Auto fit</span>
-            </label>
-          </div>
+          <label className="row" style={{ gap: 8, alignItems:"center", padding: "4px 8px", flex: "0 0 auto" }}>
+            <input type="checkbox" checked={autoFit} onChange={(e) => setAutoFit(e.target.checked)} />
+            <span className="small">Auto fit</span>
+          </label>
         </div>
       </div>
 
@@ -568,13 +527,9 @@ export default function Drawing2D() {
         {lines.length===0 && <div className="small">No lines yet.</div>}
         {lines.map(l=>(
           <div key={l.id} className="row" style={{ justifyContent:"space-between", alignItems:"center", gap:8 }}>
-            <div>
-              #{l.id} — {l.p1} ↔ {l.p2} — <b>{Math.round(l.lenMm)} {UNIT_LABEL}</b>
-            </div>
+            <div>#{l.id} — {l.p1} ↔ {l.p2} — <b>{Math.round(l.lenMm)} {UNIT_LABEL}</b></div>
             <div className="row" style={{ gap:8 }}>
-              <button className="btn" onClick={()=>removeLine(l.id)} style={{ background:"#ef4444" }}>
-                🗑 Delete
-              </button>
+              <button className="btn" onClick={()=>removeLine(l.id)} style={{ background:"#ef4444" }}>🗑 Delete</button>
             </div>
           </div>
         ))}
@@ -591,4 +546,22 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-        }
+}
+
+/* ---- small toolbar button wrapper ---- */
+function ToolbarBtn({ children, onClick, active, danger, warn }) {
+  return (
+    <button
+      onClick={onClick}
+      className="btn"
+      style={{
+        flex: "0 0 auto",
+        background: danger ? "#ef4444" : warn ? "#f59e0b" : active ? "#0ea5e9" : "#64748b",
+        height: 40,
+        padding: "0 12px"
+      }}
+    >
+      {children}
+    </button>
+  );
+          }
