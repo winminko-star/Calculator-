@@ -55,8 +55,8 @@ function drawLabelPill(ctx, x, y, text) {
   ctx.fillText(text, bx + padX, by + h - padY - 2);
 }
 
-/* ---------- scene renderer (uses current view: zoom/tx/ty) ---------- */
-function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
+/* ---------- scene renderer ---------- */
+function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, highlightLineId=null) {
   ctx.clearRect(0, 0, wCss, hCss);
 
   // grid
@@ -82,12 +82,17 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
   });
 
   // lines + length (show in mm)
-  ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2; ctx.fillStyle = "#0f172a"; ctx.font = "13px system-ui";
+  ctx.font = "13px system-ui";
   lines.forEach(l => {
     const a = points.find(p => p.id === l.p1), b = points.find(p => p.id === l.p2);
     if (!a || !b) return;
     const s1 = W2S(a), s2 = W2S(b);
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = (l.id === highlightLineId) ? "#ef4444" : "#0ea5e9";
     ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
+
+    ctx.fillStyle = "#0f172a";
     const midX = (s1.x + s2.x)/2 + 6, midY = (s1.y + s2.y)/2 - 6;
     ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, midX, midY);
   });
@@ -119,6 +124,19 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
   });
 }
 
+/* ---------- distance from point to line segment (in px, screen space) ---------- */
+function pointToSegDistPx(px, py, ax, ay, bx, by) {
+  const vx = bx - ax, vy = by - ay;
+  const wx = px - ax, wy = py - ay;
+  const c1 = vx * wx + vy * wy;
+  if (c1 <= 0) return Math.hypot(px - ax, py - ay);
+  const c2 = vx * vx + vy * vy;
+  if (c2 <= c1) return Math.hypot(px - bx, py - by);
+  const t = c1 / c2;
+  const hx = ax + t * vx, hy = ay + t * vy;
+  return Math.hypot(px - hx, py - hy);
+}
+
 export default function Drawing2D() {
   /* ---------- data ---------- */
   const [points, setPoints] = useState([]);
@@ -132,16 +150,15 @@ export default function Drawing2D() {
   const [title, setTitle] = useState("");
 
   /* ---------- modes / selection ---------- */
-  const [mode, setMode] = useState("line"); // 'line' | 'angle'
+  // 'line' | 'angle' | 'eraseLine'
+  const [mode, setMode] = useState("line");
   const [selected, setSelected] = useState([]);
   const [refresh, setRefresh] = useState(0);
 
-  /* ---------- view transform ----------
-   * zoom = px per mm. wider clamp so big coords auto-fit.
-   */
+  /* ---------- view transform ---------- */
   const BASE_ZOOM = 60;
-  const MIN_Z = 0.0005;  // px/mm  (very zoomed out)
-  const MAX_Z = 2400;    // px/mm  (very zoomed in)
+  const MIN_Z = 0.0005;  // px/mm
+  const MAX_Z = 2400;    // px/mm
 
   const [zoom, setZoom] = useState(BASE_ZOOM);
   const [tx, setTx] = useState(0);
@@ -151,6 +168,9 @@ export default function Drawing2D() {
   // slider state (−200 .. +80) in log scale (0.01 step)
   const MIN_S = -200, MAX_S = 80;
   const [sval, setSval] = useState(0);
+
+  // UI highlight when Erase mode
+  const [hoverLineId, setHoverLineId] = useState(null);
 
   const sliderToZoom = (s) => {
     const z = BASE_ZOOM * Math.pow(2, s / 10);
@@ -233,8 +253,8 @@ export default function Drawing2D() {
   // draw live
   useEffect(() => {
     const ctx = ctxRef.current; if (!ctx) return;
-    drawScene(ctx, sizeRef.current.wCss, sizeRef.current.hCss, zoom, tx, ty, points, lines, angles);
-  }, [points, lines, angles, zoom, tx, ty, refresh]);
+    drawScene(ctx, sizeRef.current.wCss, sizeRef.current.hCss, zoom, tx, ty, points, lines, angles, hoverLineId);
+  }, [points, lines, angles, zoom, tx, ty, refresh, hoverLineId]);
 
   /* ---------- Fit/Reset/Clear ---------- */
   const fitView = (pts = points) => {
@@ -252,8 +272,8 @@ export default function Drawing2D() {
       const nz = Math.min(MAX_Z, Math.max(MIN_Z, targetZ));
       setZoom(nz); setSval(zoomToSlider(nz));
       const p = pts[0];
-      setTx(-p.x * nz);   // ✅ correct
-      setTy(+p.y * nz);   // ✅ correct
+      setTx(-p.x * nz);
+      setTy(+p.y * nz);
       return;
     }
 
@@ -266,8 +286,8 @@ export default function Drawing2D() {
 
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
-    setTx(-cx * nz);   // ✅ center X
-    setTy(+cy * nz);   // ✅ center Y
+    setTx(-cx * nz);
+    setTy(+cy * nz);
   };
 
   const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
@@ -279,7 +299,7 @@ export default function Drawing2D() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, autoFit]);
 
-  /* ---------- Add point (input IN mm -> store IN mm) ---------- */
+  /* ---------- Add point ---------- */
   const addPoint = () => {
     if (E === "" || N === "") return;
     const x = Number(E), y = Number(N);
@@ -291,23 +311,51 @@ export default function Drawing2D() {
     if (autoFit) setTimeout(() => fitView(next), 0);
   };
 
-  /* ---------- Gestures (pan / pinch / tap to select) ---------- */
+  /* ---------- Line deletion helpers ---------- */
+  const removeLine = (id) => setLines((ls) => ls.filter((l) => l.id !== id));
+  const removeLastLine = () => setLines((ls) => ls.slice(0, -1));
+  const clearLinesOnly = () => setLines([]);
+
+  // Hit-test for nearest line in px threshold (screen coords)
+  const hitTestLine = (mx, my) => {
+    const { wCss, hCss } = sizeRef.current;
+    // world→screen helper
+    const W2S = (p) => ({ x: wCss/2 + p.x*zoom + tx, y: hCss/2 - p.y*zoom + ty });
+    let best = { id: null, d: Infinity };
+    lines.forEach(l => {
+      const a = points.find(p=>p.id===l.p1);
+      const b = points.find(p=>p.id===l.p2);
+      if (!a || !b) return;
+      const s1 = W2S(a), s2 = W2S(b);
+      const d = pointToSegDistPx(mx, my, s1.x, s1.y, s2.x, s2.y);
+      if (d < best.d) best = { id: l.id, d };
+    });
+    const tol = 10; // px
+    return best.d <= tol ? best.id : null;
+  };
+
+  /* ---------- Gestures (pan / pinch / erase / tap-select) ---------- */
   const onPointerDown = (e) => {
     e.currentTarget.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
+
+    if (mode === "eraseLine") {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const id = hitTestLine(mx, my);
+      setHoverLineId(id);
+    }
   };
 
   const onPointerMove = (e) => {
     const prev = pointers.current.get(e.pointerId); if (!prev) return;
-    // update map first
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: prev.t });
 
     const pts = [...pointers.current.values()];
-    if (pts.length === 1) {
+    if (pts.length === 1 && mode !== "eraseLine") {
       setTx(v => v + (e.clientX - prev.x));
       setTy(v => v + (e.clientY - prev.y));
-    } else if (pts.length >= 2) {
-      // simple 2-finger pinch zoom (anchor mid on screen)
+    } else if (pts.length >= 2 && mode !== "eraseLine") {
       const [p1, p2] = pts;
       const distPrev = Math.hypot(p1.x - prev.x, p1.y - prev.y) || 1;
       const distNow  = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
@@ -318,22 +366,22 @@ export default function Drawing2D() {
 
       setZoom(z => {
         const nz = Math.min(MAX_Z, Math.max(MIN_Z, z * (distNow / distPrev)));
-
-        // world coords under the mid point before zoom
         const wx = ((mid.x - (w/2) - tx) ) / z;
         const wy = ((h/2) - (mid.y - ty) ) / z;
-
-        // where would that be after new zoom with old tx/ty?
         const sx_after = w/2 + wx * nz + tx;
         const sy_after = h/2 - wy * nz + ty;
-
-        // adjust tx,ty so the world point stays under mid
         setTx(v => v + (mid.x - sx_after));
         setTy(v => v + (mid.y - sy_after));
-
         setSval(zoomToSlider(nz));
         return nz;
       });
+    }
+
+    if (mode === "eraseLine") {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const id = hitTestLine(mx, my);
+      setHoverLineId(id);
     }
   };
 
@@ -341,13 +389,21 @@ export default function Drawing2D() {
     const down = pointers.current.get(e.pointerId);
     pointers.current.delete(e.pointerId);
 
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+
+    if (mode === "eraseLine") {
+      const id = hitTestLine(mx, my);
+      if (id) removeLine(id);
+      setHoverLineId(null);
+      return;
+    }
+
     // quick tap -> select nearest point
     if (down && Date.now() - down.t < 200 && pointers.current.size === 0) {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
       const x = (mx - sizeRef.current.wCss/2 - tx)/zoom;
       const y = (sizeRef.current.hCss/2 - my + ty)/zoom;
-      const hitR = 12 / zoom; // 12px radius in screen → mm
+      const hitR = 12 / zoom; // 12px → mm
       let pick=null, best=Infinity;
       for (const p of points) {
         const d = Math.hypot(p.x - x, p.y - y);
@@ -361,7 +417,7 @@ export default function Drawing2D() {
         if (mode==="line" && next.length===2) {
           const [aId,bId]=next; if (aId!==bId) {
             const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
-            const len = distMm(a,b); // in mm
+            const len = distMm(a,b);
             setLines(ls=>[...ls,{ id:safeId(), p1:a.id, p2:b.id, lenMm: len }]);
           }
           return [];
@@ -387,8 +443,8 @@ export default function Drawing2D() {
       createdAt: now,
       expiresAt,
       title: title || "Untitled",
-      unitLabel: UNIT_LABEL, // "mm"
-      state: { points, lines, angles, view: { zoom, tx, ty } }, // all in mm
+      unitLabel: UNIT_LABEL,
+      state: { points, lines, angles, view: { zoom, tx, ty } },
       meta: { points: points.length, lines: lines.length, triples: angles.length },
     });
     alert("Saved ✅");
@@ -400,7 +456,6 @@ export default function Drawing2D() {
     setSval(s);
     setZoom(sliderToZoom(s));
   };
-
   return (
     <div className="grid">
       {/* Canvas (with vertical scale slider overlay at right) */}
@@ -415,7 +470,7 @@ export default function Drawing2D() {
             style={{
               display:"block", width:"100%", background:"#fff",
               borderRadius:12, border:"1px solid #e5e7eb",
-              touchAction:"none", cursor:"crosshair"
+              touchAction:"none", cursor: mode==="eraseLine" ? "not-allowed" : "crosshair"
             }}
           />
         </div>
@@ -431,8 +486,8 @@ export default function Drawing2D() {
           </div>
           <input
             type="range"
-            min={MIN_S}
-            max={MAX_S}
+            min={-200}
+            max={80}
             step={0.01}
             value={sval}
             onChange={(e)=>onSliderChange(e.target.value)}
@@ -459,7 +514,7 @@ export default function Drawing2D() {
             onChange={(e)=>setTitle(e.target.value)}
             style={{ flex: "1 1 260px" }}
           />
-        <button className="btn" onClick={saveToFirebase}>💾 Save</button>
+          <button className="btn" onClick={saveToFirebase}>💾 Save</button>
         </div>
 
         {/* Add point (mm inputs) */}
@@ -472,20 +527,33 @@ export default function Drawing2D() {
           <button className="btn" onClick={addPoint}>➕ Add</button>
         </div>
 
-        <div className="row" style={{ marginTop:8, alignItems:"center" }}>
-          <button className="btn" onClick={()=>{ setMode("line"); setSelected([]); }}
+        <div className="row" style={{ marginTop:8, alignItems:"center", flexWrap:"wrap", gap:8 }}>
+          <button className="btn" onClick={()=>{ setMode("line"); setSelected([]); setHoverLineId(null); }}
                   style={{ background: mode==="line" ? "#0ea5e9" : "#64748b" }}>
             📏 Line
           </button>
-          <button className="btn" onClick={()=>{ setMode("angle"); setSelected([]); }}
+          <button className="btn" onClick={()=>{ setMode("angle"); setSelected([]); setHoverLineId(null); }}
                   style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b" }}>
             ∠ Angle
+          </button>
+          <button className="btn" onClick={()=>{ setMode("eraseLine"); setSelected([]); }}
+                  style={{ background: mode==="eraseLine" ? "#ef4444" : "#64748b" }}>
+            🧽 Erase Line (tap)
           </button>
 
           <div className="row" style={{ marginLeft:"auto", alignItems:"center", gap:8 }}>
             <button className="btn" onClick={fitView}>🧭 Fit</button>
             <button className="btn" onClick={resetView}>↺ Reset</button>
-            <button className="btn" onClick={clearAll}>🧹 Clear</button>
+            <button className="btn" onClick={clearAll}>🧹 Clear All</button>
+
+            {/* line-only tools */}
+            <button className="btn" onClick={removeLastLine} style={{ background:"#f59e0b" }}>
+              ⤺ Remove last line
+            </button>
+            <button className="btn" onClick={clearLinesOnly} style={{ background:"#ef4444" }}>
+              ✖ Clear lines
+            </button>
+
             <label className="row" style={{ gap: 8, marginLeft: 8 }}>
               <input type="checkbox" checked={autoFit} onChange={(e) => setAutoFit(e.target.checked)} />
               <span className="small">Auto fit</span>
@@ -499,9 +567,14 @@ export default function Drawing2D() {
         <div className="page-title">Lines</div>
         {lines.length===0 && <div className="small">No lines yet.</div>}
         {lines.map(l=>(
-          <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
+          <div key={l.id} className="row" style={{ justifyContent:"space-between", alignItems:"center", gap:8 }}>
             <div>
               #{l.id} — {l.p1} ↔ {l.p2} — <b>{Math.round(l.lenMm)} {UNIT_LABEL}</b>
+            </div>
+            <div className="row" style={{ gap:8 }}>
+              <button className="btn" onClick={()=>removeLine(l.id)} style={{ background:"#ef4444" }}>
+                🗑 Delete
+              </button>
             </div>
           </div>
         ))}
@@ -518,4 +591,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-}
+        }
