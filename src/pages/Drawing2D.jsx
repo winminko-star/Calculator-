@@ -60,7 +60,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
   ctx.clearRect(0, 0, wCss, hCss);
 
   // grid
-  const step = Math.max(zoom * 1, 24); // 1mm grid (merged) with min px spacing
+  const step = Math.max(zoom * 1, 24); // 1mm grid, but never denser than 24px
   const originX = wCss / 2 + tx;
   const originY = hCss / 2 + ty;
 
@@ -77,7 +77,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
 
   // world(mm) → screen(px)
   const W2S = (p) => ({
-    x: p.x * zoom + wCss/2 + tx,
+    x: wCss/2 + p.x * zoom + tx,
     y: hCss/2 - p.y * zoom + ty
   });
 
@@ -140,16 +140,16 @@ export default function Drawing2D() {
    * zoom = px per mm. wider clamp so big coords auto-fit.
    */
   const BASE_ZOOM = 60;
-  const MIN_Z = 0.005;  // px/mm (very zoomed out)
-  const MAX_Z = 1200;   // px/mm (very zoomed in)
+  const MIN_Z = 0.0005;  // px/mm  (very zoomed out)
+  const MAX_Z = 2400;    // px/mm  (very zoomed in)
 
   const [zoom, setZoom] = useState(BASE_ZOOM);
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
   const [autoFit, setAutoFit] = useState(true);
 
-  // slider state (−80 .. +60) in log scale
-  const MIN_S = -80, MAX_S = 60;
+  // slider state (−200 .. +80) in log scale (0.01 step)
+  const MIN_S = -200, MAX_S = 80;
   const [sval, setSval] = useState(0);
 
   const sliderToZoom = (s) => {
@@ -158,7 +158,7 @@ export default function Drawing2D() {
   };
   const zoomToSlider = (z) => {
     const s = 10 * Math.log2((z || BASE_ZOOM) / BASE_ZOOM);
-    return Math.min(MAX_S, Math.max(MIN_S, Math.round(s)));
+    return Math.min(MAX_S, Math.max(MIN_S, Math.round(s * 100) / 100));
   };
 
   /* ---------- canvas ---------- */
@@ -239,6 +239,7 @@ export default function Drawing2D() {
   /* ---------- Fit/Reset/Clear ---------- */
   const fitView = (pts = points) => {
     if (!pts || pts.length === 0) return;
+
     const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
@@ -251,8 +252,8 @@ export default function Drawing2D() {
       const nz = Math.min(MAX_Z, Math.max(MIN_Z, targetZ));
       setZoom(nz); setSval(zoomToSlider(nz));
       const p = pts[0];
-      setTx(wCss / 2 - p.x * nz);
-      setTy(p.y * nz);   // ✅ correct (NO + hCss/2)
+      setTx(-p.x * nz);   // ✅ correct
+      setTy(+p.y * nz);   // ✅ correct
       return;
     }
 
@@ -263,9 +264,10 @@ export default function Drawing2D() {
 
     setZoom(nz); setSval(zoomToSlider(nz));
 
-    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-    setTx(wCss / 2 - cx * nz);
-    setTy(cy * nz);      // ✅ correct (NO + hCss/2)
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    setTx(-cx * nz);   // ✅ center X
+    setTy(+cy * nz);   // ✅ center Y
   };
 
   const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
@@ -305,21 +307,30 @@ export default function Drawing2D() {
       setTx(v => v + (e.clientX - prev.x));
       setTy(v => v + (e.clientY - prev.y));
     } else if (pts.length >= 2) {
-      // simple 2-finger pinch zoom
+      // simple 2-finger pinch zoom (anchor mid on screen)
       const [p1, p2] = pts;
       const distPrev = Math.hypot(p1.x - prev.x, p1.y - prev.y) || 1;
       const distNow  = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
+
+      const w = sizeRef.current.wCss, h = sizeRef.current.hCss;
       const wrap = wrapRef.current, rect = wrap.getBoundingClientRect();
       const mid = { x: (p1.x + p2.x)/2 - rect.left, y: (p1.y + p2.y)/2 - rect.top };
 
       setZoom(z => {
         const nz = Math.min(MAX_Z, Math.max(MIN_Z, z * (distNow / distPrev)));
-        // keep screen point 'mid' pointing to same world point
-        const wx = (mid.x - tx - sizeRef.current.wCss/2) / z;
-        const wy = (sizeRef.current.hCss/2 - (mid.y - ty)) / z;
-        const afterX = wx * nz, afterY = wy * nz;
-        setTx(v => v + ( (afterX - wx*z) ));  // adjust translate to anchor mid
-        setTy(v => v + ( (wy*z - afterY) ));
+
+        // world coords under the mid point before zoom
+        const wx = ((mid.x - (w/2) - tx) ) / z;
+        const wy = ((h/2) - (mid.y - ty) ) / z;
+
+        // where would that be after new zoom with old tx/ty?
+        const sx_after = w/2 + wx * nz + tx;
+        const sy_after = h/2 - wy * nz + ty;
+
+        // adjust tx,ty so the world point stays under mid
+        setTx(v => v + (mid.x - sx_after));
+        setTy(v => v + (mid.y - sy_after));
+
         setSval(zoomToSlider(nz));
         return nz;
       });
@@ -409,7 +420,7 @@ export default function Drawing2D() {
           />
         </div>
 
-        {/* vertical slider (−80 .. +60) */}
+        {/* vertical slider (−200 .. +80, step 0.01) */}
         <div style={{
           position: "absolute", right: 8, top: 12, bottom: 12,
           width: 56, display: "grid", placeItems: "center", gap: 6,
@@ -422,7 +433,7 @@ export default function Drawing2D() {
             type="range"
             min={MIN_S}
             max={MAX_S}
-            step={1}
+            step={0.01}
             value={sval}
             onChange={(e)=>onSliderChange(e.target.value)}
             style={{
@@ -432,7 +443,7 @@ export default function Drawing2D() {
             }}
           />
           <div className="small" style={{ textAlign:"center" }}>
-            {Math.max(0.001, Math.round(zoom*1000)/1000)} px/{UNIT_LABEL}
+            {Math.max(0.0001, Math.round(zoom*1000)/1000)} px/{UNIT_LABEL}
           </div>
         </div>
       </div>
@@ -448,7 +459,7 @@ export default function Drawing2D() {
             onChange={(e)=>setTitle(e.target.value)}
             style={{ flex: "1 1 260px" }}
           />
-          <button className="btn" onClick={saveToFirebase}>💾 Save</button>
+        <button className="btn" onClick={saveToFirebase}>💾 Save</button>
         </div>
 
         {/* Add point (mm inputs) */}
@@ -507,4 +518,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-    }
+}
