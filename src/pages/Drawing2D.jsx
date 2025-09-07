@@ -46,8 +46,7 @@ function drawLabelPill(ctx, x, y, text) {
   ctx.lineWidth = 2;
   ctx.fill();
   ctx.stroke();
-
-  ctx.fillStyle = "#0f172a";
+mm ctx.fillStyle = "#0f172a";
   ctx.fillText(text, bx + padX, by + h - padY - 2);
 }
 
@@ -125,7 +124,7 @@ export default function Drawing2D() {
   const [selected, setSelected] = useState([]);
   const [refresh, setRefresh] = useState(0);
 
-  // view transform (zoom is “units→pixels”, here 1 unit = 1 mm)
+  // view transform (zoom is “units→pixels”, here 1 unit = 1000 mm)
   const BASE_ZOOM = 60;        // slider = 0  နေရာမှာ zoom
   const [zoom, setZoom] = useState(BASE_ZOOM);
   const [tx, setTx] = useState(0);
