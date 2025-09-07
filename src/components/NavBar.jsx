@@ -58,7 +58,10 @@ export default function NavBar({ user, onLogout }) {
           <Chip to="/righttriangle" label="Right Triangle" />
           <Chip to="/circlecenter" label="Circle Center" />
           <Chip to="/levelling" label="Levelling" />
-          <Chip to="/levelling-review" label="Levelling Review" /> {/* အသစ်ထည့်ထားတဲ့ Tab */}
+          <Chip to="/levelling-review" label="Levelling Review" /> 
+          <Chip to="/simple-calc" label="Simple Calc" />
+          {/* အသစ်ထည့်ထားတဲ့ Tab */}
+          
         </nav>
       </div>
     </div>
