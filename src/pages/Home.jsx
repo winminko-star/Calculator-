@@ -66,6 +66,12 @@ export default function Home() {
         desc="Saved levelling results"
         to="/levelling-review"
       />
+      <Btn
+  icon="🧮"
+  label="Simple Calculator"
+  desc="Big keys • one decimal • clean UI"
+  to="/simple-calc"
+/>
     </div>
   );
       }
