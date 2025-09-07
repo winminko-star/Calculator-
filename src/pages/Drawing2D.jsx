@@ -115,7 +115,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
     ctx.strokeText(p.label, s.x + 8, s.y - 8);
     ctx.fillStyle = "#0f172a"; ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
-    }
+                  }
 // src/pages/Drawing2D.jsx  (Part 2/3 — continue in same file)
 
 export default function Drawing2D() {
@@ -138,6 +138,30 @@ export default function Drawing2D() {
   const [zoom, setZoom] = useState(BASE_ZOOM);
   const [tx, setTx] = useState(0), [ty, setTy] = useState(0);
   const [autoFit, setAutoFit] = useState(true);
+
+  // ----- Horizontal Scale slider -----
+  const MIN_S = -200;    // zoom out အများ (နည်း)
+  const MAX_S = 80;      // zoom in အများ (ကြီး)
+  const [sval, setSval] = useState(0); // slider value
+
+  const sliderToZoom = (s) => {
+    const BASE = BASE_ZOOM;
+    const z = BASE * Math.pow(2, s / 10);
+    return Math.min(MAX_Z, Math.max(MIN_Z, z));
+  };
+  const zoomToSlider = (z) => {
+    const BASE = BASE_ZOOM;
+    const s = 10 * Math.log2((z || BASE) / BASE);
+    return Math.max(MIN_S, Math.min(MAX_S, Math.round(s * 100) / 100));
+  };
+  useEffect(() => { setSval(zoomToSlider(zoom)); /* sync slider */ }, [zoom]); // eslint-disable-line
+
+  const onSliderChange = (v) => {
+    const s = Number(v);
+    setSval(s);
+    const nz = sliderToZoom(s);
+    setZoom(nz); // center anchoring simple: keep tx/ty
+  };
 
   // canvas
   const wrapRef = useRef(null), canvasRef = useRef(null), ctxRef = useRef(null);
@@ -204,12 +228,13 @@ export default function Drawing2D() {
     const zY = (hCss * 0.9) / (h + pad * 2);
     const nz = Math.min(MAX_Z, Math.max(MIN_Z, Math.min(zX, zY)));
     setZoom(nz);
+    setSval(zoomToSlider(nz));
 
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     setTx(-cx * nz);
     setTy(+cy * nz);
   };
-  const resetView = () => { setZoom(BASE_ZOOM); setTx(0); setTy(0); };
+  const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
   const clearAll  = () => { setPoints([]); setLines([]); setAngles([]); setSelected([]); };
   const clearLines = () => setLines([]);
   const removeLastLine = () => setLines(ls => ls.slice(0, -1));
@@ -374,6 +399,28 @@ export default function Drawing2D() {
             }}
           />
         </div>
+
+        {/* Horizontal Scale slider (under canvas) */}
+        <div style={{ marginTop: 10 }}>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
+            <span className="small">Scale (px/{UNIT_LABEL})</span>
+            <span className="small">{Math.max(0.0001, Math.round(zoom * 1000) / 1000)} px/{UNIT_LABEL}</span>
+          </div>
+          <input
+            type="range"
+            min={MIN_S}
+            max={MAX_S}
+            step={0.01}
+            value={sval}
+            onChange={(e) => onSliderChange(e.target.value)}
+            style={{ width: "100%" }}
+          />
+          <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}>
+            <span className="small">{MIN_S}</span>
+            <span className="small">0</span>
+            <span className="small">{MAX_S}</span>
+          </div>
+        </div>
       </div>
 
       {/* Controls: title + add point */}
@@ -447,4 +494,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-            }
+              }
