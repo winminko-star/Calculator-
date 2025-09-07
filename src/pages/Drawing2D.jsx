@@ -1,31 +1,15 @@
-// src/pages/Drawing2D.jsx
+// src/pages/Drawing2D.jsx  (Part 1/3)
 import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
 
-/** ===== Units / Display =====
- * Coordinates are in mm. (1 unit == 1 mm)
- * zoom = pixels per mm
- */
+/** Units: coordinates are in millimetres (mm). zoom = px per mm */
 const UNIT_LABEL = "mm";
 
-/* ---------- helpers ---------- */
+/* ---------------- helpers ---------------- */
 const safeId = () =>
   (crypto?.randomUUID?.() || Math.random().toString(36)).slice(0, 8);
-const distMm = (a, b) => Math.hypot(b.x - a.x, b.y - a.y); // distance in mm
-
-// A, B, C … AA, AB …
-function indexToLabel(i) {
-  let s = "";
-  i = Math.max(0, i);
-  do {
-    s = String.fromCharCode(65 + (i % 26)) + s;
-    i = Math.floor(i / 26) - 1;
-  } while (i >= 0);
-  return s;
-}
-
-// Smaller angle (0..180°)
+const distMm = (a, b) => Math.hypot(b.x - a.x, b.y - a.y); // mm
 const angleDeg = (a, b, c) => {
   const v1 = { x: a.x - b.x, y: a.y - b.y };
   const v2 = { x: c.x - b.x, y: c.y - b.y };
@@ -33,10 +17,21 @@ const angleDeg = (a, b, c) => {
   const m1 = Math.hypot(v1.x, v1.y) || 1;
   const m2 = Math.hypot(v2.x, v2.y) || 1;
   const cos = Math.min(1, Math.max(-1, dot / (m1 * m2)));
+  // smaller angle 0..180
   return +(Math.acos(cos) * 180 / Math.PI).toFixed(2);
 };
+// auto labels: A, B, ..., Z, AA, AB, ...
+const labelFromIndex = (i) => {
+  let s = "";
+  i += 1;
+  while (i > 0) {
+    i--;
+    s = String.fromCharCode(65 + (i % 26)) + s;
+    i = Math.floor(i / 26);
+  }
+  return s;
+};
 
-// rounded label pill for angle text
 function drawLabelPill(ctx, x, y, text) {
   ctx.font = "bold 14px system-ui";
   const padX = 6, padY = 4;
@@ -66,12 +61,12 @@ function drawLabelPill(ctx, x, y, text) {
   ctx.fillText(text, bx + padX, by + h - padY - 2);
 }
 
-/* ---------- scene renderer ---------- */
-function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, highlightLineId=null) {
+/* --------------- renderer (uses zoom/tx/ty) --------------- */
+function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles) {
   ctx.clearRect(0, 0, wCss, hCss);
 
   // grid
-  const step = Math.max(zoom * 1, 24);
+  const step = Math.max(zoom * 1, 24); // 1mm grid, min spacing 24px
   const originX = wCss / 2 + tx;
   const originY = hCss / 2 + ty;
 
@@ -86,30 +81,21 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, highlig
   ctx.beginPath(); ctx.moveTo(0, hCss/2 + ty); ctx.lineTo(wCss, hCss/2 + ty); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(wCss/2 + tx, 0); ctx.lineTo(wCss/2 + tx, hCss); ctx.stroke();
 
-  // world(mm) → screen(px)
   const W2S = (p) => ({ x: wCss/2 + p.x * zoom + tx, y: hCss/2 - p.y * zoom + ty });
 
   // lines + length
-  ctx.font = "13px system-ui";
+  ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2; ctx.fillStyle = "#0f172a"; ctx.font = "13px system-ui";
   lines.forEach(l => {
     const a = points.find(p => p.id === l.p1), b = points.find(p => p.id === l.p2);
     if (!a || !b) return;
     const s1 = W2S(a), s2 = W2S(b);
-
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = (l.id === highlightLineId) ? "#ef4444" : "#0ea5e9";
     ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
-
-    ctx.fillStyle = "#0f172a";
-    const midX = (s1.x + s2.x)/2 + 6, midY = (s1.y + s2.y)/2 - 6;
-    ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, midX, midY);
+    ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, (s1.x + s2.x)/2 + 6, (s1.y + s2.y)/2 - 6);
   });
 
-  // angles (pill text only)
+  // angle pills
   angles.forEach(t=>{
-    const a = points.find(p=>p.id===t.a),
-          b = points.find(p=>p.id===t.b),
-          c = points.find(p=>p.id===t.c);
+    const a = points.find(p=>p.id===t.a), b=points.find(p=>p.id===t.b), c=points.find(p=>p.id===t.c);
     if(!a||!b||!c) return;
     const sb = W2S(b);
     drawLabelPill(ctx, sb.x + 10, sb.y - 10, `${t.deg}°`);
@@ -117,81 +103,55 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, highlig
 
   // points
   points.forEach(p=>{
-    const s = W2S(p), r = 6;
+    const s = W2S(p);
+    const r = 6;
     ctx.lineWidth = 2; ctx.strokeStyle = "#ffffff";
     ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI*2); ctx.stroke();
     ctx.fillStyle = "#ef4444";
     ctx.beginPath(); ctx.arc(s.x, s.y, r-1, 0, Math.PI*2); ctx.fill();
 
-    const text = p.label ?? p.id;
     ctx.font = "13px system-ui";
     ctx.lineWidth = 3; ctx.strokeStyle = "#ffffff";
-    ctx.strokeText(text, s.x + 8, s.y - 8);
-    ctx.fillStyle = "#0f172a"; ctx.fillText(text, s.x + 8, s.y - 8);
+    ctx.strokeText(p.label, s.x + 8, s.y - 8);
+    ctx.fillStyle = "#0f172a"; ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
-}
-
-/* ---------- screen-distance to line segment ---------- */
-function pointToSegDistPx(px, py, ax, ay, bx, by) {
-  const vx = bx - ax, vy = by - ay;
-  const wx = px - ax, wy = py - ay;
-  const c1 = vx * wx + vy * wy;
-  if (c1 <= 0) return Math.hypot(px - ax, py - ay);
-  const c2 = vx * vx + vy * vy;
-  if (c2 <= c1) return Math.hypot(px - bx, py - by);
-  const t = c1 / c2;
-  const hx = ax + t * vx, hy = ay + t * vy;
-  return Math.hypot(px - hx, py - hy);
-}
+    }
+// src/pages/Drawing2D.jsx  (Part 2/3 — continue in same file)
 
 export default function Drawing2D() {
-  /* ---------- data ---------- */
+  // data
   const [points, setPoints] = useState([]);
-  const [lines, setLines] = useState([]);   // {id,p1,p2,lenMm}
+  const [lines, setLines]   = useState([]);   // {id,p1,p2,lenMm}
   const [angles, setAngles] = useState([]);
 
-  /* ---------- inputs ---------- */
+  // inputs
   const [E, setE] = useState("");   // mm
   const [N, setN] = useState("");   // mm
   const [title, setTitle] = useState("");
 
-  /* ---------- modes / selection ---------- */
-  // 'line' | 'angle' | 'eraseLine'
-  const [mode, setMode] = useState("line");
+  // modes / selection
+  const [mode, setMode] = useState("line"); // 'line' | 'angle' | 'eraseLine'
   const [selected, setSelected] = useState([]);
-  const [refresh, setRefresh] = useState(0);
 
-  /* ---------- view transform ---------- */
-  const BASE_ZOOM = 60;
-  const MIN_Z = 0.0005;  // px/mm
-  const MAX_Z = 2400;    // px/mm
-
+  // view
+  const BASE_ZOOM = 60, MIN_Z = 0.0005, MAX_Z = 2400;
   const [zoom, setZoom] = useState(BASE_ZOOM);
-  const [tx, setTx] = useState(0);
-  const [ty, setTy] = useState(0);
+  const [tx, setTx] = useState(0), [ty, setTy] = useState(0);
   const [autoFit, setAutoFit] = useState(true);
 
-  // slider (−200..+80)
-  const MIN_S = -200, MAX_S = 80;
-  const [sval, setSval] = useState(0);
-
-  // ui hover for erase
-  const [hoverLineId, setHoverLineId] = useState(null);
-
-  const sliderToZoom = (s) => Math.min(MAX_Z, Math.max(MIN_Z, BASE_ZOOM * Math.pow(2, s / 10)));
-  const zoomToSlider = (z) => Math.min(MAX_S, Math.max(MIN_S, Math.round(10 * Math.log2((z || BASE_ZOOM) / BASE_ZOOM) * 100) / 100));
-
-  /* ---------- canvas ---------- */
-  const wrapRef = useRef(null);
-  const canvasRef = useRef(null);
-  const ctxRef = useRef(null);
+  // canvas
+  const wrapRef = useRef(null), canvasRef = useRef(null), ctxRef = useRef(null);
   const sizeRef = useRef({ wCss: 360, hCss: 420 });
   const pointers = useRef(new Map());
 
-  // size / DPR setup
+  // next point label
+  const nextLabel = () => labelFromIndex(points.length);
+
+  /* ---------- size / DPR ---------- */
   useEffect(() => {
     const cvs = canvasRef.current, wrap = wrapRef.current;
     if (!cvs || !wrap) return;
+
     const applySize = () => {
       const dpr = window.devicePixelRatio || 1;
       const w = Math.max(320, Math.floor(wrap.clientWidth || 360));
@@ -202,54 +162,27 @@ export default function Drawing2D() {
       const ctx = cvs.getContext("2d");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctxRef.current = ctx;
-      setRefresh(r => r + 1);
+      drawScene(ctx, w, h, zoom, tx, ty, points, lines, angles);
     };
+
     applySize();
     let t;
     const onResize = () => { clearTimeout(t); t = setTimeout(() => { applySize(); if (autoFit) fitView(points); }, 60); };
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
-    const onVis = () => document.visibilityState === "visible" && setRefresh(r => r + 1);
-    window.addEventListener("visibilitychange", onVis);
-    window.addEventListener("pageshow", onVis);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("orientationchange", onResize);
-      window.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("pageshow", onVis);
-    };
-  }, [autoFit, points]);
+    return () => { clearTimeout(t); window.removeEventListener("resize", onResize); window.removeEventListener("orientationchange", onResize); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFit, points, zoom, tx, ty]);
 
-  // restore from AllReview
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("wmk_restore");
-      if (!raw) return;
-      localStorage.removeItem("wmk_restore");
-      const st = JSON.parse(raw);
-      if (st.points) setPoints(st.points);
-      if (st.lines) setLines(st.lines);
-      if (st.angles) setAngles(st.angles);
-      if (st.view) {
-        if (typeof st.view.zoom === "number") { setZoom(st.view.zoom); setSval(zoomToSlider(st.view.zoom)); }
-        if (typeof st.view.tx === "number") setTx(st.view.tx);
-        if (typeof st.view.ty === "number") setTy(st.view.ty);
-      }
-      setTimeout(() => setRefresh(r => r + 1), 0);
-    } catch (e) { console.warn("restore failed", e); }
-  }, []);
-
-  // draw live
+  // draw
   useEffect(() => {
     const ctx = ctxRef.current; if (!ctx) return;
-    drawScene(ctx, sizeRef.current.wCss, sizeRef.current.hCss, zoom, tx, ty, points, lines, angles, hoverLineId);
-  }, [points, lines, angles, zoom, tx, ty, refresh, hoverLineId]);
+    drawScene(ctx, sizeRef.current.wCss, sizeRef.current.hCss, zoom, tx, ty, points, lines, angles);
+  }, [points, lines, angles, zoom, tx, ty]);
 
-  /* ---------- Fit/Reset/Clear ---------- */
+  /* ---------- fit/reset/clear ---------- */
   const fitView = (pts = points) => {
     if (!pts || pts.length === 0) return;
-
     const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
@@ -259,7 +192,7 @@ export default function Drawing2D() {
     if (w === 0 && h === 0) {
       const targetZ = Math.min(wCss, hCss) * 0.5;
       const nz = Math.min(MAX_Z, Math.max(MIN_Z, targetZ));
-      setZoom(nz); setSval(zoomToSlider(nz));
+      setZoom(nz);
       const p = pts[0];
       setTx(-p.x * nz);
       setTy(+p.y * nz);
@@ -270,76 +203,63 @@ export default function Drawing2D() {
     const zX = (wCss * 0.9) / (w + pad * 2);
     const zY = (hCss * 0.9) / (h + pad * 2);
     const nz = Math.min(MAX_Z, Math.max(MIN_Z, Math.min(zX, zY)));
+    setZoom(nz);
 
-    setZoom(nz); setSval(zoomToSlider(nz));
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     setTx(-cx * nz);
     setTy(+cy * nz);
   };
+  const resetView = () => { setZoom(BASE_ZOOM); setTx(0); setTy(0); };
+  const clearAll  = () => { setPoints([]); setLines([]); setAngles([]); setSelected([]); };
+  const clearLines = () => setLines([]);
+  const removeLastLine = () => setLines(ls => ls.slice(0, -1));
 
-  const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
-  const clearAll = () => { setPoints([]); setLines([]); setAngles([]); setSelected([]); };
+  // center on A, keep current zoom
+  const centerOnA = () => {
+    if (!points.length) return;
+    const A = points[0];
+    const z = zoom;
+    setTx(-A.x * z);
+    setTy(+A.y * z);
+  };
 
-  useEffect(() => { if (autoFit) fitView(points); }, [points, autoFit]); // eslint-disable-line
+  // auto-fit when points change (if ON)
+  useEffect(() => { if (autoFit) fitView(points); }, [points]); // eslint-disable-line
 
-  /* ---------- Add point (auto label) ---------- */
+  /* ---------- add point ---------- */
   const addPoint = () => {
     if (E === "" || N === "") return;
     const x = Number(E), y = Number(N);
     if (!isFinite(x) || !isFinite(y)) return;
     const id = safeId();
-    const label = indexToLabel(points.length); // A, B, C …
-    const next = [...points, { id, label, x, y }];
+    const pt = { id, label: nextLabel(), x, y };
+    const next = [...points, pt];
     setPoints(next);
     setE(""); setN("");
     if (autoFit) setTimeout(() => fitView(next), 0);
   };
 
-  /* ---------- Line deletion helpers ---------- */
-  const removeLine = (id) => setLines((ls) => ls.filter((l) => l.id !== id));
-  const removeLastLine = () => setLines((ls) => ls.slice(0, -1));
-  const clearLinesOnly = () => setLines([]);
-
-  // Hit-test nearest line in px
-  const hitTestLine = (mx, my) => {
-    const { wCss, hCss } = sizeRef.current;
-    const W2S = (p) => ({ x: wCss/2 + p.x*zoom + tx, y: hCss/2 - p.y*zoom + ty });
-    let best = { id: null, d: Infinity };
-    lines.forEach(l => {
-      const a = points.find(p=>p.id===l.p1), b = points.find(p=>p.id===l.p2);
-      if (!a || !b) return;
-      const s1 = W2S(a), s2 = W2S(b);
-      const d = pointToSegDistPx(mx, my, s1.x, s1.y, s2.x, s2.y);
-      if (d < best.d) best = { id: l.id, d };
-    });
-    return best.d <= 10 ? best.id : null; // 10px tolerance
-  };
-
-  /* ---------- Gestures (pan / pinch / erase / tap-select) ---------- */
+  /* ---------- gestures ---------- */
   const onPointerDown = (e) => {
     e.currentTarget.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
-    if (mode === "eraseLine") {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setHoverLineId(hitTestLine(e.clientX - rect.left, e.clientY - rect.top));
-    }
   };
-
   const onPointerMove = (e) => {
     const prev = pointers.current.get(e.pointerId); if (!prev) return;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: prev.t });
 
     const pts = [...pointers.current.values()];
-    if (pts.length === 1 && mode !== "eraseLine") {
+    if (pts.length === 1) {
       setTx(v => v + (e.clientX - prev.x));
       setTy(v => v + (e.clientY - prev.y));
-    } else if (pts.length >= 2 && mode !== "eraseLine") {
+    } else if (pts.length >= 2) {
       const [p1, p2] = pts;
       const distPrev = Math.hypot(p1.x - prev.x, p1.y - prev.y) || 1;
       const distNow  = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
-      const w = sizeRef.current.wCss, h = sizeRef.current.hCss;
+
       const wrap = wrapRef.current, rect = wrap.getBoundingClientRect();
       const mid = { x: (p1.x + p2.x)/2 - rect.left, y: (p1.y + p2.y)/2 - rect.top };
+      const { wCss:w, hCss:h } = sizeRef.current;
 
       setZoom(z => {
         const nz = Math.min(MAX_Z, Math.max(MIN_Z, z * (distNow / distPrev)));
@@ -349,64 +269,77 @@ export default function Drawing2D() {
         const sy_after = h/2 - wy * nz + ty;
         setTx(v => v + (mid.x - sx_after));
         setTy(v => v + (mid.y - sy_after));
-        setSval(zoomToSlider(nz));
         return nz;
       });
     }
-    if (mode === "eraseLine") {
-      const rect = e.currentTarget.getBoundingClientRect();
-      setHoverLineId(hitTestLine(e.clientX - rect.left, e.clientY - rect.top));
-    }
   };
-
   const onPointerUp = (e) => {
     const down = pointers.current.get(e.pointerId);
     pointers.current.delete(e.pointerId);
 
+    if (!down || Date.now() - down.t > 200 || pointers.current.size !== 0) return;
+
     const rect = e.currentTarget.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const world = { x: (mx - sizeRef.current.wCss/2 - tx)/zoom,
+                    y: (sizeRef.current.hCss/2 - my + ty)/zoom };
 
+    // erase-line mode: tap near a segment to remove
     if (mode === "eraseLine") {
-      const id = hitTestLine(mx, my);
-      if (id) removeLine(id);
-      setHoverLineId(null);
+      const pxTol = 12; // 12px
+      const mmTol = pxTol / zoom;
+      let bestIdx = -1, bestD = Infinity;
+
+      lines.forEach((ln, idx) => {
+        const a = points.find(p => p.id === ln.p1);
+        const b = points.find(p => p.id === ln.p2);
+        if (!a || !b) return;
+        // point-to-segment distance in mm
+        const vx = b.x - a.x, vy = b.y - a.y;
+        const t = Math.max(0, Math.min(1, ((world.x - a.x)*vx + (world.y - a.y)*vy) / (vx*vx + vy*vy || 1)));
+        const cx = a.x + t*vx, cy = a.y + t*vy;
+        const d = Math.hypot(world.x - cx, world.y - cy);
+        if (d < bestD) { bestD = d; bestIdx = idx; }
+      });
+
+      if (bestIdx !== -1 && bestD <= mmTol) {
+        setLines(ls => ls.filter((_, i) => i !== bestIdx));
+      }
       return;
     }
 
-    if (down && Date.now() - down.t < 200 && pointers.current.size === 0) {
-      const x = (mx - sizeRef.current.wCss/2 - tx)/zoom;
-      const y = (sizeRef.current.hCss/2 - my + ty)/zoom;
-      const hitR = 12 / zoom;
-      let pick=null, best=Infinity;
-      for (const p of points) {
-        const d = Math.hypot(p.x - x, p.y - y);
-        if (d < best && d <= hitR) { best = d; pick = p; }
-      }
-      if (!pick) return;
-
-      setSelected(sel=>{
-        const next=[...sel, pick.id];
-        if (mode==="line" && next.length===2) {
-          const [aId,bId]=next; if (aId!==bId) {
-            const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
-            setLines(ls=>[...ls,{ id:safeId(), p1:a.id, p2:b.id, lenMm: distMm(a,b) }]);
-          }
-          return [];
-        }
-        if (mode==="angle" && next.length===3) {
-          const [aId,bId,cId]=next;
-          if (new Set(next).size===3) {
-            const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId), c=points.find(x=>x.id===cId);
-            setAngles(ag=>[...ag,{ id:safeId(), a:a.id, b:b.id, c:c.id, deg:angleDeg(a,b,c) }]);
-          }
-          return [];
-        }
-        return next;
-      });
+    // select-near point
+    const hitR = 12 / zoom;
+    let pick=null, best=Infinity;
+    for (const p of points) {
+      const d = Math.hypot(p.x - world.x, p.y - world.y);
+      if (d < best && d <= hitR) { best = d; pick = p; }
     }
+    if (!pick) return;
+
+    setSelected(sel=>{
+      const next=[...sel, pick.id];
+
+      if (mode==="line" && next.length===2) {
+        const [aId,bId]=next; if (aId!==bId) {
+          const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
+          setLines(ls=>[...ls,{ id:safeId(), p1:a.id, p2:b.id, lenMm: distMm(a,b) }]);
+        }
+        return [];
+      }
+      if (mode==="angle" && next.length===3) {
+        const [aId,bId,cId]=next;
+        if (new Set(next).size===3) {
+          const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId), c=points.find(x=>x.id===cId);
+          setAngles(ag=>[...ag,{ id:safeId(), a:a.id, b:b.id, c:c.id, deg:angleDeg(a,b,c) }]);
+        }
+        return [];
+      }
+      return next;
+    });
   };
 
-  /* ---------- SAVE (no image) ---------- */
+  /* ---------- save (DB only, no image) ---------- */
   const saveToFirebase = async () => {
     const now = Date.now();
     const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
@@ -420,13 +353,13 @@ export default function Drawing2D() {
     });
     alert("Saved ✅");
   };
+  // src/pages/Drawing2D.jsx  (Part 3/3 — finish component)
 
-  // slider change
-  const onSliderChange = (v) => { const s = Number(v); setSval(s); setZoom(sliderToZoom(s)); };
+  /* -------------------- UI -------------------- */
   return (
     <div className="grid">
-      {/* Canvas (with vertical scale slider overlay at right) */}
-      <div className="card" style={{ padding: 8, position: "relative" }}>
+      {/* Canvas */}
+      <div className="card" style={{ padding: 8 }}>
         <div ref={wrapRef} style={{ width: "100%" }}>
           <canvas
             ref={canvasRef}
@@ -437,42 +370,14 @@ export default function Drawing2D() {
             style={{
               display:"block", width:"100%", background:"#fff",
               borderRadius:12, border:"1px solid #e5e7eb",
-              touchAction:"none",
-              cursor: mode==="eraseLine" ? "not-allowed" : "crosshair"
+              touchAction:"none", cursor:"crosshair"
             }}
           />
-        </div>
-
-        {/* vertical slider */}
-        <div style={{
-          position: "absolute", right: 8, top: 12, bottom: 12,
-          width: 56, display: "grid", placeItems: "center", gap: 6,
-          background: "#f1f5f9", border: "1px solid #e5e7eb", borderRadius: 12, padding: 6
-        }}>
-          <div className="small" style={{ textAlign:"center" }}>
-            Scale<br/>(px/{UNIT_LABEL})
-          </div>
-          <input
-            type="range"
-            min={-200}
-            max={80}
-            step={0.01}
-            value={sval}
-            onChange={(e)=>onSliderChange(e.target.value)}
-            style={{
-              writingMode: "bt-lr",
-              WebkitAppearance: "slider-vertical",
-              height: "74%", width: 24
-            }}
-          />
-          <div className="small" style={{ textAlign:"center" }}>
-            {Math.max(0.0001, Math.round(zoom*1000)/1000)} px/{UNIT_LABEL}
-          </div>
         </div>
       </div>
 
-      {/* Title + Save */}
-      <div className="card" style={{ position:"sticky", bottom:8, zIndex:10 }}>
+      {/* Controls: title + add point */}
+      <div className="card">
         <div className="row" style={{ marginBottom: 8 }}>
           <input
             className="input"
@@ -484,38 +389,37 @@ export default function Drawing2D() {
           <button className="btn" onClick={saveToFirebase}>💾 Save</button>
         </div>
 
-        {/* Add point (mm inputs) */}
         <div className="row" style={{ marginBottom: 8 }}>
           <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder={`E (${UNIT_LABEL})`} value={E} onChange={(e)=>setE(e.target.value)}/>
+                 placeholder={`E (${UNIT_LABEL})`} value={E} onChange={(e)=>setE(e.target.value)} />
           <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder={`N (${UNIT_LABEL})`} value={N} onChange={(e)=>setN(e.target.value)}/>
-          <button className="btn" onClick={addPoint}>➕ Add</button>
+                 placeholder={`N (${UNIT_LABEL})`} value={N} onChange={(e)=>setN(e.target.value)} />
+          <button className="btn" onClick={addPoint}>➕ Add (label {nextLabel()})</button>
         </div>
 
-        {/* Tools — single horizontal scroll row */}
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            overflowX: "auto",
-            whiteSpace: "nowrap",
-            WebkitOverflowScrolling: "touch",
-            paddingBottom: 4,
-          }}
-        >
-          <ToolbarBtn active={mode==="line"} onClick={()=>{ setMode("line"); setSelected([]); setHoverLineId(null); }}>📏 Line</ToolbarBtn>
-          <ToolbarBtn active={mode==="angle"} onClick={()=>{ setMode("angle"); setSelected([]); setHoverLineId(null); }}>∠ Angle</ToolbarBtn>
-          <ToolbarBtn active={mode==="eraseLine"} danger onClick={()=>{ setMode("eraseLine"); setSelected([]); }}>🧽 Erase line (tap)</ToolbarBtn>
+        {/* Toolbar – scrollable single row */}
+        <div className="row" style={{ overflowX:"auto", paddingBottom:4 }}>
+          <button className="btn"
+            onClick={()=>{ setMode("line"); setSelected([]); }}
+            style={{ background: mode==="line" ? "#0ea5e9" : "#64748b" }}>📏 Line</button>
 
-          <ToolbarBtn onClick={fitView}>🧭 Fit</ToolbarBtn>
-          <ToolbarBtn onClick={resetView}>↺ Reset</ToolbarBtn>
-          <ToolbarBtn danger onClick={clearAll}>🧹 Clear All</ToolbarBtn>
-          <ToolbarBtn warn onClick={removeLastLine}>⤺ Remove last line</ToolbarBtn>
-          <ToolbarBtn danger onClick={clearLinesOnly}>✖ Clear lines</ToolbarBtn>
+          <button className="btn"
+            onClick={()=>{ setMode("angle"); setSelected([]); }}
+            style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b" }}>∠ Angle</button>
 
-          <label className="row" style={{ gap: 8, alignItems:"center", padding: "4px 8px", flex: "0 0 auto" }}>
-            <input type="checkbox" checked={autoFit} onChange={(e) => setAutoFit(e.target.checked)} />
+          <button className="btn"
+            onClick={()=>{ setMode("eraseLine"); setSelected([]); }}
+            style={{ background: mode==="eraseLine" ? "#0ea5e9" : "#64748b" }}>🧽 Erase line (tap)</button>
+
+          <button className="btn" onClick={centerOnA}>🎯 Find A</button>
+          <button className="btn" onClick={fitView}>🧭 Fit</button>
+          <button className="btn" onClick={resetView}>↺ Reset</button>
+          <button className="btn" onClick={clearAll}>🧹 Clear All</button>
+          <button className="btn" onClick={removeLastLine}>↩ Remove last line</button>
+          <button className="btn" onClick={clearLines}>❌ Clear lines</button>
+
+          <label className="row" style={{ gap:8, marginLeft:8 }}>
+            <input type="checkbox" checked={autoFit} onChange={(e)=>setAutoFit(e.target.checked)} />
             <span className="small">Auto fit</span>
           </label>
         </div>
@@ -526,11 +430,8 @@ export default function Drawing2D() {
         <div className="page-title">Lines</div>
         {lines.length===0 && <div className="small">No lines yet.</div>}
         {lines.map(l=>(
-          <div key={l.id} className="row" style={{ justifyContent:"space-between", alignItems:"center", gap:8 }}>
+          <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
             <div>#{l.id} — {l.p1} ↔ {l.p2} — <b>{Math.round(l.lenMm)} {UNIT_LABEL}</b></div>
-            <div className="row" style={{ gap:8 }}>
-              <button className="btn" onClick={()=>removeLine(l.id)} style={{ background:"#ef4444" }}>🗑 Delete</button>
-            </div>
           </div>
         ))}
       </div>
@@ -546,22 +447,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-}
-
-/* ---- small toolbar button wrapper ---- */
-function ToolbarBtn({ children, onClick, active, danger, warn }) {
-  return (
-    <button
-      onClick={onClick}
-      className="btn"
-      style={{
-        flex: "0 0 auto",
-        background: danger ? "#ef4444" : warn ? "#f59e0b" : active ? "#0ea5e9" : "#64748b",
-        height: 40,
-        padding: "0 12px"
-      }}
-    >
-      {children}
-    </button>
-  );
-          }
+            }
