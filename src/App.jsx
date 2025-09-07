@@ -13,6 +13,7 @@ import RightTriangle from "./pages/RightTriangle";
 import CircleCenter from "./pages/CircleCenter";
 import Levelling from "./pages/Levelling";
 import LevellingReview from "./pages/LevellingReview";
+import SimpleCalc from "./pages/SimpleCalc";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/circlecenter" element={user ? <CircleCenter /> : <Navigate to="/login" replace />} />
           <Route path="/levelling" element={user ? <Levelling /> : <Navigate to="/login" replace />} />
           <Route path="/levelling-review" element={<LevellingReview />} />
+          <Route path="/simple-calc" element={<SimpleCalc />} />
 
           {/* fallback */}
           <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />
