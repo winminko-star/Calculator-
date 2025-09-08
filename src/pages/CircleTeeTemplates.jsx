@@ -1,280 +1,334 @@
-import React, { useEffect, useRef, useState } from "react";
+// src/pages/CircleTee.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../firebase";
-import { ref as dbRef, push, set } from "firebase/database";
+import { ref as dbRef, push, set as dbSet } from "firebase/database";
 
-// ---------- math helpers ----------
-const deg2rad = d => (d * Math.PI) / 180;
+/* ───────── helpers ───────── */
+const rad = (d) => (d * Math.PI) / 180;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const fmt = (n) => (Math.round(n * 100) / 100).toString(); // mm ကို 그대로, decimal 2
 
-// equal-pipe (ODs တူ) Intersection profile (unwrap):
-// u = R * t    , v_run = R * (1 - cos(θ) * cos(t))
-// v_branch = R * (1 - cos(t))   (branch pipe ကို အနံကို ဖြတ်သွားတဲ့ template)
-function makeProfiles({ runOD, branchOD, angleDeg, stepDeg = 15 }) {
-  const Rr = runOD / 2;           // run radius (mm)
-  const Rb = branchOD / 2;        // branch radius (mm)
-  const θ  = deg2rad(angleDeg);   // angle between axes
+// 3-mode tilt: run, side, combined (= run * side on cos)
+function makeProfiles({ runOD, branchOD, runTiltDeg, sideTiltDeg, stepDeg = 15 }) {
+  const Rr = runOD / 2;      // run radius (mm)
+  const Rb = branchOD / 2;   // branch radius (mm)
+  const a = rad(runTiltDeg || 0);
+  const b = rad(sideTiltDeg || 0);
+
+  // effective cos between axes for hole contour on run
+  const cosθ = Math.cos(a) * Math.cos(b);
 
   const steps = Math.max(4, Math.round(360 / stepDeg));
-  const tList = Array.from({ length: steps + 1 }, (_, i) => deg2rad(i * stepDeg));
+  const tList = Array.from({ length: steps + 1 }, (_, i) => i * stepDeg); // deg list
 
-  // Unwrap width = circumference = 2πRr
-  const width = 2 * Math.PI * Rr;
+  // Run tube (unwrapped) hole template (y = distance from reference line, x = arc length)
+  const run = tList.map((deg) => {
+    const t = rad(deg);
+    // canonical “saddle” approximation for branch round on cylindrical run
+    // height in mm; clamp to >= 0
+    const h = Math.max(0, Rr - Rr * cosθ * Math.cos(t));
+    return { u: (Rr * 2 * Math.PI) * (deg / 360), v: h, deg };
+  });
 
-  // Run-hole template (wrap on RUN) -> depth from outside surface
-  const run = tList.map(t => ({
-    u: Rr * t,                                  // along circumference (mm)
-    v: Math.max(0, Rr - (Rr * Math.cos(θ) * Math.cos(t))), // penetration depth
-    deg: (t * 180) / Math.PI
-  }));
+  // Branch cut (wrap on branch) — tilt along side only has strongest effect;
+  // for simplicity use side tilt as primary; run tilt changes phase slightly
+  const branch = tList.map((deg) => {
+    const t = rad(deg);
+    const eff = Math.cos(b); // side tilt factor
+    const h = Math.max(0, Rb - Rb * eff * Math.cos(t));
+    return { u: (Rb * 2 * Math.PI) * (deg / 360), v: h, deg };
+  });
 
-  // Branch-cut template (wrap on BRANCH) -> cut back distance
-  const branch = tList.map(t => ({
-    u: Rb * t,
-    v: Math.max(0, Rb - (Rb * Math.cos(t))),   // classic mitre cut
-    deg: (t * 180) / Math.PI
-  }));
-
-  // Stations (deg labels)
-  const stations = tList.map(t => ({
-    uRun: Rr * t,
-    vRun: Math.max(0, Rr - (Rr * Math.cos(θ) * Math.cos(t))),
-    uBranch: Rb * t,
-    vBranch: Math.max(0, Rb - (Rb * Math.cos(t))),
-    deg: (t * 180) / Math.PI
-  }));
-
-  return { run, branch, widthRun: width, widthBranch: 2 * Math.PI * Rb, stations };
+  return {
+    run,
+    branch,
+    widthRun: 2 * Math.PI * Rr,
+    widthBranch: 2 * Math.PI * Rb,
+    steps,
+  };
 }
 
-// ---------- drawing helpers ----------
-function drawDimTemplate(canvas, pts, stations, opts) {
+function drawTemplate(canvas, pts, width, title) {
   if (!canvas) return;
-  const { title, widthMm, label = "u(mm)", valueLabel = "v(mm)" } = opts;
-
-  // setup
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth || 640;
-  const H = canvas.clientHeight || 260;
+  const H = canvas.clientHeight || 220;
   canvas.width = Math.floor(W * dpr);
   canvas.height = Math.floor(H * dpr);
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
   ctx.clearRect(0, 0, W, H);
+
+  // background
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, W, H);
 
-  if (!pts?.length) {
-    ctx.fillStyle = "#64748b";
-    ctx.fillText("No data", 12, 18);
-    return;
-  }
+  // padding & scale
+  const pad = 16;
+  const maxX = width || (pts.length ? pts[pts.length - 1].u : 1);
+  const maxY = Math.max(1, ...pts.map((p) => p.v));
+  const sx = (W - pad * 2) / maxX;
+  const sy = (H - pad * 2) / maxY;
 
-  // margins
-  const padL = 42, padR = 16, padT = 28, padB = 38;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-
-  // domain
-  const minU = 0, maxU = widthMm;
-  const minV = 0, maxV = Math.max(5, Math.max(...pts.map(p => p.v)));
-
-  const X = u => padL + ((u - minU) * plotW) / (maxU - minU || 1);
-  const Y = v => padT + plotH - ((v - minV) * plotH) / (maxV - minV || 1);
-
-  // grid vertical every 30°
-  const stepU = widthMm / 12;
+  // grid (vertical each 30deg tick, horizontal every 10 mm)
   ctx.strokeStyle = "#e5e7eb";
   ctx.lineWidth = 1;
-  for (let u = minU; u <= maxU + 1e-6; u += stepU) {
-    ctx.beginPath();
-    ctx.moveTo(X(u), padT);
-    ctx.lineTo(X(u), padT + plotH);
-    ctx.stroke();
+  for (let mm = 0; mm <= maxY; mm += 10) {
+    const y = H - pad - mm * sy;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
   }
-  // border
-  ctx.strokeStyle = "#94a3b8";
-  ctx.strokeRect(padL, padT, plotW, plotH);
+  // ticks by deg label if available
+  if (pts.length) {
+    const stepDeg = pts.length > 1 ? pts[1].deg - pts[0].deg : 30;
+    const degs = Array.from({ length: Math.round(360 / stepDeg) + 1 }, (_, i) => i * stepDeg);
+    degs.forEach((d) => {
+      const x = pad + (width * (d / 360)) * sx;
+      ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, H - pad); ctx.stroke();
+      ctx.fillStyle = "#334155"; ctx.font = "12px system-ui";
+      ctx.fillText(String(d), x - 6, H - 2);
+    });
+  }
 
-  // curve
-  ctx.strokeStyle = "#0ea5e9";
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(X(pts[0].u), Y(pts[0].v));
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(X(pts[i].u), Y(pts[i].v));
-  ctx.stroke();
+  // axis
+  ctx.strokeStyle = "#cbd5e1";
+  ctx.beginPath(); ctx.moveTo(pad, H - pad); ctx.lineTo(W - pad, H - pad); ctx.stroke();
 
-  // dimensions (station lines + numbers)
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "12px system-ui";
-  ctx.textAlign = "center";
-
-  stations.forEach((st, i) => {
-    const u = X(st.uRun ?? st.uBranch); // whichever template we’re drawing
-    // station line
-    ctx.strokeStyle = "rgba(2,6,23,0.15)";
+  // polyline
+  if (pts.length) {
+    ctx.strokeStyle = "#0ea5e9";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(u, padT + plotH);
-    ctx.lineTo(u, padT + plotH + 10);
-    ctx.stroke();
-    // baseline (u mm)
-    ctx.fillText(String(Math.round((st.uRun ?? st.uBranch))), u, padT + plotH + 22);
-
-    // v dimension — hide ~0
-    const v = (st.vRun ?? st.vBranch);
-    if (v > 0.5) {
-      const yCurve = Y(v);
-      // arrow
-      ctx.strokeStyle = "#0ea5e9";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(u, padT + plotH);
-      ctx.lineTo(u, yCurve);
-      ctx.stroke();
-      // head
-      ctx.beginPath();
-      ctx.moveTo(u - 4, yCurve + 6);
-      ctx.lineTo(u, yCurve);
-      ctx.lineTo(u + 4, yCurve + 6);
-      ctx.stroke();
-
-      // value pill
-      const text = String(Math.round(v));
-      const tw = Math.ceil(ctx.measureText(text).width) + 8;
-      const x = u, y = yCurve - 10, h = 18, r = 8;
-      ctx.fillStyle = "rgba(255,255,255,0.96)";
-      ctx.strokeStyle = "#94a3b8";
-      ctx.beginPath();
-      ctx.moveTo(x - tw / 2 + r, y - h);
-      ctx.lineTo(x + tw / 2 - r, y - h);
-      ctx.quadraticCurveTo(x + tw / 2, y - h, x + tw / 2, y - h + r);
-      ctx.lineTo(x + tw / 2, y - r);
-      ctx.quadraticCurveTo(x + tw / 2, y, x + tw / 2 - r, y);
-      ctx.lineTo(x - tw / 2 + r, y);
-      ctx.quadraticCurveTo(x - tw / 2, y, x - tw / 2, y - r);
-      ctx.lineTo(x - tw / 2, y - h + r);
-      ctx.quadraticCurveTo(x - tw / 2, y - h, x - tw / 2 + r, y - h);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = "#0f172a";
-      ctx.fillText(text, x, y - 4);
+    const p0 = pts[0];
+    ctx.moveTo(pad + p0.u * sx, H - pad - p0.v * sy);
+    for (let i = 1; i < pts.length; i++) {
+      const p = pts[i];
+      ctx.lineTo(pad + p.u * sx, H - pad - p.v * sy);
     }
-  });
+    ctx.stroke();
 
-  // axes labels
+    // value bubbles on each 30deg
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "12px system-ui";
+    pts.forEach((p, i) => {
+      // show every ~30deg (skip too dense)
+      if (i % Math.max(1, Math.round(30 / (pts[1]?.deg || 30))) !== 0) return;
+      const x = pad + p.u * sx;
+      const y = H - pad - p.v * sy;
+      const label = fmt(p.v);
+      // pill
+      const w = ctx.measureText(label).width + 10, h = 18, r = 9;
+      const bx = x - w / 2, by = y - h - 8;
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(bx + r, by);
+      ctx.lineTo(bx + w - r, by);
+      ctx.quadraticCurveTo(bx + w, by, bx + w, by + r);
+      ctx.lineTo(bx + w, by + h - r);
+      ctx.quadraticCurveTo(bx + w, by + h, bx + w - r, by + h);
+      ctx.lineTo(bx + r, by + h);
+      ctx.quadraticCurveTo(bx, by + h, bx, by + h - r);
+      ctx.lineTo(bx, by + r);
+      ctx.quadraticCurveTo(bx, by, bx + r, by);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      // text
+      ctx.fillStyle = "#0f172a";
+      ctx.fillText(label, bx + 5, by + h - 4);
+    });
+  }
+
+  // title
   ctx.fillStyle = "#0f172a";
-  ctx.font = "600 14px system-ui";
-  ctx.textAlign = "left";
-  ctx.fillText(title, padL, 20);
-
-  ctx.font = "12px system-ui";
-  ctx.textAlign = "center";
-  ctx.fillText(label, padL + plotW / 2, H - 6);
-
-  ctx.save();
-  ctx.translate(14, padT + plotH / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText(valueLabel, 0, 0);
-  ctx.restore();
+  ctx.font = "bold 14px system-ui";
+  ctx.fillText(title, pad, 18);
 }
 
-// ---------- main component ----------
-export default function CircleTeeDim() {
+/* ───────── Page ───────── */
+export default function CircleTee() {
+  // inputs
   const [title, setTitle] = useState("");
-  const [runOD, setRunOD] = useState("");       // mm
-  const [branchOD, setBranchOD] = useState(""); // mm
-  const [deg, setDeg] = useState("90");         // overlap angle
-  const [step, setStep] = useState("15");       // station every N deg
+  const [runOD, setRunOD] = useState("200");     // mm
+  const [branchOD, setBranchOD] = useState("50");
+  const [runTilt, setRunTilt] = useState("35");  // deg
+  const [sideTilt, setSideTilt] = useState("0"); // deg
+  const [stepDeg, setStepDeg] = useState("15");
 
-  const cRun = useRef(null);
-  const cBranch = useRef(null);
+  const parsed = useMemo(() => {
+    const rOD = clamp(Number(runOD) || 0, 1, 1e6);
+    const bOD = clamp(Number(branchOD) || 0, 1, 1e6);
+    const rt = clamp(Number(runTilt) || 0, 0, 180);
+    const st = clamp(Number(sideTilt) || 0, 0, 180);
+    const sd = clamp(Number(stepDeg) || 15, 1, 90);
+    return { rOD, bOD, rt, st, sd };
+  }, [runOD, branchOD, runTilt, sideTilt, stepDeg]);
 
-  // live draw
+  const data = useMemo(
+    () =>
+      makeProfiles({
+        runOD: parsed.rOD,
+        branchOD: parsed.bOD,
+        runTiltDeg: parsed.rt,
+        sideTiltDeg: parsed.st,
+        stepDeg: parsed.sd,
+      }),
+    [parsed]
+  );
+
+  // canvases
+  const refRun = useRef(null);
+  const refBranch = useRef(null);
   useEffect(() => {
-    const R = parseFloat(runOD), B = parseFloat(branchOD);
-    const A = parseFloat(deg), S = parseFloat(step) || 15;
-    if (!isFinite(R) || !isFinite(B) || !isFinite(A)) {
-      // clear canvases
-      [cRun.current, cBranch.current].forEach(cv => {
-        if (!cv) return;
-        const ctx = cv.getContext("2d");
-        ctx && ctx.clearRect(0,0,cv.width,cv.height);
-      });
-      return;
-    }
-    const prof = makeProfiles({ runOD: R, branchOD: B, angleDeg: A, stepDeg: S });
-    drawDimTemplate(
-      cRun.current,
-      prof.run,
-      prof.stations,
-      { title: "Run hole template (wrap on RUN)", widthMm: prof.widthRun }
+    drawTemplate(refRun.current, data.run, data.widthRun, "Run hole template");
+    drawTemplate(
+      refBranch.current,
+      data.branch,
+      data.widthBranch,
+      "Branch cut template (wrap on branch)"
     );
-    drawDimTemplate(
-      cBranch.current,
-      prof.branch,
-      prof.stations.map(s=>({ uBranch:s.uBranch, vBranch:s.vBranch })), // map for branch
-      { title: "Branch cut template (wrap on BRANCH)", widthMm: prof.widthBranch }
-    );
-  }, [runOD, branchOD, deg, step]);
+  }, [data]);
 
-  const clearAll = () => { setTitle(""); setRunOD(""); setBranchOD(""); setDeg("90"); setStep("15"); };
+  const onUpdate = () => {
+    // redraw is handled by useEffect through state; noop here
+  };
 
-  const save = async () => {
-    const R = parseFloat(runOD), B = parseFloat(branchOD);
-    const A = parseFloat(deg), S = parseFloat(step) || 15;
-    if (!isFinite(R) || !isFinite(B) || !isFinite(A)) { alert("Fill all numbers first."); return; }
-    const prof = makeProfiles({ runOD: R, branchOD: B, angleDeg: A, stepDeg: S });
+  const onClear = () => {
+    setTitle("");
+    setRunOD("");
+    setBranchOD("");
+    setRunTilt("");
+    setSideTilt("");
+    setStepDeg("15");
+  };
 
+  const onSave = async () => {
     const now = Date.now();
     const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
-    await set(push(dbRef(db, "teeTemplates")), {
-      createdAt: now, expiresAt,
+    const payload = {
+      createdAt: now,
+      expiresAt,
       title: title || "Untitled",
-      inputs: { runOD: R, branchOD: B, deg: A, stepDeg: S },
-      run: prof.run, branch: prof.branch,
-      stations: prof.stations
-    });
+      inputs: {
+        Rr: parsed.rOD / 2,
+        Rb: parsed.bOD / 2,
+        runOD: parsed.rOD,
+        branchOD: parsed.bOD,
+        runTilt: parsed.rt,
+        sideTilt: parsed.st,
+        stepDeg: parsed.sd,
+      },
+      // raw series for All Review preview
+      data: {
+        run: data.run,
+        branch: data.branch,
+        widthRun: data.widthRun,
+        widthBranch: data.widthBranch,
+      },
+    };
+    await dbSet(push(dbRef(db, "teeTemplates")), payload);
     alert("Saved ✅");
   };
 
   return (
     <div className="grid">
       <div className="card">
-        <div className="page-title">🧩 Pipe Tee Templates (with dimensions)</div>
+        <div className="page-title">🧩 Pipe Tee Templates</div>
 
-        <input className="input" placeholder="Title" value={title} onChange={e=>setTitle(e.target.value)} />
+        <input
+          className="input"
+          placeholder="Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          style={{ marginBottom: 8 }}
+        />
 
         <div className="row">
-          <input className="input" placeholder="Run OD" value={runOD} onChange={e=>setRunOD(e.target.value)} />
-          <input className="input" placeholder="Branch OD" value={branchOD} onChange={e=>setBranchOD(e.target.value)} />
-        </div>
-
-        <div className="row">
-          <input className="input" placeholder="Angle (deg)" value={deg} onChange={e=>setDeg(e.target.value)} />
-          <input className="input" placeholder="Station step (deg, e.g. 15)" value={step} onChange={e=>setStep(e.target.value)} />
+          <input
+            className="input"
+            placeholder="Run OD (mm)"
+            inputMode="decimal"
+            value={runOD}
+            onChange={(e) => setRunOD(e.target.value)}
+          />
+          <input
+            className="input"
+            placeholder="Branch OD (mm)"
+            inputMode="decimal"
+            value={branchOD}
+            onChange={(e) => setBranchOD(e.target.value)}
+          />
         </div>
 
         <div className="row" style={{ marginTop: 8 }}>
-          <button className="btn" onClick={save}>💾 Save</button>
-          <button className="btn" onClick={clearAll} style={{ background: "#64748b" }}>🧹 Clear</button>
+          <input
+            className="input"
+            placeholder="Run tilt (deg)"
+            inputMode="decimal"
+            value={runTilt}
+            onChange={(e) => setRunTilt(e.target.value)}
+          />
+          <input
+            className="input"
+            placeholder="Side tilt (deg)"
+            inputMode="decimal"
+            value={sideTilt}
+            onChange={(e) => setSideTilt(e.target.value)}
+          />
+          <input
+            className="input"
+            placeholder="Step (deg)"
+            inputMode="decimal"
+            value={stepDeg}
+            onChange={(e) => setStepDeg(e.target.value)}
+            title="Station spacing along circumference"
+          />
+        </div>
+
+        <div className="row" style={{ marginTop: 10, gap: 10 }}>
+          <button className="btn" onClick={onUpdate}>↻ Update</button>
+          <button className="btn" onClick={onSave}>💾 Save</button>
+          <button className="btn" onClick={onClear} style={{ background: "#64748b" }}>
+            🧹 Clear
+          </button>
         </div>
       </div>
 
+      {/* canvases */}
       <div className="card">
-        <canvas ref={cRun} style={{ width: "100%", height: 260, border: "1px solid #e5e7eb", borderRadius: 12 }} />
+        <canvas
+          ref={refRun}
+          style={{
+            width: "100%",
+            height: 240,
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+          }}
+        />
       </div>
 
       <div className="card">
-        <canvas ref={cBranch} style={{ width: "100%", height: 260, border: "1px solid #e5e7eb", borderRadius: 12 }} />
+        <canvas
+          ref={refBranch}
+          style={{
+            width: "100%",
+            height: 240,
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+          }}
+        />
       </div>
 
-      <div className="card small">
-        Usage:  တစ်ခုချင်းကို print → စက္ကူကို pipe ပတ်ပြီး  
-        - **Run hole template** ကို run ပိုက်ပေါ်မှာပတ်ပြီး station line တွေနှင့် **v(mm)** အတိုင်းအတာအထိ ခြစ်/မှတ်ပြီး ဖောက်ပါ။  
-        - **Branch cut template** ကို branch ပိုက်အဆုံးမှာပတ်ပြီး **v(mm)** အတိုင်းအတာအထိ ဖြတ်ပါ။  
-        Note: label တွေမှာ mm မရေးပဲ နံပါတ်ပဲပြထားပါတယ်။
+      {/* quick facts */}
+      <div className="card">
+        <div className="page-title">Dimensions (for checking)</div>
+        <div className="small">
+          Run circumference: <b>{fmt(data.widthRun)}</b> mm · Branch circumference:{" "}
+          <b>{fmt(data.widthBranch)}</b> mm
+        </div>
+        <div className="small" style={{ marginTop: 4 }}>
+          Tilts → Run: <b>{parsed.rt}°</b>, Side: <b>{parsed.st}°</b>, Step:{" "}
+          <b>{parsed.sd}°</b>
+        </div>
       </div>
     </div>
   );
-    }
+}
