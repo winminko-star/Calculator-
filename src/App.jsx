@@ -14,6 +14,7 @@ import CircleCenter from "./pages/CircleCenter";
 import Levelling from "./pages/Levelling";
 import LevellingReview from "./pages/LevellingReview";
 import SimpleCalc from "./pages/SimpleCalc";
+import CircleArc from "./pages/CircleArc";
 
 export default function App() {
   const [user, setUser] = useState(null);
