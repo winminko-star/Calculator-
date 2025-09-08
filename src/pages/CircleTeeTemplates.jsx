@@ -2,330 +2,279 @@ import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
 
-/**
- * Tee wrap templates with general orientation (Pitch + Yaw).
- * - Run axis = world Z.
- * - Branch axis = rotate default X-axis by:
- *      1) pitch (around Y)  -> tilt along run axis plane
- *      2) yaw   (around Z)  -> tilt sideways around run axis
- * - Axes intersect at origin. Radii in mm.
- * - We unwrap each cylinder's surface:
- *      u = radius * angle  (wrap distance along circumference)
- *      v = axial coordinate along that pipe (mm)
- * - We draw:
- *      • Run hole template  (unwrap of run)
- *      • Branch cut template (unwrap of branch end)
- *   With 30° stations: bottom shows u (number only), near-curve shows v (number only).
- */
+// ---------- math helpers ----------
+const deg2rad = d => (d * Math.PI) / 180;
 
-const TAU = Math.PI * 2;
-const toRad = (d) => (d * Math.PI) / 180;
+// equal-pipe (ODs တူ) Intersection profile (unwrap):
+// u = R * t    , v_run = R * (1 - cos(θ) * cos(t))
+// v_branch = R * (1 - cos(t))   (branch pipe ကို အနံကို ဖြတ်သွားတဲ့ template)
+function makeProfiles({ runOD, branchOD, angleDeg, stepDeg = 15 }) {
+  const Rr = runOD / 2;           // run radius (mm)
+  const Rb = branchOD / 2;        // branch radius (mm)
+  const θ  = deg2rad(angleDeg);   // angle between axes
 
-// vector helpers
-const dot = (a,b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
-const sub = (a,b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
-const cross = (a,b) => [ a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0] ];
-const norm = (a) => { const m=Math.hypot(a[0],a[1],a[2])||1; return [a[0]/m,a[1]/m,a[2]/m]; };
+  const steps = Math.max(4, Math.round(360 / stepDeg));
+  const tList = Array.from({ length: steps + 1 }, (_, i) => deg2rad(i * stepDeg));
 
-// build branch axis unit vector u from pitch (around Y) then yaw (around Z)
-function branchAxisFromPitchYaw(pitchDeg, yawDeg) {
-  const p = toRad(pitchDeg); // rotate around Y
-  const y = toRad(yawDeg);   // then around Z
-  // start axis along +X
-  let v = [1,0,0];
-  // RotY(p)
-  v = [ v[0]*Math.cos(p) + v[2]*Math.sin(p), v[1], -v[0]*Math.sin(p) + v[2]*Math.cos(p) ];
-  // RotZ(y)
-  v = [ v[0]*Math.cos(y) - v[1]*Math.sin(y), v[0]*Math.sin(y) + v[1]*Math.cos(y), v[2] ];
-  return norm(v);
+  // Unwrap width = circumference = 2πRr
+  const width = 2 * Math.PI * Rr;
+
+  // Run-hole template (wrap on RUN) -> depth from outside surface
+  const run = tList.map(t => ({
+    u: Rr * t,                                  // along circumference (mm)
+    v: Math.max(0, Rr - (Rr * Math.cos(θ) * Math.cos(t))), // penetration depth
+    deg: (t * 180) / Math.PI
+  }));
+
+  // Branch-cut template (wrap on BRANCH) -> cut back distance
+  const branch = tList.map(t => ({
+    u: Rb * t,
+    v: Math.max(0, Rb - (Rb * Math.cos(t))),   // classic mitre cut
+    deg: (t * 180) / Math.PI
+  }));
+
+  // Stations (deg labels)
+  const stations = tList.map(t => ({
+    uRun: Rr * t,
+    vRun: Math.max(0, Rr - (Rr * Math.cos(θ) * Math.cos(t))),
+    uBranch: Rb * t,
+    vBranch: Math.max(0, Rb - (Rb * Math.cos(t))),
+    deg: (t * 180) / Math.PI
+  }));
+
+  return { run, branch, widthRun: width, widthBranch: 2 * Math.PI * Rb, stations };
 }
 
-// orthonormal basis (n1,n2) perpendicular to axis u
-function basisPerp(u){
-  const up = Math.abs(u[1])<0.9 ? [0,1,0] : [1,0,0];
-  const n1 = norm(cross(u, up));
-  const n2 = norm(cross(u, n1));
-  return { n1, n2 };
-}
+// ---------- drawing helpers ----------
+function drawDimTemplate(canvas, pts, stations, opts) {
+  if (!canvas) return;
+  const { title, widthMm, label = "u(mm)", valueLabel = "v(mm)" } = opts;
 
-// Solve quadratic a t^2 + b t + c = 0; return best root by selector
-function solveQuad(a,b,c, pick = "larger"){ // pick: "larger" | "smaller" | "absMin"
-  const eps = 1e-9;
-  if (Math.abs(a) < eps) { // linear
-    if (Math.abs(b) < eps) return null;
-    return -c / b;
-  }
-  const D = b*b - 4*a*c;
-  if (D < -1e-9) return null;
-  const sD = Math.sqrt(Math.max(0,D));
-  const r1 = (-b + sD)/(2*a);
-  const r2 = (-b - sD)/(2*a);
-  if (pick === "smaller") return (r1 < r2 ? r1 : r2);
-  if (pick === "absMin")  return (Math.abs(r1) < Math.abs(r2) ? r1 : r2);
-  return (r1 > r2 ? r1 : r2);
-}
-
-/**
- * Compute unwrap polylines:
- *  - Branch unwrap: loop angle a ∈ [0,2π), solve s along branch axis s.t. point hits RUN cylinder (x^2+y^2=Rr^2)
- *  - Run unwrap:    loop angle b ∈ [0,2π), solve t along run axis s.t. point hits BRANCH cylinder (distance^2 to branch axis = Rb^2)
- */
-function computeTemplates(runOD, branchOD, pitch, yaw, samples=720) {
-  const Rr = Math.max(1, +runOD/2);
-  const Rb = Math.max(1, +branchOD/2);
-  const u = branchAxisFromPitchYaw(pitch, yaw); // branch axis dir
-  const { n1, n2 } = basisPerp(u);              // branch ring basis
-
-  // Branch unwrap polyline: ptsB = {u: Rb*a, v: s}  where s solves x^2+y^2=Rr^2
-  const ptsB = [];
-  for (let i=0;i<=samples;i++){
-    const a = (i/samples)*TAU;
-    const q = [ Rb*Math.cos(a)*n1[0] + Rb*Math.sin(a)*n2[0],
-                Rb*Math.cos(a)*n1[1] + Rb*Math.sin(a)*n2[1],
-                Rb*Math.cos(a)*n1[2] + Rb*Math.sin(a)*n2[2] ];
-    // point p = q + s*u
-    // run cylinder eq: x^2 + y^2 = Rr^2
-    const ux = u[0], uy = u[1];
-    const qx = q[0], qy = q[1];
-    const a2 = ux*ux + uy*uy;
-    const b2 = 2*(ux*qx + uy*qy);
-    const c2 = qx*qx + qy*qy - Rr*Rr;
-    const sSol = solveQuad(a2, b2, c2, "larger"); // pick outer
-    if (sSol == null) { ptsB.push(null); continue; }
-    ptsB.push({ u: Rb*a, v: sSol });
-  }
-
-  // Run unwrap polyline: ptsR = {u: Rr*b, v: t}  where dist^2 to branch axis = Rb^2
-  // Run param point: p = [Rr cos b, Rr sin b, t]
-  const ptsR = [];
-  for (let i=0;i<=samples;i++){
-    const b = (i/samples)*TAU;
-    const cx = Rr*Math.cos(b), cy = Rr*Math.sin(b);
-    // distance^2 to branch axis for p is: |p|^2 - (u·p)^2 = Rb^2
-    // p = (cx,cy,t): |p|^2 = cx^2 + cy^2 + t^2 = Rr^2 + t^2
-    // u·p = ux*cx + uy*cy + uz*t = B + A t
-    const A = u[2];
-    const B = u[0]*cx + u[1]*cy;
-    // (Rr^2 + t^2) - (B + A t)^2 = Rb^2
-    // => (1 - A^2) t^2 - 2AB t + (Rr^2 - B^2 - Rb^2) = 0
-    const qa = (1 - A*A);
-    const qb = -2*A*B;
-    const qc = (Rr*Rr - B*B - Rb*Rb);
-    const tSol = solveQuad(qa,qb,qc,"larger");
-    if (tSol == null) { ptsR.push(null); continue; }
-    ptsR.push({ u: Rr*b, v: tSol });
-  }
-
-  // 30° stations
-  const stations = [];
-  for (let d=0; d<=360; d+=30){
-    const a = toRad(d), b = a;
-    // branch s
-    {
-      const q = [ Rb*Math.cos(a)*n1[0] + Rb*Math.sin(a)*n2[0],
-                  Rb*Math.cos(a)*n1[1] + Rb*Math.sin(a)*n2[1],
-                  Rb*Math.cos(a)*n1[2] + Rb*Math.sin(a)*n2[2] ];
-      const ux=u[0], uy=u[1], qx=q[0], qy=q[1];
-      const A=ux*ux+uy*uy, B=2*(ux*qx+uy*qy), C=qx*qx+qy*qy-Rr*Rr;
-      const sSol = solveQuad(A,B,C,"larger");
-      stations.push({
-        deg:d,
-        uBranch:+(Rb*a).toFixed(3),
-        vBranch:sSol==null?null:+(+sSol).toFixed(3)
-      });
-    }
-  }
-  for (let d=0; d<=360; d+=30){
-    const b = toRad(d);
-    const cx = Rr*Math.cos(b), cy = Rr*Math.sin(b);
-    const A = u[2], B = u[0]*cx + u[1]*cy;
-    const qa = (1 - A*A), qb = -2*A*B, qc = (Rr*Rr - B*B - Rb*Rb);
-    const tSol = solveQuad(qa,qb,qc,"larger");
-    const st = stations[d/30];
-    st.uRun = +(Rr*b).toFixed(3);
-    st.vRun = tSol==null?null:+(+tSol).toFixed(3);
-  }
-
-  return { ptsB, ptsR, stations, Rr, Rb };
-}
-
-function roundedRect(ctx,x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
-  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r);
-  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h);
-  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r);
-  ctx.quadraticCurveTo(x,y,x+r,y);
-  ctx.closePath();
-}
-
-function drawTemplate(canvas, pts, title, R, stations, which){
-  if(!canvas) return;
-  const ctx = canvas.getContext("2d");
+  // setup
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth || 640;
-  const H = canvas.clientHeight || 280;
-  canvas.width = Math.floor(W*dpr);
-  canvas.height= Math.floor(H*dpr);
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,W,H);
+  const H = canvas.clientHeight || 260;
+  canvas.width = Math.floor(W * dpr);
+  canvas.height = Math.floor(H * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const pad=18;
-  const minU=0, maxU=2*Math.PI*R;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, W, H);
 
-  const valid = pts.filter(Boolean);
-  if(!valid.length){
-    ctx.fillStyle="#64748b"; ctx.font="14px system-ui";
-    ctx.fillText("Out of domain for given inputs.", 12, 22);
+  if (!pts?.length) {
+    ctx.fillStyle = "#64748b";
+    ctx.fillText("No data", 12, 18);
     return;
   }
 
-  let minV=Infinity, maxV=-Infinity;
-  valid.forEach(p=>{ minV=Math.min(minV,p.v); maxV=Math.max(maxV,p.v); });
-  const vPad=Math.max(2,0.06*Math.max(1,maxV-minV));
-  minV-=vPad; maxV+=vPad;
+  // margins
+  const padL = 42, padR = 16, padT = 28, padB = 38;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
 
-  const X = (u)=> pad + (u-minU)*(W-2*pad)/(maxU-minU);
-  const Y = (v)=> H - pad - (v-minV)*(H-2*pad)/(maxV-minV);
+  // domain
+  const minU = 0, maxU = widthMm;
+  const minV = 0, maxV = Math.max(5, Math.max(...pts.map(p => p.v)));
 
-  // grid each 30°
-  ctx.strokeStyle="#e5e7eb"; ctx.lineWidth=1;
-  const stepU = (2*Math.PI*R)/12;
-  for(let u=minU; u<=maxU+1e-6; u+=stepU){
-    ctx.beginPath(); ctx.moveTo(X(u), pad); ctx.lineTo(X(u), H-pad); ctx.stroke();
+  const X = u => padL + ((u - minU) * plotW) / (maxU - minU || 1);
+  const Y = v => padT + plotH - ((v - minV) * plotH) / (maxV - minV || 1);
+
+  // grid vertical every 30°
+  const stepU = widthMm / 12;
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  for (let u = minU; u <= maxU + 1e-6; u += stepU) {
+    ctx.beginPath();
+    ctx.moveTo(X(u), padT);
+    ctx.lineTo(X(u), padT + plotH);
+    ctx.stroke();
   }
   // border
-  ctx.strokeStyle="#94a3b8";
-  ctx.strokeRect(pad,pad,W-2*pad,H-2*pad);
+  ctx.strokeStyle = "#94a3b8";
+  ctx.strokeRect(padL, padT, plotW, plotH);
 
-  // title
-  ctx.fillStyle="#0f172a"; ctx.font="600 14px system-ui";
-  ctx.fillText(title, pad, pad-4);
-
-  // polyline
-  ctx.strokeStyle="#0ea5e9"; ctx.lineWidth=2.5;
+  // curve
+  ctx.strokeStyle = "#0ea5e9";
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  let first=true;
-  pts.forEach(p=>{
-    if(!p){ first=true; return; }
-    const x=X(p.u), y=Y(p.v);
-    if(first){ ctx.moveTo(x,y); first=false; } else ctx.lineTo(x,y);
-  });
+  ctx.moveTo(X(pts[0].u), Y(pts[0].v));
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(X(pts[i].u), Y(pts[i].v));
   ctx.stroke();
 
-  // stations: bottom u + near-curve v (numbers only)
-  ctx.font="bold 12px system-ui"; ctx.textAlign="center"; ctx.fillStyle="#0f172a";
-  stations.forEach(st=>{
-    const u = which==="run" ? st.uRun : st.uBranch;
-    const v = which==="run" ? st.vRun : st.vBranch;
-    if(u==null) return;
-    const x=X(u);
-    ctx.fillText(String(Math.round(u)), x, H - pad + 14);
-    if(v!=null){
-      const y=Y(v)-8, text=String(Math.round(v));
-      const tw=Math.ceil(ctx.measureText(text).width)+8, th=18, r=8, rx=x-tw/2, ry=y-th+4;
-      ctx.fillStyle="rgba(255,255,255,0.9)";
-      ctx.strokeStyle="#94a3b8"; ctx.lineWidth=1;
-      roundedRect(ctx,rx,ry,tw,th,r); ctx.fill(); ctx.stroke();
-      ctx.fillStyle="#0f172a";
-      ctx.fillText(text,x,y);
+  // dimensions (station lines + numbers)
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "12px system-ui";
+  ctx.textAlign = "center";
+
+  stations.forEach((st, i) => {
+    const u = X(st.uRun ?? st.uBranch); // whichever template we’re drawing
+    // station line
+    ctx.strokeStyle = "rgba(2,6,23,0.15)";
+    ctx.beginPath();
+    ctx.moveTo(u, padT + plotH);
+    ctx.lineTo(u, padT + plotH + 10);
+    ctx.stroke();
+    // baseline (u mm)
+    ctx.fillText(String(Math.round((st.uRun ?? st.uBranch))), u, padT + plotH + 22);
+
+    // v dimension — hide ~0
+    const v = (st.vRun ?? st.vBranch);
+    if (v > 0.5) {
+      const yCurve = Y(v);
+      // arrow
+      ctx.strokeStyle = "#0ea5e9";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(u, padT + plotH);
+      ctx.lineTo(u, yCurve);
+      ctx.stroke();
+      // head
+      ctx.beginPath();
+      ctx.moveTo(u - 4, yCurve + 6);
+      ctx.lineTo(u, yCurve);
+      ctx.lineTo(u + 4, yCurve + 6);
+      ctx.stroke();
+
+      // value pill
+      const text = String(Math.round(v));
+      const tw = Math.ceil(ctx.measureText(text).width) + 8;
+      const x = u, y = yCurve - 10, h = 18, r = 8;
+      ctx.fillStyle = "rgba(255,255,255,0.96)";
+      ctx.strokeStyle = "#94a3b8";
+      ctx.beginPath();
+      ctx.moveTo(x - tw / 2 + r, y - h);
+      ctx.lineTo(x + tw / 2 - r, y - h);
+      ctx.quadraticCurveTo(x + tw / 2, y - h, x + tw / 2, y - h + r);
+      ctx.lineTo(x + tw / 2, y - r);
+      ctx.quadraticCurveTo(x + tw / 2, y, x + tw / 2 - r, y);
+      ctx.lineTo(x - tw / 2 + r, y);
+      ctx.quadraticCurveTo(x - tw / 2, y, x - tw / 2, y - r);
+      ctx.lineTo(x - tw / 2, y - h + r);
+      ctx.quadraticCurveTo(x - tw / 2, y - h, x - tw / 2 + r, y - h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#0f172a";
+      ctx.fillText(text, x, y - 4);
     }
   });
 
-  // baseline
-  ctx.strokeStyle="#94a3b8";
-  ctx.beginPath(); ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,H-pad); ctx.stroke();
+  // axes labels
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "600 14px system-ui";
+  ctx.textAlign = "left";
+  ctx.fillText(title, padL, 20);
+
+  ctx.font = "12px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText(label, padL + plotW / 2, H - 6);
+
+  ctx.save();
+  ctx.translate(14, padT + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(valueLabel, 0, 0);
+  ctx.restore();
 }
 
-export default function CircleTeeTemplates(){
-  const [title,setTitle] = useState("");
-  const [runOD,setRunOD] = useState(200);
-  const [brOD,setBrOD]  = useState(50);
-  const [pitch,setPitch]= useState(0);  // deg: along-run tilt (0=perpendicular)
-  const [yaw,setYaw]    = useState(0);  // deg: sideways tilt
-  const [samples,setSamples]=useState(720);
+// ---------- main component ----------
+export default function CircleTeeDim() {
+  const [title, setTitle] = useState("");
+  const [runOD, setRunOD] = useState("");       // mm
+  const [branchOD, setBranchOD] = useState(""); // mm
+  const [deg, setDeg] = useState("90");         // overlap angle
+  const [step, setStep] = useState("15");       // station every N deg
 
-  const cvRun = useRef(null);
-  const cvBr  = useRef(null);
-  const last  = useRef(null);
+  const cRun = useRef(null);
+  const cBranch = useRef(null);
 
-  const recompute = ()=>{
-    const { ptsB, ptsR, stations, Rr, Rb } =
-      computeTemplates(runOD, brOD, pitch, yaw, samples);
-    last.current = { ptsB, ptsR, stations, Rr, Rb,
-      inputs: { runOD, branchOD: brOD, pitch, yaw, samples, title } };
-    requestAnimationFrame(()=>{
-      drawTemplate(cvRun.current, ptsR, "Run hole template", Rr, stations, "run");
-      drawTemplate(cvBr.current,  ptsB, "Branch cut template", Rb, stations, "branch");
-    });
-  };
+  // live draw
+  useEffect(() => {
+    const R = parseFloat(runOD), B = parseFloat(branchOD);
+    const A = parseFloat(deg), S = parseFloat(step) || 15;
+    if (!isFinite(R) || !isFinite(B) || !isFinite(A)) {
+      // clear canvases
+      [cRun.current, cBranch.current].forEach(cv => {
+        if (!cv) return;
+        const ctx = cv.getContext("2d");
+        ctx && ctx.clearRect(0,0,cv.width,cv.height);
+      });
+      return;
+    }
+    const prof = makeProfiles({ runOD: R, branchOD: B, angleDeg: A, stepDeg: S });
+    drawDimTemplate(
+      cRun.current,
+      prof.run,
+      prof.stations,
+      { title: "Run hole template (wrap on RUN)", widthMm: prof.widthRun }
+    );
+    drawDimTemplate(
+      cBranch.current,
+      prof.branch,
+      prof.stations.map(s=>({ uBranch:s.uBranch, vBranch:s.vBranch })), // map for branch
+      { title: "Branch cut template (wrap on BRANCH)", widthMm: prof.widthBranch }
+    );
+  }, [runOD, branchOD, deg, step]);
 
-  useEffect(()=>{ recompute(); /* eslint-disable-next-line */ },[]);
-  useEffect(()=>{ recompute(); /* eslint-disable-next-line */ },[runOD,brOD,pitch,yaw,samples]);
+  const clearAll = () => { setTitle(""); setRunOD(""); setBranchOD(""); setDeg("90"); setStep("15"); };
 
-  const onSave = async ()=>{
+  const save = async () => {
+    const R = parseFloat(runOD), B = parseFloat(branchOD);
+    const A = parseFloat(deg), S = parseFloat(step) || 15;
+    if (!isFinite(R) || !isFinite(B) || !isFinite(A)) { alert("Fill all numbers first."); return; }
+    const prof = makeProfiles({ runOD: R, branchOD: B, angleDeg: A, stepDeg: S });
+
     const now = Date.now();
-    const expiresAt = now + 90*24*60*60*1000;
-    const data = last.current;
-    if(!data){ alert("Nothing to save"); return; }
-    await set(push(dbRef(db,"teeTemplates")), {
-      type: "tee-template-orient-v1",
+    const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
+    await set(push(dbRef(db, "teeTemplates")), {
       createdAt: now, expiresAt,
       title: title || "Untitled",
-      inputs: { runOD, branchOD: brOD, pitch, yaw, samples },
-      run: data.ptsR, branch: data.ptsB, stations: data.stations
+      inputs: { runOD: R, branchOD: B, deg: A, stepDeg: S },
+      run: prof.run, branch: prof.branch,
+      stations: prof.stations
     });
     alert("Saved ✅");
   };
 
-  const quick = (label)=>{
-    if(label==="Perpendicular"){ setPitch(0); setYaw(0); }
-    if(label==="Pitch 20°"){ setPitch(20); setYaw(0); }
-    if(label==="Yaw 20°"){ setPitch(0); setYaw(20); }
-    if(label==="Oblique 20°/15°"){ setPitch(20); setYaw(15); }
-  };
-
   return (
-    <div className="grid container">
+    <div className="grid">
       <div className="card">
-        <div className="page-title">Pipe Tee — Wrap Templates (Pitch/Yaw)</div>
-        <div className="row" style={{flexWrap:"wrap", gap:10}}>
-          <input className="input" placeholder="Title" value={title} onChange={e=>setTitle(e.target.value)} />
-          <div className="small">Run OD</div>
-          <input className="input" type="number" inputMode="decimal" value={runOD} onChange={e=>setRunOD(+e.target.value||0)} />
-          <div className="small">Branch OD</div>
-          <input className="input" type="number" inputMode="decimal" value={brOD} onChange={e=>setBrOD(+e.target.value||0)} />
+        <div className="page-title">🧩 Pipe Tee Templates (with dimensions)</div>
 
-          <div className="small">Pitch (deg)</div>
-          <input className="input" type="number" inputMode="decimal" value={pitch} onChange={e=>setPitch(+e.target.value||0)} />
-          <div className="small">Yaw (deg)</div>
-          <input className="input" type="number" inputMode="decimal" value={yaw} onChange={e=>setYaw(+e.target.value||0)} />
+        <input className="input" placeholder="Title" value={title} onChange={e=>setTitle(e.target.value)} />
 
-          <div className="small">Smooth</div>
-          <input className="input" type="number" value={samples}
-            onChange={e=>setSamples(Math.max(240, Math.min(2880, +e.target.value||720)))} />
-          <button className="btn" onClick={()=>quick("Perpendicular")}>⊥</button>
-          <button className="btn" onClick={()=>quick("Pitch 20°")}>Pitch 20°</button>
-          <button className="btn" onClick={()=>quick("Yaw 20°")}>Yaw 20°</button>
-          <button className="btn" onClick={()=>quick("Oblique 20°/15°")}>20°/15°</button>
+        <div className="row">
+          <input className="input" placeholder="Run OD" value={runOD} onChange={e=>setRunOD(e.target.value)} />
+          <input className="input" placeholder="Branch OD" value={branchOD} onChange={e=>setBranchOD(e.target.value)} />
+        </div>
 
-          <button className="btn" onClick={recompute}>⟳ Update</button>
-          <button className="btn" onClick={onSave}>💾 Save</button>
+        <div className="row">
+          <input className="input" placeholder="Angle (deg)" value={deg} onChange={e=>setDeg(e.target.value)} />
+          <input className="input" placeholder="Station step (deg, e.g. 15)" value={step} onChange={e=>setStep(e.target.value)} />
+        </div>
+
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className="btn" onClick={save}>💾 Save</button>
+          <button className="btn" onClick={clearAll} style={{ background: "#64748b" }}>🧹 Clear</button>
         </div>
       </div>
 
       <div className="card">
-        <div className="page-title">Run hole template (wrap on run)</div>
-        <canvas ref={cvRun} style={{width:"100%", height:280, border:"1px solid #e5e7eb", borderRadius:12, background:"#fff"}}/>
+        <canvas ref={cRun} style={{ width: "100%", height: 260, border: "1px solid #e5e7eb", borderRadius: 12 }} />
       </div>
 
       <div className="card">
-        <div className="page-title">Branch cut template (wrap on branch)</div>
-        <canvas ref={cvBr} style={{width:"100%", height:280, border:"1px solid #e5e7eb", borderRadius:12, background:"#fff"}}/>
+        <canvas ref={cBranch} style={{ width: "100%", height: 260, border: "1px solid #e5e7eb", borderRadius: 12 }} />
+      </div>
+
+      <div className="card small">
+        Usage:  တစ်ခုချင်းကို print → စက္ကူကို pipe ပတ်ပြီး  
+        - **Run hole template** ကို run ပိုက်ပေါ်မှာပတ်ပြီး station line တွေနှင့် **v(mm)** အတိုင်းအတာအထိ ခြစ်/မှတ်ပြီး ဖောက်ပါ။  
+        - **Branch cut template** ကို branch ပိုက်အဆုံးမှာပတ်ပြီး **v(mm)** အတိုင်းအတာအထိ ဖြတ်ပါ။  
+        Note: label တွေမှာ mm မရေးပဲ နံပါတ်ပဲပြထားပါတယ်။
       </div>
     </div>
   );
-  }
+    }
