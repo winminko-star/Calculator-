@@ -1,252 +1,329 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
-import { ref as dbRef, push, set as dbSet } from "firebase/database";
+import { ref as dbRef, push, set } from "firebase/database";
 
+/* ------------------------ math helpers ------------------------ */
+// deg↔rad
+const D2R = (d) => (d * Math.PI) / 180;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-const rad = (d) => (d * Math.PI) / 180;
-const wrap01 = (a) => { const t = a % (2*Math.PI); return t < 0 ? t + 2*Math.PI : t; };
+const safe = (x) => (Number.isFinite(x) ? x : null);
 
-/* ===== Axis rotations (yaw→about X, pitch→about Y) ===== */
-function axisVector(pitchDeg, yawDeg) {
-  const p = rad(pitchDeg), y = rad(yawDeg);
-  // v = Ry(pitch) * Rx(yaw) * [0,0,1]
-  const vx = Math.sin(p) * Math.cos(y);
-  const vy = -Math.sin(y);
-  const vz = Math.cos(p) * Math.cos(y);
-  const m = Math.hypot(vx, vy, vz) || 1;
-  return { x: vx/m, y: vy/m, z: vz/m };
-}
-
-/* ===== Quadratic on run: |P×v| = Rb  →  (1-A^2)x^2 -2ARrD x + (Rr^2(1-D^2)-Rb^2)=0 ===== */
-function solveRunX(Rr, Rb, v, th) {
-  const A = v.x, B = v.y, C = v.z;
-  const D = B * Math.sin(th) + C * Math.cos(th);
-
-  const k1 = 1 - A*A;
-  const k2 = -2 * A * Rr * D;
-  const k3 = Rr*Rr * (1 - D*D) - Rb*Rb;
-
-  // Degenerate: axis ~ parallel to run axis → k1≈0
-  if (Math.abs(k1) < 1e-9) return null;
-
-  const disc = k2*k2 - 4*k1*k3;
-  if (disc < -1e-9) return null;
-  const s = Math.sqrt(Math.max(0, disc));
-
-  const x1 = (-k2 + s) / (2*k1);
-  const x2 = (-k2 - s) / (2*k1);
-
-  // template uses the boundary closer to center plane → choose min |x|
-  const pick = (Math.abs(x1) <= Math.abs(x2)) ? x1 : x2;
-  return pick;
-}
-
-/* ===== Build curves ===== */
-function makeRunStencil(Rr, Rb, pitch, yaw, samples) {
-  const v = axisVector(pitch, yaw);
-  const pts = [];
-  for (let i = 0; i <= samples; i++) {
-    const th = (i / samples) * 2 * Math.PI;
-    const x = solveRunX(Rr, Rb, v, th);
-    if (x == null) { pts.push(null); continue; }
-    const u = Rr * th;      // unwrap along run circumference
-    const h = Math.abs(x);  // axial distance as positive height
-    pts.push({ u, v: h, th, x, _v: v }); // keep extras for branch mapping
-  }
-  return pts;
-}
-
-function orthoBasis(v) {
-  // e1 = normalize(v × ref); use X-axis by default, else Y
-  let cx = v.y*0 - v.z*0, cy = v.z*1 - v.x*0, cz = v.x*0 - v.y*1; // v × [1,0,0] = [0, vz, -vy]
-  cx = 0; cy = v.z; cz = -v.y;
-  let m = Math.hypot(cx, cy, cz);
-  if (m < 1e-6) { // v ~ X-axis → use [0,1,0]
-    cx = -v.z; cy = 0; cz = v.x; // v × [0,1,0] = [vz,0,-vx] (then swap sign to keep orientation)
-    m = Math.hypot(cx, cy, cz);
-  }
-  const e1 = { x: cx/m, y: cy/m, z: cz/m };
-  const e2 = { // e2 = v × e1
-    x: v.y*e1.z - v.z*e1.y,
-    y: v.z*e1.x - v.x*e1.z,
-    z: v.x*e1.y - v.y*e1.x
+// unit axis from pitch/yaw (run axis = +X)
+// pitch: 0° = true tee (⊥ to run), 90° = parallel to run
+// yaw: rotate around run axis to choose where the branch sits (0° = +Y, 90° = +Z)
+function axisFromPitchYaw(pitchDeg, yawDeg) {
+  const p = D2R(pitchDeg || 0);
+  const y = D2R(yawDeg || 0);
+  // unit vector in YZ-plane pointing outwards at yaw
+  const u = { x: 0, y: Math.cos(y), z: Math.sin(y) };
+  // move from perpendicular towards +X by pitch
+  const d = {
+    x: Math.sin(p),
+    y: u.y * Math.cos(p),
+    z: u.z * Math.cos(p),
   };
-  return { e1, e2 };
+  // normalize (already unit but guard)
+  const m = Math.hypot(d.x, d.y, d.z) || 1;
+  return { x: d.x / m, y: d.y / m, z: d.z / m };
 }
 
-function makeBranchStencilFromRun(runPts, Rr, Rb, pitch, yaw) {
-  const v = axisVector(pitch, yaw);
-  const { e1, e2 } = orthoBasis(v);
-  const pts = [];
-  for (const pr of runPts) {
-    if (!pr) { pts.push(null); continue; }
-    // 3D point on run surface
-    const th = pr.th;
-    const P = { x: pr.x, y: Rr*Math.sin(th), z: Rr*Math.cos(th) };
-    // projection to branch axis
-    const t = P.x*v.x + P.y*v.y + P.z*v.z;                 // distance along branch axis
-    const W = { x: P.x - t*v.x, y: P.y - t*v.y, z: P.z - t*v.z }; // perpendicular foot
-    const a = W.x*e1.x + W.y*e1.y + W.z*e1.z;
-    const b = W.x*e2.x + W.y*e2.y + W.z*e2.z;
-    const phi = wrap01(Math.atan2(b, a));                  // 0..2π
-    const ub = Rb * phi;
-    const vb = Math.abs(t);
-    pts.push({ u: ub, v: vb });
+// build an orthonormal basis (n1,n2) ⟂ d   (for parameterising the branch surface)
+function buildPerpBasis(d) {
+  // pick any vector not collinear
+  const tmp = Math.abs(d.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  // n1 = normalize(tmp × d)
+  const n1 = {
+    x: tmp.y * d.z - tmp.z * d.y,
+    y: tmp.z * d.x - tmp.x * d.z,
+    z: tmp.x * d.y - tmp.y * d.x,
+  };
+  const m1 = Math.hypot(n1.x, n1.y, n1.z) || 1;
+  n1.x /= m1; n1.y /= m1; n1.z /= m1;
+  // n2 = d × n1
+  const n2 = {
+    x: d.y * n1.z - d.z * n1.y,
+    y: d.z * n1.x - d.x * n1.z,
+    z: d.x * n1.y - d.y * n1.x,
+  };
+  return { n1, n2 };
+}
+
+/* --------------------- core geometry (closed-form) --------------------- */
+/** Run-hole curve (unwrap run cylinder)
+ * Run axis = X, radius Rr. A surface point is (x, Rr cosθ, Rr sinθ).
+ * Branch axis = line through origin along d (unit). Branch radius Rb.
+ * Intersection condition: |P × d| = Rb.
+ * This yields a quadratic in x: A x² + B x + C = 0 (θ is parameter), we pick |x|.
+ */
+function computeRunHole(Rr, Rb, pitch, yaw, stepAngle = 1) {
+  const d = axisFromPitchYaw(pitch, yaw);
+  const A = (d.y * d.y) + (d.z * d.z);
+
+  const res = [];
+  for (let deg = 0; deg <= 360; deg += stepAngle) {
+    const θ = D2R(deg);
+    const s = Math.sin(θ), c = Math.cos(θ);
+
+    const B = -2 * Rr * d.x * (s * d.z + c * d.y);
+    const C =
+      Rr * Rr * (d.x * d.x) +
+      Rr * Rr * ( (c * d.z - s * d.y) * (c * d.z - s * d.y) ) -
+      Rb * Rb;
+
+    const disc = B * B - 4 * A * C;
+    if (disc < 0) { res.push(null); continue; }
+
+    const root = Math.sqrt(disc);
+    const x1 = (-B + root) / (2 * A);
+    const x2 = (-B - root) / (2 * A);
+    // stencil needs axial distance from mid-plane → take the smaller magnitude
+    const x = Math.abs(Math.abs(x1) < Math.abs(x2) ? x1 : x2);
+
+    // unwrap: u (mm along circumference), v (mm along axis)
+    res.push({
+      u: Rr * θ,         // arc length on run (0 .. 2πRr)
+      v: safe(x),        // axial distance
+      deg,
+    });
   }
-  return pts;
+  return res;
 }
 
-/* ===== Drawer ===== */
-function drawUnwrap(canvas, pts, stations, title, OD) {
+/** Branch-cut curve (unwrap branch cylinder)
+ * Parameterise Q(t, φ) = t d + Rb( n1 cosφ + n2 sinφ ), want y²+z² = Rr²
+ * Solve for t: (d_y²+d_z²)t² + 2Rb(d·A)t + Rb²|A|² - Rr² = 0 where A = (0, A_y, A_z)
+ */
+function computeBranchCut(Rr, Rb, pitch, yaw, stepAngle = 1) {
+  const d = axisFromPitchYaw(pitch, yaw);
+  const { n1, n2 } = buildPerpBasis(d);
+
+  const Ay = (c) => n1.y * c + n2.y * Math.sqrt(1 - c * c); // cosφ known → sinφ from c
+  const Az = (c) => n1.z * c + n2.z * Math.sqrt(1 - c * c);
+
+  const A2 = d.y * d.y + d.z * d.z;
+  const res = [];
+  for (let deg = 0; deg <= 360; deg += stepAngle) {
+    const φ = D2R(deg);
+    const c = Math.cos(φ), s = Math.sin(φ);
+    const Ayv = n1.y * c + n2.y * s;
+    const Azv = n1.z * c + n2.z * s;
+
+    const B = 2 * Rb * (d.y * Ayv + d.z * Azv);
+    const C = Rb * Rb * (Ayv * Ayv + Azv * Azv) - Rr * Rr;
+
+    const disc = B * B - 4 * A2 * C;
+    if (disc < 0) { res.push(null); continue; }
+
+    const root = Math.sqrt(disc);
+    const t1 = (-B + root) / (2 * A2);
+    const t2 = (-B - root) / (2 * A2);
+    const t = Math.abs(Math.abs(t1) < Math.abs(t2) ? t1 : t2);
+
+    res.push({
+      u: Rb * φ,    // arc length on branch (0 .. 2πRb)
+      v: safe(t),   // along branch axis from saddle plane
+      deg,
+    });
+  }
+  return res;
+}
+
+/* --------------------------- tiny canvas drawer --------------------------- */
+function drawUnwrap(canvas, pts, title, OD, tickDeg = 30) {
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
-  const W = canvas.clientWidth || 640, H = canvas.clientHeight || 220;
-  canvas.width = Math.floor(W*dpr); canvas.height = Math.floor(H*dpr);
-  const ctx = canvas.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,W,H); ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H);
+  const W = canvas.clientWidth || 640;
+  const H = canvas.clientHeight || 220;
+  canvas.width = Math.floor(W * dpr);
+  canvas.height = Math.floor(H * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
 
-  if (!pts?.length) { ctx.fillStyle="#64748b"; ctx.fillText("No data",12,22); return; }
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, W, H);
 
-  const pad = 18, Umax = 2*Math.PI*(OD/2);
-  let minV=Infinity, maxV=-Infinity;
-  pts.forEach(p=>{ if(p){minV=Math.min(minV,p.v); maxV=Math.max(maxV,p.v);} });
-  if (!isFinite(minV)) { ctx.fillStyle="#64748b"; ctx.fillText("No domain",12,22); return; }
-  const head = Math.max(2, 0.06*(maxV-minV||1)); minV-=head; maxV+=head;
+  // guard
+  const valid = pts.filter(p => p && Number.isFinite(p.u) && Number.isFinite(p.v));
+  if (!valid.length) {
+    ctx.fillStyle = "#64748b";
+    ctx.font = "14px system-ui";
+    ctx.fillText("No domain", 12, 22);
+    return;
+  }
 
-  const X = (u)=> pad + (u)*(W-2*pad)/Math.max(1e-6,Umax);
-  const Y = (v)=> H-pad - (v-minV)*(H-2*pad)/Math.max(1e-6,(maxV-minV));
+  const pad = 16;
+  const minU = 0, maxU = Math.max(...valid.map(p=>p.u));
+  let minV = Math.min(...valid.map(p=>p.v));
+  let maxV = Math.max(...valid.map(p=>p.v));
+  const head = Math.max(2, 0.08*(maxV - minV || 1));
+  minV = Math.max(0, minV - head); maxV += head;
 
-  ctx.strokeStyle="#e5e7eb"; ctx.lineWidth=1;
-  const stepU = Umax/12;
-  for (let u=0; u<=Umax+1e-6; u+=stepU) { ctx.beginPath(); ctx.moveTo(X(u),pad); ctx.lineTo(X(u),H-pad); ctx.stroke(); }
-  ctx.strokeStyle="#94a3b8"; ctx.strokeRect(pad,pad,W-2*pad,H-2*pad);
+  const X = (u) => pad + (u - minU) * (W - 2*pad) / Math.max(1e-6, (maxU - minU));
+  const Y = (v) => H - pad - (v - minV) * (H - 2*pad) / Math.max(1e-6, (maxV - minV));
 
+  // vertical ticks each tickDeg
+  ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 1;
+  const C = Math.PI * (OD || 0);
+  const stepU = (tickDeg/360) * C;
+  for (let u = 0; u <= C + 0.5; u += stepU) {
+    ctx.beginPath(); ctx.moveTo(X(u), pad); ctx.lineTo(X(u), H-pad); ctx.stroke();
+  }
+  // baseline + title
+  ctx.strokeStyle="#94a3b8";
+  ctx.strokeRect(pad, pad, W-2*pad, H-2*pad);
+  ctx.beginPath(); ctx.moveTo(pad, H-pad); ctx.lineTo(W-pad, H-pad); ctx.stroke();
   ctx.fillStyle="#0f172a"; ctx.font="600 14px system-ui"; ctx.fillText(title, pad, pad-4);
 
+  // curve
   ctx.strokeStyle="#0ea5e9"; ctx.lineWidth=2.5; ctx.beginPath();
   let first=true;
-  pts.forEach(p=>{ if(!p){first=true;return;} const x=X(p.u), y=Y(p.v); if(first){ctx.moveTo(x,y); first=false;} else ctx.lineTo(x,y); });
+  pts.forEach(p=>{
+    if(!p){first=true; return;}
+    const x=X(p.u), y=Y(p.v);
+    if(first){ctx.moveTo(x,y); first=false;} else ctx.lineTo(x,y);
+  });
   ctx.stroke();
 
-  ctx.strokeStyle="#94a3b8"; ctx.beginPath(); ctx.moveTo(pad,H-pad); ctx.lineTo(W-pad,H-pad); ctx.stroke();
-
-  // stations
-  ctx.textAlign="center"; ctx.font="bold 12px system-ui";
-  (stations||[]).forEach(s=>{
-    const u = clamp(s.u,0,Umax), v = s.v;
-    const x = X(u); ctx.fillStyle="#0f172a"; ctx.fillText(String(Math.round(u)), x, H-pad+14);
-    if (v!=null) {
-      const y = Y(v)-8, text = String(Math.round(v));
-      const tw = Math.ceil(ctx.measureText(text).width)+8, th=18, r=8, rx=x-tw/2, ry=y-th+4;
-      ctx.fillStyle="rgba(255,255,255,0.92)"; ctx.strokeStyle="#cbd5e1"; ctx.lineWidth=1;
+  // station dots every tickDeg
+  ctx.font="bold 12px system-ui"; ctx.textAlign="center";
+  (function drawStations(){
+    const keep = new Set();
+    for(let d=0; d<=360; d+=tickDeg) keep.add(d);
+    pts.forEach(p=>{
+      if(!p || !keep.has(p.deg)) return;
+      const x=X(p.u), y=Y(p.v);
+      // bubble
+      const text = String(Math.round(p.v));
+      const tw = Math.ceil(ctx.measureText(text).width)+8, th=18, r=8;
+      const rx=x-tw/2, ry=y-th-6;
+      ctx.fillStyle="rgba(255,255,255,0.95)";
+      ctx.strokeStyle="#94a3b8"; ctx.lineWidth=1;
       ctx.beginPath();
-      ctx.moveTo(rx+r,ry); ctx.lineTo(rx+tw-r,ry); ctx.quadraticCurveTo(rx+tw,ry,rx+tw,ry+r);
-      ctx.lineTo(rx+tw,ry+th-r); ctx.quadraticCurveTo(rx+tw,ry+th,rx+tw-r,ry+th);
-      ctx.lineTo(rx+r,ry+th); ctx.quadraticCurveTo(rx,ry+th,rx,ry+th-r);
-      ctx.lineTo(rx,ry+r); ctx.quadraticCurveTo(rx,ry,rx+r,ry); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle="#0f172a"; ctx.fillText(text, x, y);
-    }
-  });
+      ctx.moveTo(rx+r,ry);
+      ctx.lineTo(rx+tw-r,ry);
+      ctx.quadraticCurveTo(rx+tw,ry,rx+tw,ry+r);
+      ctx.lineTo(rx+tw,ry+th-r);
+      ctx.quadraticCurveTo(rx+tw,ry+th,rx+tw-r,ry+th);
+      ctx.lineTo(rx+r,ry+th);
+      ctx.quadraticCurveTo(rx,ry+th,rx,ry+th-r);
+      ctx.lineTo(rx,ry+r);
+      ctx.quadraticCurveTo(rx,ry,rx+r,ry);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#0f172a"; ctx.fillText(text,x,ry+th-5);
+
+      // bottom degree text
+      ctx.fillStyle="#0f172a";
+      ctx.fillText(String(p.deg), x, H-pad+14);
+    });
+  })();
 }
 
-/* ===== Page ===== */
+/* ------------------------------- component ------------------------------- */
 export default function CircleTee() {
-  const [title, setTitle]   = useState("");
-  const [runOD, setRunOD]   = useState("200");
-  const [brOD, setBrOD]     = useState("50");
-  const [stepDeg, setStep]  = useState("30");     // station spacing
-  const [samples, setSmp]   = useState("360");    // curve smoothness
+  const [title, setTitle] = useState("");
+  const [runOD, setRunOD] = useState(200);     // mm
+  const [branchOD, setBranchOD] = useState(50);// mm
+  const [pitch, setPitch] = useState(0);       // deg (0 ⟂, 90 ∥)
+  const [yaw, setYaw] = useState(0);           // deg (around run)
+  const [stepDeg, setStepDeg] = useState(30);  // station step
+  const [wrapDeg, setWrapDeg] = useState(360); // how much of circumference to draw (keep 360)
 
-  // NEW — tilts (deg)
-  const [degRun, setDegRun] = useState("0");      // pitch
-  const [degSide, setDegSide]=useState("0");      // yaw
+  const [runPts, setRunPts] = useState([]);
+  const [brPts, setBrPts] = useState([]);
 
-  const Rr = clamp(Number(runOD)/2||0,0,1e9);
-  const Rb = clamp(Number(brOD)/2||0,0,1e9);
-  const N  = clamp(Math.floor(Number(samples)||0), 60, 1080);
-  const STEP = clamp(Math.floor(Number(stepDeg)||0), 5, 90);
-  const pitch = Number(degRun)||0, yaw = Number(degSide)||0;
+  const refRun = useRef(null);
+  const refBr  = useRef(null);
 
-  const runPts = useMemo(()=>makeRunStencil(Rr,Rb,pitch,yaw,N),[Rr,Rb,pitch,yaw,N]);
-  const brPts  = useMemo(()=>makeBranchStencilFromRun(runPts,Rr,Rb,pitch,yaw),[runPts,Rr,Rb,pitch,yaw]);
+  const update = () => {
+    const Rr = clamp(runOD/2, 0.1, 1e6);
+    const Rb = clamp(branchOD/2, 0.1, 1e6);
+    const step = clamp(stepDeg, 1, 90);
 
-  const stationsRun = useMemo(()=>{
-    const Cr = 2*Math.PI*Rr; const v = axisVector(pitch,yaw);
-    const arr=[]; for(let d=0; d<=360; d+=STEP){ const th=rad(d);
-      const x = solveRunX(Rr,Rb,v,th); if (x==null){arr.push({u: (d/360)*Cr, v:null}); continue;}
-      arr.push({ u:(d/360)*Cr, v:Math.abs(x) });
-    } return arr;
-  },[Rr,Rb,pitch,yaw,STEP]);
+    const denseStep = 1; // draw smooth curve (1°)
+    const run = computeRunHole(Rr, Rb, pitch, yaw, denseStep)
+      .filter(p => p && p.deg <= wrapDeg);
+    const br  = computeBranchCut(Rr, Rb, pitch, yaw, denseStep)
+      .filter(p => p && p.deg <= wrapDeg);
 
-  const stationsBr = useMemo(()=>{
-    const Cb=2*Math.PI*Rb;
-    // branch stations use φ=d directly (simple, for labels)
-    const arr=[]; for(let d=0; d<=360; d+=STEP){
-      // find matching index in runPts (approx)
-      const idx = Math.round((d/360)*(runPts.length-1));
-      const pr = runPts[idx]; if(!pr){ arr.push({u:(d/360)*Cb, v:null}); continue; }
-      const pb = brPts[idx];  if(!pb){ arr.push({u:(d/360)*Cb, v:null}); continue; }
-      arr.push({ u: pb.u, v: pb.v });
-    } return arr;
-  },[Rb,STEP,runPts,brPts]);
+    setRunPts(run);
+    setBrPts(br);
+  };
 
-  const cRun = useRef(null);
-  const cBr  = useRef(null);
+  useEffect(update, []); // first paint
+  useEffect(()=>{
+    drawUnwrap(refRun.current, runPts, "Run hole stencil (cut-out)", runOD, stepDeg);
+    drawUnwrap(refBr.current,  brPts,  "Branch cut stencil (wrap on branch)", branchOD, stepDeg);
+  }, [runPts, brPts, runOD, branchOD, stepDeg]);
 
-  useEffect(()=>{ drawUnwrap(cRun.current, runPts, stationsRun, "Run hole stencil (cut-out)", Number(runOD)); },[runPts, stationsRun, runOD]);
-  useEffect(()=>{ drawUnwrap(cBr.current,  brPts,  stationsBr,  "Branch cut stencil (wrap on branch)", Number(brOD)); },[brPts, stationsBr, brOD]);
+  const clearAll = () => {
+    setTitle(""); setRunOD(200); setBranchOD(50);
+    setPitch(0); setYaw(0); setStepDeg(30); setWrapDeg(360);
+    setRunPts([]); setBrPts([]);
+  };
 
-  const clearAll = () => { setTitle(""); setRunOD(""); setBrOD(""); setStep("30"); setSmp("360"); setDegRun("0"); setDegSide("0"); };
-  const saveToFirebase = async () => {
+  const save = async () => {
     const now = Date.now();
-    await dbSet(push(dbRef(db,"teeTemplates")), {
+    const expiresAt = now + 90*24*60*60*1000;
+    await set(push(dbRef(db, "teeTemplates")), {
+      createdAt: now, expiresAt,
       title: title || "Untitled",
-      createdAt: now, expiresAt: now + 90*24*60*60*1000,
-      inputs: { runOD:Number(runOD)||0, branchOD:Number(brOD)||0, stepDeg:STEP, samples:N, pitch: pitch, yaw: yaw },
-      run: runPts.map(p=>p&&({u:p.u,v:p.v})),
-      branch: brPts.map(p=>p&&({u:p.u,v:p.v})),
-      stations: { run: stationsRun, branch: stationsBr }
+      inputs: { runOD, branchOD, pitch, yaw, stepDeg, wrapDeg },
+      run: runPts,     // {u, v, deg}
+      branch: brPts,   // {u, v, deg}
     });
     alert("Saved ✅");
   };
 
   return (
     <div className="grid">
-      <div className="card" style={{ display:"grid", gap:10 }}>
-        <div className="page-title">🧩 Pipe Tee Templates (with Pitch/Yaw)</div>
+      <div className="card">
+        <div className="page-title">🧩 Pipe Tee Templates</div>
 
-        <input className="input" placeholder="Title" value={title} onChange={e=>setTitle(e.target.value)}/>
-        <input className="input" type="number" inputMode="numeric" placeholder="Run OD (mm)" value={runOD} onChange={e=>setRunOD(e.target.value)}/>
-        <input className="input" type="number" inputMode="numeric" placeholder="Branch OD (mm)" value={brOD} onChange={e=>setBrOD(e.target.value)}/>
-        <div className="row" style={{ gap:8, flexWrap:"wrap" }}>
-          <input className="input" type="number" inputMode="numeric" placeholder="Pitch (deg run)" value={degRun} onChange={e=>setDegRun(e.target.value)} style={{flex:"1 1 140px"}}/>
-          <input className="input" type="number" inputMode="numeric" placeholder="Yaw (deg side)"  value={degSide} onChange={e=>setDegSide(e.target.value)} style={{flex:"1 1 140px"}}/>
-        </div>
-        <div className="row" style={{ gap:8, flexWrap:"wrap" }}>
-          <input className="input" type="number" inputMode="numeric" placeholder="Station step (deg)" value={stepDeg} onChange={e=>setStep(e.target.value)} style={{flex:"1 1 140px"}}/>
-          <input className="input" type="number" inputMode="numeric" placeholder="Samples" value={samples} onChange={e=>setSmp(e.target.value)} style={{flex:"1 1 140px"}}/>
+        <div className="row" style={{ marginBottom: 8 }}>
+          <input className="input" placeholder="Title" value={title} onChange={(e)=>setTitle(e.target.value)} />
+          <button className="btn" onClick={update}>↻ Update</button>
+          <button className="btn" onClick={save}>💾 Save</button>
+          <button className="btn" onClick={clearAll} style={{ background:"#6b7280" }}>🧹 Clear</button>
         </div>
 
-        <div className="row" style={{ gap:8, flexWrap:"wrap" }}>
-          <button className="btn">⟳ Update</button>
-          <button className="btn" onClick={saveToFirebase}>💾 Save</button>
-          <button className="btn" onClick={clearAll} style={{ background:"#64748b" }}>🧹 Clear</button>
+        <div className="row">
+          <input className="input" type="number" inputMode="decimal" placeholder="Run OD (mm)"
+                 value={runOD} onChange={e=>setRunOD(+e.target.value||0)} />
+          <input className="input" type="number" inputMode="decimal" placeholder="Branch OD (mm)"
+                 value={branchOD} onChange={e=>setBranchOD(+e.target.value||0)} />
+        </div>
+        <div className="row">
+          <input className="input" type="number" inputMode="decimal" placeholder="Pitch (deg)"
+                 value={pitch} onChange={e=>setPitch(+e.target.value||0)} />
+          <input className="input" type="number" inputMode="decimal" placeholder="Yaw (deg)"
+                 value={yaw} onChange={e=>setYaw(+e.target.value||0)} />
+        </div>
+        <div className="row">
+          <input className="input" type="number" inputMode="decimal" placeholder="Step (deg)"
+                 value={stepDeg} onChange={e=>setStepDeg(+e.target.value||0)} />
+          <input className="input" type="number" inputMode="decimal" placeholder="Wrap (deg)"
+                 value={wrapDeg} onChange={e=>setWrapDeg(+e.target.value||0)} />
         </div>
       </div>
 
-      <div className="card" style={{ display:"grid", gap:10 }}>
-        <canvas ref={cRun} style={{ width:"100%", height:220, border:"1px solid #e5e7eb", borderRadius:12, background:"#fff" }}/>
-        <canvas ref={cBr}  style={{ width:"100%", height:220, border:"1px solid #e5e7eb", borderRadius:12, background:"#fff" }}/>
+      {/* canvases */}
+      <div className="card">
+        <canvas ref={refRun} style={{ width:"100%", height:240, border:"1px solid #e5e7eb", borderRadius:12, background:"#fff" }} />
+      </div>
+      <div className="card">
+        <canvas ref={refBr} style={{ width:"100%", height:240, border:"1px solid #e5e7eb", borderRadius:12, background:"#fff" }} />
       </div>
 
-      <div className="card small">
-        <div className="page-title">Dimensions (quick check)</div>
-        <div>
-          Run C ≈ <b>{(2*Math.PI*Rr).toFixed(2)}</b> mm · Branch C ≈ <b>{(2*Math.PI*Rb).toFixed(2)}</b> mm ·
-          Pitch <b>{pitch}°</b> · Yaw <b>{yaw}°</b> · Step <b>{STEP}°</b>
+      <div className="card">
+        <div className="small">
+          Dimensions (quick check): Run C ≈ <b>{(Math.PI*runOD).toFixed(2)}</b> mm ·
+          Branch C ≈ <b>{(Math.PI*branchOD).toFixed(2)}</b> mm ·
+          Tilts → Pitch <b>{pitch}</b>°, Yaw <b>{yaw}</b>°, Step <b>{stepDeg}</b>°
         </div>
-        <div style={{ marginTop:6, color:"#334155" }}>
-          0°→360° ကို station step နဲ့ အောက်တန်း u(mm) သတ်မှတ်ပြီး၊ pill label v(mm) ကို တိုင်းရိုက်ကူးရေး—Run stencil ကို run pipe ပေါ်၊ Branch stencil ကို branch pipe ပေါ် **ပတ်ပြီး ကပ်ကာ** curve ယူပါ။ Pitch/Yaw သည့် အနေအထားပြောင်းတွေ လိုက်ပြီး waveform က အလိုလိုပြောင်းသွားပါလိမ့်မယ်။
+        <div className="small" style={{ marginTop:6 }}>
+          စက္ကူပတ်နည်း: <b>Run hole stencil</b> ကို run ပိုက်ပတ်ပြီး ellipse ကို ရိတ်/မှတ်ပါ။ <b>Branch cut stencil</b> ကို branch ပိုက်ပတ်ပြီး contour ကို ဖြတ်ပါ။
+          အောက်ခြေ 0-360 တိုင်ရိယာက 30° တစ်ခါစီ mm တန်ဖိုးတွေ ပြထားပါတယ် (mm စာလုံးမထည့်ဘဲ ဂဏန်းဘဲ)။
         </div>
       </div>
     </div>
