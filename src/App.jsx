@@ -49,6 +49,7 @@ export default function App() {
           <Route path="/levelling" element={user ? <Levelling /> : <Navigate to="/login" replace />} />
           <Route path="/levelling-review" element={<LevellingReview />} />
           <Route path="/simple-calc" element={<SimpleCalc />} />
+          <Route path="/circlearc" element={<CircleArc />} />
 
           {/* fallback */}
           <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />
