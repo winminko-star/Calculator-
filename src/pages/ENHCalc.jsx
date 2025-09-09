@@ -11,39 +11,28 @@ export default function ENHCalc() {
   const [n2, setN2] = useState("");
   const [h2, setH2] = useState("");
 
-  // --- helpers ---
-  const clean = (s) => {
-    // allow digits, one leading -, one dot; convert comma -> dot
-    s = (s || "").replace(",", ".").trim();
-    // keep only valid chars
-    s = s.replace(/[^0-9\.\-]/g, "");
-    // keep only first '-' at start
-    s = s.replace(/(?!^)-/g, "");
-    // keep only first '.'
-    const i = s.indexOf(".");
-    if (i !== -1) s = s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, "");
-    // limit to ~6 significant digits visually (optional)
-    return s.slice(0, 12);
-  };
+  // --- parse only (do NOT sanitize input value itself) ---
   const toNum = (s) => {
-    if (s === "" || s === "-" || s === "." || s === "-.") return NaN;
-    const v = parseFloat(s.replace(",", "."));
+    if (!s) return NaN;
+    const v = parseFloat(String(s).replace(",", "."));
     return Number.isFinite(v) ? v : NaN;
   };
 
   const Row = ({ label, value, onChange, placeholder }) => (
     <div className="row" style={{ gap: 8 }}>
-      <div style={{ width: 140, fontWeight: 700 }}>{label}</div>
+      <div style={{ width: 160, fontWeight: 700 }}>{label}</div>
       <input
         className="input"
-        type="text"
-        inputMode="decimal"
+        type="text"              // keep keyboard open on mobile
+        inputMode="decimal"      // show numeric keypad with .
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
         placeholder={placeholder}
         value={value}
-        onChange={(e) => onChange(clean(e.target.value))}
-        onWheel={(e) => e.currentTarget.blur()} // prevent accidental scroll-change
+        onChange={(e) => onChange(e.target.value)}  // <-- no clean()/trim() here
         style={{
-          width: 140,           // ခန့်မှန်းအားဖြင့်ဂဏန်း ၆ လုံးဝင်မယ်
+          width: 160,
           textAlign: "right",
           fontWeight: 700,
         }}
@@ -53,11 +42,11 @@ export default function ENHCalc() {
 
   const Out = ({ label, value }) => (
     <div className="row" style={{ gap: 8 }}>
-      <div style={{ width: 140, fontWeight: 700 }}>{label}</div>
+      <div style={{ width: 160, fontWeight: 700 }}>{label}</div>
       <div
         className="input"
         style={{
-          width: 140,
+          width: 160,
           textAlign: "right",
           fontWeight: 800,
           background: "#f8fafc",
@@ -68,16 +57,13 @@ export default function ENHCalc() {
     </div>
   );
 
-  // compute answers
+  // compute answers (E-E, N-N, H-H)
   const out = useMemo(() => {
     const E = toNum(e2) - toNum(e1);
     const N = toNum(n2) - toNum(n1);
     const H = toNum(h2) - toNum(h1);
-    return {
-      E: Number.isFinite(E) ? E : "",
-      N: Number.isFinite(N) ? N : "",
-      H: Number.isFinite(H) ? H : "",
-    };
+    const fmt = (v) => (Number.isFinite(v) ? v : "");
+    return { E: fmt(E), N: fmt(N), H: fmt(H) };
   }, [e1, n1, h1, e2, n2, h2]);
 
   const clearAll = () => {
