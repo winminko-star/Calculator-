@@ -1,313 +1,312 @@
-// src/pages/CircleTeeFlat.jsx
+// src/pages/TeeTrueTemplates.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
-import { ref as dbRef, push, set } from "firebase/database";
+import { ref as dbRef, push, set as dbSet } from "firebase/database";
 
-const TAU = Math.PI * 2;
-const deg2rad = d => (d * Math.PI) / 180;
-const rad2deg = r => (r * 180) / Math.PI;
-const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-const safeId = () => (crypto?.randomUUID?.() || Math.random().toString(36)).slice(0,8);
+/* ===================== math helpers (true intersection) ===================== */
+// deg <-> rad
+const D2R = (d) => (d * Math.PI) / 180;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// unit vectors from pitch/yaw (pitch=90 = cross, yaw=0 = symmetric)
-function dirFromPitchYaw(pitchDeg, yawDeg){
-  const p = deg2rad(pitchDeg);
-  const y = deg2rad(yawDeg);
-  // run axis = +X. start from +X then rotate:
-  // yaw around X, then pitch away from X into +Z
-  const dx = Math.cos(p);
-  const dy = Math.sin(p) * Math.sin(y);
-  const dz = Math.sin(p) * Math.cos(y);
-  const L = Math.hypot(dx,dy,dz)||1;
-  return { x:dx/L, y:dy/L, z:dz/L };
+// direction of branch axis relative to run-axis (run-axis = +X)
+function branchDir(pitchDeg, yawDeg) {
+  const phi = D2R(clamp(pitchDeg, 0.0001, 179.9999)); // angle between axes
+  const psi = D2R(yawDeg);                              // rotation around run-axis
+  return {
+    x: Math.cos(phi),
+    y: Math.sin(phi) * Math.cos(psi),
+    z: Math.sin(phi) * Math.sin(psi),
+  }; // unit by construction
 }
 
-// build an orthonormal basis around d (for branch surface)
-function basisPerp(d){
-  // pick a non-parallel helper
-  const h = Math.abs(d.x) < 0.9 ? {x:1,y:0,z:0} : {x:0,y:1,z:0};
+// distance-squared from point P to a line through origin, dir d
+function dist2ToLine(P, d) {
+  const dot = P.x * d.x + P.y * d.y + P.z * d.z;
+  return P.x * P.x + P.y * P.y + P.z * P.z - dot * dot;
+}
+
+// Solve quadratic ax^2 + bx + c = 0 (returns array, maybe empty)
+function solveQuad(a, b, c) {
+  if (Math.abs(a) < 1e-12) { // linear
+    if (Math.abs(b) < 1e-12) return [];
+    return [-c / b];
+  }
+  const D = b * b - 4 * a * c;
+  if (D < -1e-12) return [];
+  const sD = Math.sqrt(Math.max(0, D));
+  return [(-b - sD) / (2 * a), (-b + sD) / (2 * a)];
+}
+
+/* ---- Run-hole: unwrap around RUN (y,z circle; find x where intersects branch) ----
+   Run cylinder radius Rr; param φ (deg on run). Point on surface: (x, Rr cosφ, Rr sinφ).
+   Solve for x with |P|^2 - (P·d)^2 = Rb^2  → quadratic in x.
+*/
+function sampleRunStencil(Rr, Rb, pitchDeg, yawDeg, stepDeg = 30) {
+  const d = branchDir(pitchDeg, yawDeg);
+  const A = Math.cos(D2R(pitchDeg));
+  const s2 = 1 - A * A; // = sin^2(pitch)
+  const psi = D2R(yawDeg);
+  const pts = [];
+  for (let deg = 0; deg <= 360; deg += stepDeg) {
+    const φ = D2R(deg);
+    const B = Rr * Math.sin(D2R(pitchDeg)) * Math.cos(φ - psi);
+    // s2 x^2 - 2 A B x + (Rr^2 - B^2 - Rb^2) = 0
+    const roots = solveQuad(s2, -2 * A * B, Rr * Rr - B * B - Rb * Rb);
+    if (roots.length === 0) {
+      pts.push({ deg, h: null }); // out of domain
+      continue;
+    }
+    // Two intersections along +X/−X. For run-hole outline we need the "near seam"
+    // pick the root with smaller |x| (hole centered at x≈0)
+    const x = roots.sort((a, b) => Math.abs(a) - Math.abs(b))[0];
+    pts.push({ deg, h: x }); // height along RUN axis (mm)
+  }
+  return pts;
+}
+
+/* ---- Branch-cut: unwrap around BRANCH (around branch axis; find t on branch axis)
+   Build orthonormal basis (u,v,d). Point on branch surface: P = t d + Rb (u cosθ + v sinθ).
+   Condition: distance of P to RUN axis (X-axis) equals Rr  →  sqrt(P_y^2+P_z^2)=Rr.
+   This gives quadratic in t (since P_y,P_z are linear in t).
+*/
+function sampleBranchStencil(Rr, Rb, pitchDeg, yawDeg, stepDeg = 30) {
+  const d = branchDir(pitchDeg, yawDeg);
+  // helper to build u,v ⟂ d
+  let h = { x: 0, y: 1, z: 0 };
+  if (Math.abs(h.x * d.x + h.y * d.y + h.z * d.z) > 0.99) h = { x: 0, y: 0, z: 1 };
   // u = normalize(h - (h·d)d)
-  const dot = h.x*d.x + h.y*d.y + h.z*d.z;
-  let ux = h.x - dot*d.x, uy = h.y - dot*d.y, uz = h.z - dot*d.z;
-  const ul = Math.hypot(ux,uy,uz)||1;
-  ux/=ul; uy/=ul; uz/=ul;
+  const hd = h.x * d.x + h.y * d.y + h.z * d.z;
+  let u = { x: h.x - hd * d.x, y: h.y - hd * d.y, z: h.z - hd * d.z };
+  const un = Math.hypot(u.x, u.y, u.z) || 1;
+  u = { x: u.x / un, y: u.y / un, z: u.z / un };
   // v = d × u
-  const vx = d.y*uz - d.z*uy;
-  const vy = d.z*ux - d.x*uz;
-  const vz = d.x*uy - d.y*ux;
-  return { u:{x:ux,y:uy,z:uz}, v:{x:vx,y:vy,z:vz} };
-}
-
-/** Solve intersection = two-quadratic trick
- * RUN surface: P(x,θ) = (x, Rr cosθ, Rr sinθ)
- * BRANCH axis: line through origin with direction d (unit)
- * Distance to axis^2 = |P|^2 - (d·P)^2 = Rb^2
- * -> α x^2 + β x + γ = 0  (α=B^2+C^2, β=-2 A K, K = Rr(B cosθ + C sinθ))
- */
-function runHoleCurve(Rr, Rb, d, stepDeg=10){
-  const {x:A,y:B,z:C} = d;
-  const alpha = 1 - A*A; // = B^2 + C^2
-  const CperDeg = TAU*Rr/360; // unwrap scale (mm per degree)
+  const v = {
+    x: d.y * u.z - d.z * u.y,
+    y: d.z * u.x - d.x * u.z,
+    z: d.x * u.y - d.y * u.x,
+  };
 
   const pts = [];
-  const stations = [];
-  for(let ddeg=0; ddeg<=360; ddeg+=stepDeg){
-    const t = deg2rad(ddeg);
-    const K = Rr*(B*Math.cos(t) + C*Math.sin(t));
-    const beta = -2*A*K;
-    const gamma = Rr*Rr - K*K - Rb*Rb;
-    let x=null;
-    if(alpha<=1e-9){
-      // branch axis almost parallel to run axis → straight slot; use linear solve
-      const S = A*0 + K; // at x=0
-      const need = Math.sqrt(Math.max(0, Rr*Rr - Rb*Rb));
-      x = Math.abs(need - S); // fallback
-    }else{
-      const disc = beta*beta - 4*alpha*gamma;
-      if(disc<0){ x = 0; }
-      else{
-        const r1 = (-beta - Math.sqrt(disc))/(2*alpha);
-        const r2 = (-beta + Math.sqrt(disc))/(2*alpha);
-        // pick the smaller |x| (mouth both sides; use positive height)
-        const pick = Math.abs(r1) < Math.abs(r2) ? r1 : r2;
-        x = Math.abs(pick);
-      }
-    }
-    pts.push({ u: ddeg*CperDeg, v: x });   // u = along circumference; v = axial (mm)
-    stations.push({deg:ddeg, u: ddeg*CperDeg, v: x});
+  for (let deg = 0; deg <= 360; deg += stepDeg) {
+    const θ = D2R(deg);
+    // P = t d + Rb( u cosθ + v sinθ )
+    // distance to X-axis = sqrt(P_y^2 + P_z^2) = Rr
+    // → (t d_y + Rb( u_y c + v_y s ))^2 + (t d_z + Rb( u_z c + v_z s ))^2 = Rr^2
+    const c = Math.cos(θ), s = Math.sin(θ);
+    const ay = d.y, az = d.z;
+    const by = Rb * (u.y * c + v.y * s);
+    const bz = Rb * (u.z * c + v.z * s);
+    // (ay t + by)^2 + (az t + bz)^2 = Rr^2
+    const a = ay * ay + az * az;
+    const b = 2 * (ay * by + az * bz);
+    const c0 = by * by + bz * bz - Rr * Rr;
+    const roots = solveQuad(a, b, c0);
+    if (roots.length === 0) { pts.push({ deg, h: null }); continue; }
+    // choose t near 0 (branch axis passes through origin at run center)
+    const t = roots.sort((A, B) => Math.abs(A) - Math.abs(B))[0];
+    pts.push({ deg, h: t }); // height along BRANCH axis (mm)
   }
-  return { pts, stations, width: TAU*Rr, label:"Run-hole (wrap on RUN)" };
+  return pts;
 }
 
-/** Branch side: Q(s,φ) = s d + Rb(u cosφ + v sinφ)
- * distance to run axis (X-axis) ⇒ sqrt( (Qy)^2 + (Qz)^2 ) = Rr
- * -> quadratic in s; solve as v(s)=Rr, take |s|
- */
-function branchCutCurve(Rr, Rb, d, stepDeg=10){
-  const {u, v} = basisPerp(d);
-  const CperDeg = TAU*Rb/360;
-
-  const Ay = d.y, Az = d.z;
-  const Uy = u.y, Uz = u.z;
-  const Vy = v.y, Vz = v.z;
-
-  const pts = [];
-  const stations = [];
-  for(let ddeg=0; ddeg<=360; ddeg+=stepDeg){
-    const p = deg2rad(ddeg);
-    const Cy = Rb*(Uy*Math.cos(p) + Vy*Math.sin(p));
-    const Cz = Rb*(Uz*Math.cos(p) + Vz*Math.sin(p));
-
-    // (Ay*s + Cy)^2 + (Az*s + Cz)^2 = Rr^2  ->  (Ay^2+Az^2)s^2 + 2(AyCy+AzCz)s + (Cy^2+Cz^2 - Rr^2) = 0
-    const a = Ay*Ay + Az*Az;
-    const b = 2*(Ay*Cy + Az*Cz);
-    const c = (Cy*Cy + Cz*Cz - Rr*Rr);
-    let s=0;
-    if(a<=1e-9){
-      // axis perpendicular to run axis -> use linear
-      s = Math.abs(-c/(b||1e-6));
-    }else{
-      const disc = b*b - 4*a*c;
-      if(disc<0) s = 0;
-      else{
-        const s1 = (-b - Math.sqrt(disc))/(2*a);
-        const s2 = (-b + Math.sqrt(disc))/(2*a);
-        s = Math.min(Math.abs(s1), Math.abs(s2));
-      }
-    }
-    pts.push({ u: ddeg*CperDeg, v: s });   // u = branch circumference; v = along branch axis
-    stations.push({deg:ddeg, u: ddeg*CperDeg, v: s});
-  }
-  return { pts, stations, width: TAU*Rb, label:"Branch-cut (wrap on BRANCH)" };
-}
-
-// simple canvas renderer
-function drawUnwrap(canvas, curve, stepDeg, showFill=false){
-  if(!canvas || !curve) return;
+/* ===================== Canvas drawer ===================== */
+function drawUnwrap(canvas, samples, title, maxHForGrid) {
+  if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   const W = canvas.clientWidth || 640;
   const H = canvas.clientHeight || 240;
-  canvas.width = Math.floor(W*dpr);
-  canvas.height = Math.floor(H*dpr);
+  canvas.width = Math.floor(W * dpr);
+  canvas.height = Math.floor(H * dpr);
   const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,W,H);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
 
-  const pad = 16;
-  const minU = 0, maxU = curve.width;
-  let minV = 0, maxV = 0;
-  curve.pts.forEach(p=>{ minV=Math.min(minV,p.v); maxV=Math.max(maxV,p.v); });
-  if(maxV-minV < 1e-6){ maxV = minV+1; }
-  const X = u => pad + (u-minU)*(W-2*pad)/Math.max(1e-6, (maxU-minU));
-  const Y = v => H-pad - (v-minV)*(H-2*pad)/Math.max(1e-6, (maxV-minV));
+  // bounds
+  const pad = 26;
+  const minX = 0, maxX = 360;
+  // vertical bounds from samples (ignore null)
+  let minY = 0, maxY = 0;
+  samples.forEach(p => { if (p.h != null) { minY = Math.min(minY, p.h); maxY = Math.max(maxY, p.h); } });
+  if (Math.abs(maxY - minY) < 1e-6) { maxY = Math.max(1, maxHForGrid || 50); minY = -maxY; }
+  const head = 0.1 * (maxY - minY || 1);
+  minY -= head; maxY += head;
 
-  // grid (every 30°)
-  ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 1;
-  const nTick = Math.round(360/stepDeg);
-  for(let i=0;i<=nTick;i++){
-    const u = (i*stepDeg/360)*curve.width;
-    const x = X(u);
-    ctx.beginPath(); ctx.moveTo(x,pad); ctx.lineTo(x,H-pad); ctx.stroke();
+  const X = (deg) => pad + ((deg - minX) * (W - 2 * pad)) / (maxX - minX);
+  const Y = (h) => H - pad - ((h - minY) * (H - 2 * pad)) / (maxY - minY);
+
+  // grid
+  ctx.strokeStyle = "#eef2f7"; ctx.lineWidth = 1;
+  for (let g = 0; g <= 360; g += 30) {
+    ctx.beginPath(); ctx.moveTo(X(g), pad); ctx.lineTo(X(g), H - pad); ctx.stroke();
   }
-  // border
-  ctx.strokeStyle = "#94a3b8"; ctx.strokeRect(pad,pad,W-2*pad,H-2*pad);
+  ctx.beginPath(); ctx.moveTo(pad, Y(0)); ctx.lineTo(W - pad, Y(0)); ctx.stroke();
 
-  // filled area (optional)
-  if(showFill){
-    ctx.fillStyle = "rgba(14,165,233,0.12)";
-    ctx.beginPath();
-    curve.pts.forEach((p,i)=>{ const x=X(p.u), y=Y(p.v); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
-    ctx.lineTo(X(maxU), Y(0));
-    ctx.lineTo(X(minU), Y(0));
-    ctx.closePath(); ctx.fill();
-  }
+  // title
+  ctx.fillStyle = "#0f172a"; ctx.font = "600 14px system-ui";
+  ctx.fillText(title, pad, pad - 8);
 
   // curve
   ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2.5;
   ctx.beginPath();
-  curve.pts.forEach((p,i)=>{ const x=X(p.u), y=Y(p.v); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);});
+  let first = true;
+  samples.forEach((p, i) => {
+    if (p.h == null) { first = true; return; }
+    const x = X(p.deg), y = Y(p.h);
+    if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y);
+  });
   ctx.stroke();
 
-  // station labels (degree → height)
-  ctx.font = "bold 12px system-ui"; ctx.textAlign="center";
-  curve.stations.forEach(st=>{
-    const x = X(st.u), y = Y(st.v);
-    // degree under axis
-    ctx.fillStyle="#0f172a";
-    ctx.fillText(String(st.deg), x, H-pad+14);
-    // height pill
-    const text = String(Math.round(st.v));
-    const tw = Math.ceil(ctx.measureText(text).width)+8, th=18, r=8;
-    const rx = x - tw/2, ry = y - th - 4;
-    ctx.fillStyle="rgba(255,255,255,0.95)";
-    ctx.strokeStyle="#cbd5e1"; ctx.lineWidth=1;
+  // points + labels every 30°
+  ctx.font = "bold 12px system-ui"; ctx.textAlign = "center";
+  samples.forEach((p) => {
+    if (p.h == null) return;
+    const x = X(p.deg), y = Y(p.h);
+    // marker
+    ctx.fillStyle = "#0ea5e9";
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    // pill label (integer mm)
+    const t = String(Math.round(p.h));
+    const tw = Math.ceil(ctx.measureText(t).width) + 10, th = 18, r = 8;
+    const rx = x - tw / 2, ry = y - th - 6;
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(rx+r,ry); ctx.lineTo(rx+tw-r,ry);
-    ctx.quadraticCurveTo(rx+tw,ry,rx+tw,ry+r);
-    ctx.lineTo(rx+tw,ry+th-r);
-    ctx.quadraticCurveTo(rx+tw,ry+th,rx+tw-r,ry+th);
-    ctx.lineTo(rx+r,ry+th);
-    ctx.quadraticCurveTo(rx,ry+th,rx,ry+th-r);
-    ctx.lineTo(rx,ry+r);
-    ctx.quadraticCurveTo(rx,ry,rx+r,ry);
+    ctx.moveTo(rx + r, ry);
+    ctx.lineTo(rx + tw - r, ry);
+    ctx.quadraticCurveTo(rx + tw, ry, rx + tw, ry + r);
+    ctx.lineTo(rx + tw, ry + th - r);
+    ctx.quadraticCurveTo(rx + tw, ry + th, rx + tw - r, ry + th);
+    ctx.lineTo(rx + r, ry + th);
+    ctx.quadraticCurveTo(rx, ry + th, rx, ry + th - r);
+    ctx.lineTo(rx, ry + r);
+    ctx.quadraticCurveTo(rx, ry, rx + r, ry);
     ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle="#0f172a"; ctx.fillText(text, x, ry+th-5);
+    ctx.fillStyle = "#0f172a"; ctx.fillText(t, x, ry + th - 5);
+    // degree on baseline
+    ctx.fillStyle = "#334155"; ctx.fillText(String(p.deg), x, H - 6);
   });
 
-  // title
-  ctx.fillStyle = "#0f172a"; ctx.font = "600 14px system-ui";
-  ctx.fillText(curve.label, pad, pad-4);
+  // axis border
+  ctx.strokeStyle = "#cbd5e1";
+  ctx.strokeRect(pad, pad, W - 2 * pad, H - 2 * pad);
 }
 
-export default function CircleTeeFlat(){
-  const [title,setTitle] = useState("");
-  const [runOD,setRunOD] = useState("60");
-  const [branchOD,setBranchOD] = useState("60");
-  const [pitch,setPitch] = useState("90"); // deg
-  const [yaw,setYaw] = useState("0");      // deg
-  const [step,setStep] = useState("30");   // deg step labels
-  const [runC, setRunC] = useState(null);
-  const [brC, setBrC] = useState(null);
+/* ===================== Main component ===================== */
+export default function TeeTrueTemplates() {
+  // inputs
+  const [title, setTitle] = useState("");
+  const [runOD, setRunOD] = useState(60);     // mm
+  const [branchOD, setBranchOD] = useState(60);
+  const [pitch, setPitch] = useState(90);     // deg (angle between axes)
+  const [yaw, setYaw] = useState(0);          // deg (rotation about run axis)
+  const [step, setStep] = useState(30);       // deg sample
+  const [run, setRun] = useState([]);         // [{deg,h}]
+  const [branch, setBranch] = useState([]);   // [{deg,h}]
 
   const cRun = useRef(null);
-  const cBr = useRef(null);
+  const cBr  = useRef(null);
 
-  const compute = ()=>{
-    const Rr = Math.max(1, Number(runOD)/2);
-    const Rb = Math.max(1, Number(branchOD)/2);
-    const pitchDeg = Number(pitch);
-    const yawDeg = Number(yaw);
-    const stepDeg = clamp(Number(step)||30, 5, 90);
-
-    const d = dirFromPitchYaw(pitchDeg, yawDeg);
-    const run = runHoleCurve(Rr, Rb, d, stepDeg);
-    const brn = branchCutCurve(Rr, Rb, d, stepDeg);
-
-    setRunC(run); setBrC(brn);
-    // draw
-    setTimeout(()=>{
-      drawUnwrap(cRun.current, run, stepDeg, true);
-      drawUnwrap(cBr.current,  brn, stepDeg, false);
-    },0);
+  const compute = () => {
+    const Rr = (Number(runOD) || 0) / 2;
+    const Rb = (Number(branchOD) || 0) / 2;
+    const st = Math.max(1, Math.round(Number(step) || 30));
+    const runS = sampleRunStencil(Rr, Rb, Number(pitch), Number(yaw), st);
+    const brS  = sampleBranchStencil(Rr, Rb, Number(pitch), Number(yaw), st);
+    setRun(runS); setBranch(brS);
   };
 
-  useEffect(()=>{ compute(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { compute(); /* auto first render */ }, []);
 
-  const clearAll = ()=>{
-    setTitle(""); setRunOD("60"); setBranchOD("60"); setPitch("90"); setYaw("0"); setStep("30");
-    setRunC(null); setBrC(null);
-    const ctx1=cRun.current?.getContext("2d"); const ctx2=cBr.current?.getContext("2d");
-    if(ctx1){ ctx1.clearRect(0,0,cRun.current.width,cRun.current.height); }
-    if(ctx2){ ctx2.clearRect(0,0,cBr.current.width,cBr.current.height); }
-  };
+  useEffect(() => {
+    drawUnwrap(cRun.current, run, "Run-hole stencil (wrap on RUN)", (Number(branchOD)||0)/2);
+    drawUnwrap(cBr.current,  branch, "Branch-cut stencil (wrap on BRANCH)", (Number(runOD)||0)/2);
+  }, [run, branch, runOD, branchOD]);
 
-  const saveToFirebase = async ()=>{
-    if(!runC || !brC){ alert("Nothing to save yet."); return; }
+  const clearAll = () => { setRun([]); setBranch([]); };
+
+  const save = async () => {
     const now = Date.now();
-    await set(push(dbRef(db,"teeFlat")),{
+    const rec = {
       createdAt: now,
       expiresAt: now + 90*24*60*60*1000,
-      title: title || "Untitled tee",
-      inputs:{
-        runOD: Number(runOD), branchOD: Number(branchOD),
-        pitch: Number(pitch), yaw: Number(yaw),
-        stepDeg: Number(step)
-      },
-      run: runC.pts,         // [{u,v}...]
-      branch: brC.pts,       // [{u,v}...]
-      stations: runC.stations, // for quick labels (deg, u, v) – same degrees for both
-      meta:{ widthRun: runC.width, widthBranch: brC.width }
-    });
+      title: title || "Untitled Tee",
+      inputs: { runOD: Number(runOD), branchOD: Number(branchOD), pitch: Number(pitch), yaw: Number(yaw), step: Number(step) },
+      // store raw arrays & an easy “stations” array for AllReview preview labels
+      run, branch,
+      stations: Array.from({length: Math.floor(360/Math.max(1,Number(step)))+1}, (_,i)=>({
+        deg: i*Math.max(1,Number(step)),
+        // unwrap positions (mm along circumference)
+        uRun: (Number(runOD)*Math.PI/180) * (i*Math.max(1,Number(step))),
+        uBranch: (Number(branchOD)*Math.PI/180) * (i*Math.max(1,Number(step))),
+        vRun: run[i]?.h ?? null,
+        vBranch: branch[i]?.h ?? null,
+      })),
+    };
+    await dbSet(push(dbRef(db, "teeTemplates")), rec);
     alert("Saved ✅");
   };
 
   return (
     <div className="grid">
       <div className="card">
-        <div className="page-title">🧷 Pipe Tee – Flat Templates</div>
+        <div className="page-title">🧩 Pipe Tee Templates (true intersection)</div>
         <input className="input" placeholder="Title" value={title} onChange={e=>setTitle(e.target.value)} />
 
-        <div className="row" style={{marginTop:8}}>
-          <input className="input" type="number" step="any" placeholder="Run OD (mm)" value={runOD} onChange={e=>setRunOD(e.target.value)} />
-          <input className="input" type="number" step="any" placeholder="Branch OD (mm)" value={branchOD} onChange={e=>setBranchOD(e.target.value)} />
-        </div>
-        <div className="row" style={{marginTop:8}}>
-          <input className="input" type="number" step="any" placeholder="Pitch (deg)" value={pitch} onChange={e=>setPitch(e.target.value)} />
-          <input className="input" type="number" step="any" placeholder="Yaw (deg)" value={yaw} onChange={e=>setYaw(e.target.value)} />
-          <input className="input" type="number" step="1" placeholder="Step° (labels)" value={step} onChange={e=>setStep(e.target.value)} />
+        <div className="row" style={{ marginTop:8 }}>
+          <input className="input" type="number" inputMode="numeric" value={runOD}
+                 onChange={e=>setRunOD(e.target.value)} placeholder="Run OD (mm)" />
+          <input className="input" type="number" inputMode="numeric" value={branchOD}
+                 onChange={e=>setBranchOD(e.target.value)} placeholder="Branch OD (mm)" />
         </div>
 
-        <div className="row" style={{marginTop:10}}>
-          <button className="btn" onClick={compute}>🔁 Update</button>
-          <button className="btn" onClick={saveToFirebase}>💾 Save</button>
-          <button className="btn" onClick={clearAll} style={{background:"#6b7280"}}>🧹 Clear</button>
+        <div className="row" style={{ marginTop:8 }}>
+          <input className="input" type="number" inputMode="numeric" value={pitch}
+                 onChange={e=>setPitch(e.target.value)} placeholder="Pitch (°)" />
+          <input className="input" type="number" inputMode="numeric" value={yaw}
+                 onChange={e=>setYaw(e.target.value)} placeholder="Yaw (°)" />
+          <input className="input" type="number" inputMode="numeric" value={step}
+                 onChange={e=>setStep(e.target.value)} placeholder="Step (°)" />
         </div>
 
-        <div className="small" style={{marginTop:8}}>
-          • 360° seam = 0° line. Graph ထဲက degree ကိန်းဂဏန်းတိုင်းမှာ **height(mm)** ကိုပြထားပြီး စက္ကူပတ် template အဖြစ် တိုက်ရိုက်သုံးနိုင်သည်။<br/>
-          • <b>Run-hole</b> stencil ကို RUN ပိုက်ပေါ်ပတ်ပြီး hole outline ကိုမှတ်ပါ။ <b>Branch-cut</b> stencil ကို BRANCH ပိုက်ပေါ်ပတ်ပြီး fish-mouth cut outline ကိုမှတ်ပါ။
+        <div className="row" style={{ marginTop:10, gap:10, flexWrap:"wrap" }}>
+          <button className="btn" onClick={compute}>🔄 Update</button>
+          <button className="btn" onClick={save}>💾 Save</button>
+          <button className="btn" onClick={clearAll} style={{ background:"#475569" }}>🧹 Clear</button>
+        </div>
+
+        <div className="small" style={{ marginTop:10, lineHeight:1.4 }}>
+          • 360° အတွက် degree step လိုအပ်သလို ထားပါ — graph ထဲတွင် label တွေကို 30° အောက်တန်းပြ<br/>
+          • <b>Run-hole</b> stencil ကို <b>RUN</b> ပိုက်ပတ် — အလယ်လိုင်းက baseline, pill က <b>height (mm)</b><br/>
+          • <b>Branch-cut</b> stencil ကို <b>BRANCH</b> ပိုက်ပတ် — fish-mouth cut outline
+        </div>
+      </div>
+
+      {/* canvases */}
+      <div className="card">
+        <canvas ref={cRun} style={{ width:"100%", height:240, border:"1px solid #e5e7eb", borderRadius:12, background:"#fff" }}/>
+      </div>
+      <div className="card">
+        <canvas ref={cBr} style={{ width:"100%", height:240, border:"1px solid #e5e7eb", borderRadius:12, background:"#fff" }}/>
+      </div>
+
+      {/* tables (integer mm) */}
+      <div className="card">
+        <div className="page-title">Run-hole (mm @ degree)</div>
+        <div className="row" style={{ flexWrap:"wrap", gap:6 }}>
+          {run.map(p => (
+            <div key={`r${p.deg}`} className="pill">{p.deg}° → <b>{p.h==null?"–":Math.round(p.h)}</b></div>
+          ))}
         </div>
       </div>
 
       <div className="card">
-        <canvas ref={cRun} style={{width:"100%",height:240,border:"1px solid #e5e7eb",borderRadius:12,background:"#fff"}}/>
-      </div>
-
-      <div className="card">
-        <canvas ref={cBr} style={{width:"100%",height:240,border:"1px solid #e5e7eb",borderRadius:12,background:"#fff"}}/>
-      </div>
-
-      {runC && brC && (
-        <div className="card">
-          <div className="page-title">Dimensions (quick check)</div>
-          <div className="small">
-            Run circumference ≈ <b>{(Math.PI*Number(runOD)).toFixed(2)}</b> mm ·
-            Branch circumference ≈ <b>{(Math.PI*Number(branchOD)).toFixed(2)}</b> mm ·
-            Tilts → Pitch <b>{Number(pitch)}</b>°, Yaw <b>{Number(yaw)}</b>°, Step <b>{Number(step)}</b>°
-          </div>
+        <div className="page-title">Branch-cut (mm @ degree)</div>
+        <div className="row" style={{ flexWrap:"wrap", gap:6 }}>
+          {branch.map(p => (
+            <div key={`b${p.deg}`} className="pill">{p.deg}° → <b>{p.h==null?"–":Math.round(p.h)}</b></div>
+          ))}
         </div>
-      )}
+      </div>
     </div>
   );
-    }
+}
