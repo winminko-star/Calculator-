@@ -1,349 +1,129 @@
-// src/pages/TeeStencil.jsx
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useEffect, useState } from "react";
 import { db } from "../firebase";
-import { ref as dbRef, push, set as dbSet } from "firebase/database";
+import { ref as dbRef, push, set } from "firebase/database";
 
-/**
- * Pipe Tee — Paper Wrap Stencils (Run-hole & Branch-cut)
- * - Canvas 2 ခု: Run ကိုပတ်ရေးမယ့် "hole outline", Branch ကိုပတ်ဖြတ်မယ့် "fish-mouth outline"
- * - Degree အလိုက် Height(mm) စာရင်းကို Table ထုတ်ပေးတယ်
- * - Pitch/Yaw သက်ရောက်မှု "အမြဲ" ထည့်တွက်ထားတယ်
- * - Save → /teeTemplates (AllReview.jsx နောက်ဆုံးဗားရှင်းနှင့် ပေါင်းသုံးနိုင်)
- */
+const DEG = Math.PI/180;
+const uN = v=>{const m=Math.hypot(...v)||1;return [v[0]/m,v[1]/m,v[2]/m];};
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const mul=(v,k)=>[v[0]*k,v[1]*k,v[2]*k];
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]];
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 
-export default function TeeStencil() {
-  /* ------------ Inputs ------------ */
+function solveTee({ runOD, branchOD, pitchDeg, yawDeg, stepDegFine=2 }) {
+  const Rr=runOD/2, Rb=branchOD/2;
+  const pitch=pitchDeg*DEG, yaw=yawDeg*DEG;
+  const d=uN([Math.cos(yaw)*Math.sin(pitch), Math.sin(yaw)*Math.sin(pitch), Math.cos(pitch)]);
+  const k=[0,0,1];
+  const n=Math.abs(d[2])<0.9?[0,0,1]:[1,0,0];
+  const e1=uN(sub(n, mul(d, dot(n,d)))); const e2=cross(d,e1);
+
+  const run=[], branch=[];
+  for(let a=0;a<=360;a+=stepDegFine){
+    const φ=a*DEG; const p0=[Rr*Math.cos(φ), Rr*Math.sin(φ), 0];
+    const A=dot(p0,d), u=sub(p0, mul(d,A)), w=sub(k, mul(d, dot(k,d)));
+    const A2=dot(w,w), B2=2*dot(u,w), C2=dot(u,u)-Rb*Rb, disc=B2*B2-4*A2*C2;
+    if(disc<0){ run.push(null); branch.push(null); continue; }
+    const z=(-B2 + Math.sign(B2||1)*Math.sqrt(disc))/(2*A2); // nearer
+    const p=add(p0, mul(k,z));
+    run.push({u:Rr*(a*DEG), v:z, deg:a});
+
+    const s=dot(p,d), q=sub(p, mul(d,s));
+    const phi_b=Math.atan2(dot(q,e2), dot(q,e1)); const phi01=phi_b<0?phi_b+2*Math.PI:phi_b;
+    branch.push({u: Rb*phi01, v:s, deg:a});
+  }
+  const minR=Math.min(...run.filter(Boolean).map(p=>p.v)), minB=Math.min(...branch.filter(Boolean).map(p=>p.v));
+  run.forEach(p=>{if(p) p.v-=minR;}); branch.forEach(p=>{if(p) p.v-=minB;});
+  const pick=(arr)=>{ const out=[]; for(let a=0;a<=360;a+=30){ const m=arr.find(p=>p&&p.deg===a); out.push({deg:a,h:m?Math.round(m.v):0}); } return out; };
+  return { run, branch, tableRun:pick(run), tableBranch:pick(branch), C_run:Math.PI*runOD, C_branch:Math.PI*branchOD };
+}
+
+function drawUV(canvas, pts, title, Cmm){
+  if(!canvas) return;
+  const dpr=window.devicePixelRatio||1, W=canvas.clientWidth||640, H=canvas.clientHeight||220;
+  canvas.width=W*dpr; canvas.height=H*dpr; const ctx=canvas.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H); ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H);
+  const pad=20, minU=0, maxU=Cmm||1;
+  const vals=(pts||[]).filter(Boolean); const maxV=Math.max(1, ...(vals.map(p=>p.v||0)));
+  const X=u=>pad+(u-minU)*(W-2*pad)/Math.max(1e-6,maxU-minU);
+  const Y=v=>H-pad - v*(H-2*pad)/Math.max(1e-6,maxV);
+  const stepU=(Cmm||0)/12; ctx.strokeStyle="#e5e7eb"; ctx.lineWidth=1;
+  for(let u=minU; u<=maxU+1e-6; u+=stepU){ ctx.beginPath(); ctx.moveTo(X(u),pad); ctx.lineTo(X(u),H-pad); ctx.stroke(); }
+  ctx.strokeStyle="#94a3b8"; ctx.strokeRect(pad,pad,W-2*pad,H-2*pad);
+  ctx.fillStyle="#0f172a"; ctx.font="600 14px system-ui"; ctx.fillText(title, pad, pad-4);
+  if(!vals.length) return; ctx.strokeStyle="#0ea5e9"; ctx.lineWidth=2.5; ctx.beginPath();
+  vals.forEach((p,i)=>{ const x=X(p.u), y=Y(p.v); if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.stroke();
+}
+
+function AngleTable({ rows }){
+  return (
+    <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%", borderCollapse:"collapse"}}>
+        <thead><tr>{rows.map(r=><th key={r.deg} style={{padding:6, borderBottom:"1px solid #e5e7eb"}}>{r.deg}°</th>)}</tr></thead>
+        <tbody><tr>{rows.map(r=><td key={r.deg} style={{textAlign:"center", padding:6}}>{r.h}</td>)}</tr></tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function PipeTeeStencil(){
   const [title, setTitle] = useState("");
-  const [runOD, setRunOD] = useState(60);        // mm
-  const [branchOD, setBranchOD] = useState(50);  // mm
-  const [pitchDeg, setPitchDeg] = useState(90);  // ° (90 = စံ Tee)
-  const [yawDeg, setYawDeg] = useState(0);       // ° (wrap direction phase)
-  const [stepDeg, setStepDeg] = useState(30);    // ° (30°/15° စသည်)
+  const [runOD,setRunOD]=useState(60);
+  const [branchOD,setBranchOD]=useState(60);
+  const [pitch,setPitch]=useState(90);
+  const [yaw,setYaw]=useState(0);
 
-  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
-  const toRad = (d) => (d * Math.PI) / 180;
-  const round1 = (v) => Math.round(v * 100) / 100;
+  const data = useMemo(()=>solveTee({
+    runOD:Number(runOD)||0, branchOD:Number(branchOD)||0,
+    pitchDeg:Number(pitch)||0, yawDeg:Number(yaw)||0,
+  }), [runOD,branchOD,pitch,yaw]);
 
-  /* ------------ Core calc (Pitch/Yaw always applied) ------------ */
-  const data = useMemo(() => {
-    const Rr = Math.max(1e-6, runOD / 2);
-    const Rb = Math.max(1e-6, branchOD / 2);
-    const pitch = toRad(pitchDeg);
-    const yaw = toRad(yawDeg);
+  const cRun=useRef(null), cBr=useRef(null);
+  useEffect(()=>{ drawUV(cRun.current, data.run, "Run-hole stencil (wrap on RUN)", data.C_run); }, [data]);
+  useEffect(()=>{ drawUV(cBr.current,  data.branch, "Branch-cut stencil (wrap on BRANCH)", data.C_branch); }, [data]);
 
-    // stations (0..360, ensure 360 included)
-    const degs = [];
-    const step = clamp(Math.abs(stepDeg || 30), 3, 90);
-    for (let d = 0; d < 360; d += step) degs.push(Math.round(d));
-    if (degs[degs.length - 1] !== 360) degs.push(360);
+  const clearAll=()=>{ setTitle(""); setRunOD(""); setBranchOD(""); setPitch(""); setYaw(""); };
 
-    // amplitude with pitch (0..1), phase with yaw
-    const amp = Math.max(0, Math.sin(pitch)); // 0° -> 0 opening, 90° -> max
-    const hRun = []; // wrap on RUN (hole)
-    const hBr  = []; // wrap on BRANCH (cut)
-
-    degs.forEach((deg) => {
-      const t = toRad(deg) - yaw;     // phase shift with yaw
-      const lobe = Math.abs(Math.cos(t)); // symmetric around 0/180
-
-      // RUN stencil height (max Rb)
-      const hOnRun = clamp(Rb * amp * lobe, 0, Rb);
-
-      // BRANCH stencil height (max Rr)
-      const fish = Math.abs(Math.cos(t)) * amp;
-      const hOnBr = clamp(Rr * fish, 0, Rr);
-
-      hRun.push({ deg, h: hOnRun }); // mm
-      hBr.push({ deg, h: hOnBr });   // mm
-    });
-
-    const runC = Math.PI * runOD;
-    const brC = Math.PI * branchOD;
-
-    // stations for AllReview preview (u along circumference, v = height)
-    const stations = degs.map((deg, i) => {
-      const uRun = (deg / 360) * runC;
-      const uBranch = (deg / 360) * brC;
-      return {
-        deg,
-        uRun,
-        vRun: hRun[i].h,
-        uBranch,
-        vBranch: hBr[i].h,
-      };
-    });
-
-    // points (u,v) arrays for AllReview drawUnwrapPreview()
-    const runPts = hRun.map((p) => ({ u: (p.deg / 360) * runC, v: p.h }));
-    const brPts  = hBr.map((p) => ({ u: (p.deg / 360) * brC, v: p.h }));
-
-    return {
-      degs,
-      hRun,
-      hBr,
-      runC,
-      brC,
-      stations,
-      runPts,
-      brPts,
-      pitchDeg,
-      yawDeg,
-      step,
-    };
-  }, [runOD, branchOD, pitchDeg, yawDeg, stepDeg]);
-
-  /* ------------ Canvas drawing ------------ */
-  const cRunRef = useRef(null);
-  const cBrRef = useRef(null);
-
-  useEffect(() => {
-    drawStencilCanvas(
-      cRunRef.current,
-      data.hRun,
-      runOD,
-      `Run-hole stencil — Pitch ${data.pitchDeg}°, Yaw ${data.yawDeg}°`
-    );
-    drawStencilCanvas(
-      cBrRef.current,
-      data.hBr,
-      branchOD,
-      `Branch-cut stencil — Pitch ${data.pitchDeg}°, Yaw ${data.yawDeg}°`
-    );
-  }, [data, runOD, branchOD]);
-
-  /* ------------ Save to Firebase (/teeTemplates) ------------ */
-  const onSave = async () => {
-    const now = Date.now();
-    const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
-
+  const saveToFirebase = async () => {
+    const now=Date.now(); const expiresAt=now+90*24*60*60*1000;
     const payload = {
-      createdAt: now,
-      expiresAt,
-      title: title || "Untitled",
-      inputs: {
-        runOD,
-        branchOD,
-        pitch: pitchDeg,
-        yaw: yawDeg,
-        samples: data.degs.length,
-        stepDeg: data.step,
-      },
-      // For AllReview.jsx (latest)
-      run: data.runPts,        // [{u,v}...]
-      branch: data.brPts,      // [{u,v}...]
-      stations: data.stations, // [{deg,uRun,vRun,uBranch,vBranch}...]
+      createdAt: now, expiresAt, title: title || "Untitled Tee",
+      inputs: { runOD:Number(runOD), branchOD:Number(branchOD), pitch:Number(pitch), yaw:Number(yaw) },
+      run: data.run, branch: data.branch,
+      stations: Array.from({length:13},(_,i)=>({
+        deg:i*30,
+        uRun: (data.C_run/12)*i,
+        vRun:  data.tableRun[i]?.h ?? null,
+        uBranch:(data.C_branch/12)*i,
+        vBranch:data.tableBranch[i]?.h ?? null,
+      })),
     };
-
-    await dbSet(push(dbRef(db, "teeTemplates")), payload);
-    alert("Saved ✅");
-  };
-
-  const onClear = () => {
-    setTitle("");
-    setRunOD(60);
-    setBranchOD(50);
-    setPitchDeg(90);
-    setYawDeg(0);
-    setStepDeg(30);
+    await set(push(dbRef(db,"teeTemplates")), payload);
+    alert("✅ Saved to All Review");
   };
 
   return (
-    <div className="grid" style={{ gap: 12 }}>
-      {/* Controls */}
-      <div className="card" style={{ padding: 12 }}>
-        <div className="page-title">🧩 Pipe Tee — Paper Wrap Stencils</div>
-
-        <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-          <input className="input" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} style={{ flex: "1 1 220px" }} />
-        </div>
-
-        <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-          <input className="input" type="number" inputMode="decimal" step="any" placeholder="Run OD (mm)" value={runOD} onChange={(e) => setRunOD(+e.target.value || 0)} />
-          <input className="input" type="number" inputMode="decimal" step="any" placeholder="Branch OD (mm)" value={branchOD} onChange={(e) => setBranchOD(+e.target.value || 0)} />
-          <input className="input" type="number" inputMode="decimal" step="any" placeholder="Pitch (°)" value={pitchDeg} onChange={(e) => setPitchDeg(+e.target.value || 0)} />
-          <input className="input" type="number" inputMode="decimal" step="any" placeholder="Yaw (°)" value={yawDeg} onChange={(e) => setYawDeg(+e.target.value || 0)} />
-          <input className="input" type="number" inputMode="decimal" step="1" placeholder="Step (°)" value={stepDeg} onChange={(e) => setStepDeg(+e.target.value || 0)} />
-        </div>
-
-        <div className="row" style={{ gap: 8, marginTop: 8 }}>
-          <button className="btn" onClick={() => { /* live via useMemo; redraw in useEffect */ }}>
-            ⟳ Update
-          </button>
-          <button className="btn" onClick={onSave}>💾 Save</button>
-          <button className="btn" onClick={onClear} style={{ background: "#64748b" }}>
-            🧹 Clear
-          </button>
-        </div>
-
-        <div className="small" style={{ marginTop: 8, color: "#334155" }}>
-          • Canvas (အပေါ်) မှာ outline ကိုမြင်ရတယ်—pill အတွင်းကစာတန်ဖိုးတွေက **height (mm)** — unit မရေးထားပေမယ့် အောက်က Table မှာ mm တိတိကျကျ ထုတ်ပေးတယ်။
-          <br />• Run-hole stencil = RUN ပိုက်ပေါ် wrap မှာဖေါက်မယ့်အပေါက် outline; Branch-cut stencil = BRANCH ပိုက်အဆုံး fish-mouth ဖြတ်မယ့် outline။
-        </div>
-      </div>
-
-      {/* Canvases */}
+    <div className="grid">
       <div className="card">
-        <canvas
-          ref={cRunRef}
-          style={{ width: "100%", height: 240, border: "1px solid #e5e7eb", borderRadius: 12, background: "#fff" }}
-        />
-      </div>
-      <div className="card">
-        <canvas
-          ref={cBrRef}
-          style={{ width: "100%", height: 240, border: "1px solid #e5e7eb", borderRadius: 12, background: "#fff" }}
-        />
-      </div>
-
-      {/* Tables */}
-      <div className="card" style={{ display: "grid", gap: 12 }}>
-        <div className="page-title">Dimensions — degree → height (mm)</div>
-
-        <DimTable caption="Run-hole stencil (wrap on RUN)" rows={data.hRun} />
-        <DimTable caption="Branch-cut stencil (wrap on BRANCH)" rows={data.hBr} />
-
-        <div className="small" style={{ marginTop: 4 }}>
-          Circumference — Run: <b>{round1(data.runC)}</b> mm · Branch: <b>{round1(data.brC)}</b> mm ·
-          Step: <b>{data.step}°</b> · Pitch <b>{data.pitchDeg}°</b> · Yaw <b>{data.yawDeg}°</b>
+        <div className="page-title">Pipe Tee — Canvas + 30° Table</div>
+        <div className="row" style={{gap:8, flexWrap:"wrap"}}>
+          <input className="input" placeholder="Title" value={title} onChange={e=>setTitle(e.target.value)} />
+          <input className="input" placeholder="Run OD (mm)" value={runOD} onChange={e=>setRunOD(e.target.value)} />
+          <input className="input" placeholder="Branch OD (mm)" value={branchOD} onChange={e=>setBranchOD(e.target.value)} />
+          <input className="input" placeholder="Pitch (deg)" value={pitch} onChange={e=>setPitch(e.target.value)} />
+          <input className="input" placeholder="Yaw (deg)" value={yaw} onChange={e=>setYaw(e.target.value)} />
+        </div>
+        <div className="row" style={{gap:8, marginTop:8}}>
+          <button className="btn" onClick={saveToFirebase}>💾 Save</button>
+          <button className="btn" onClick={clearAll} style={{background:"#475569"}}>🧹 Clear</button>
         </div>
       </div>
+
+      <div className="card"><canvas ref={cRun} style={{width:"100%", height:240, border:"1px solid #e5e7eb", borderRadius:12}}/></div>
+      <div className="card"><canvas ref={cBr}  style={{width:"100%", height:240, border:"1px solid #e5e7eb", borderRadius:12}}/></div>
+
+      <div className="card"><div className="page-title">Run-hole heights (mm @ every 30°)</div><AngleTable rows={data.tableRun}/></div>
+      <div className="card"><div className="page-title">Branch-cut heights (mm @ every 30°)</div><AngleTable rows={data.tableBranch}/></div>
     </div>
   );
-}
-
-/* ------------ Drawing + Table helpers ------------ */
-
-function drawStencilCanvas(canvas, stations, OD, title) {
-  if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const W = canvas.clientWidth || 640;
-  const H = canvas.clientHeight || 240;
-  canvas.width = Math.floor(W * dpr);
-  canvas.height = Math.floor(H * dpr);
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, W, H);
-
-  const pad = 18;
-  ctx.strokeStyle = "#94a3b8";
-  ctx.strokeRect(pad, pad, W - 2 * pad, H - 2 * pad);
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "600 14px system-ui";
-  ctx.fillText(title, pad, pad - 4);
-
-  if (!stations?.length) {
-    ctx.fillText("No data", pad + 4, pad + 22);
-    return;
   }
-
-  const C = Math.PI * OD;
-  const minU = 0, maxU = C;
-  // v range 0..R (nice headroom)
-  const R = Math.max(1e-6, OD / 2);
-  const minV = 0, maxV = R;
-
-  const X = (u) => pad + ((u - minU) * (W - 2 * pad)) / Math.max(1e-6, maxU - minU);
-  const Y = (v) => H - pad - ((v - minV) * (H - 2 * pad)) / Math.max(1e-6, maxV - minV);
-
-  // vertical grid every 30°
-  ctx.strokeStyle = "#e5e7eb";
-  ctx.lineWidth = 1;
-  const du = C / 12;
-  for (let u = 0; u <= C + 1e-6; u += du) {
-    ctx.beginPath();
-    ctx.moveTo(X(u), pad);
-    ctx.lineTo(X(u), H - pad);
-    ctx.stroke();
-  }
-
-  // baseline
-  ctx.strokeStyle = "#94a3b8";
-  ctx.beginPath();
-  ctx.moveTo(pad, H - pad);
-  ctx.lineTo(W - pad, H - pad);
-  ctx.stroke();
-
-  // polyline
-  ctx.strokeStyle = "#0ea5e9";
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  stations.forEach((p, i) => {
-    const u = (p.deg / 360) * C;
-    const x = X(u);
-    const y = Y(p.h);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-
-  // degree ticks + height pills (numbers only)
-  ctx.textAlign = "center";
-  ctx.font = "bold 12px system-ui";
-  stations.forEach((p) => {
-    const u = (p.deg / 360) * C;
-    const x = X(u);
-    const y = Y(p.h);
-    // degree at bottom
-    ctx.fillStyle = "#0f172a";
-    ctx.fillText(String(p.deg), x, H - pad + 14);
-
-    // height pill above curve (no unit text)
-    const label = String(Math.round(p.h));
-    const tw = Math.ceil(ctx.measureText(label).width) + 10;
-    const th = 18, r = 8;
-    const rx = x - tw / 2, ry = y - th - 6;
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.strokeStyle = "#94a3b8";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(rx + r, ry);
-    ctx.lineTo(rx + tw - r, ry);
-    ctx.quadraticCurveTo(rx + tw, ry, rx + tw, ry + r);
-    ctx.lineTo(rx + tw, ry + th - r);
-    ctx.quadraticCurveTo(rx + tw, ry + th, rx + tw - r, ry + th);
-    ctx.lineTo(rx + r, ry + th);
-    ctx.quadraticCurveTo(rx, ry + th, rx, ry + th - r);
-    ctx.lineTo(rx, ry + r);
-    ctx.quadraticCurveTo(rx, ry, rx + r, ry);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "#0f172a";
-    ctx.fillText(label, x, ry + th - 4);
-  });
-}
-
-function DimTable({ caption, rows }) {
-  return (
-    <div>
-      <div style={{ fontWeight: 700, marginBottom: 6 }}>{caption}</div>
-      <div style={{ overflowX: "auto" }}>
-        <table className="table" style={{ minWidth: 420, borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={th}>Degree (°)</th>
-              {rows.map((r) => (
-                <th key={"d" + r.deg} style={th}>{r.deg}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={tdHead}>Height (mm)</td>
-              {rows.map((r) => (
-                <td key={"h" + r.deg} style={td}>{Math.round(r.h)}</td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-const th = { padding: "6px 8px", border: "1px solid #e5e7eb", background: "#f8fafc", textAlign: "center", whiteSpace: "nowrap" };
-const td = { padding: "6px 8px", border: "1px solid #e5e7eb", textAlign: "center" };
-const tdHead = { ...td, background: "#f1f5f9", fontWeight: 600 };
