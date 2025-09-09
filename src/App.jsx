@@ -17,6 +17,7 @@ import SimpleCalc from "./pages/SimpleCalc";
 import CircleArc from "./pages/CircleArc";
 import ENHCalc from "./pages/ENHCalc";
 import ENHTie from "./pages/ENHTie";
+import NotePad from "./pages/NotePad";
 
 
 export default function App() {
@@ -55,7 +56,8 @@ export default function App() {
           <Route path="/simple-calc" element={<SimpleCalc />} />
           <Route path="/circlearc" element={<CircleArc />} />
           <Route path="/enh-calc" element={<ENHCalc />} />
-          <Route path="/enh-tie" element={<ENHTie />} />
+          <R<Route path="/notepad" element={<NotePad />} />oute path="/enh-tie" element={<ENHTie />} />
+          
           
 
           {/* fallback */}
