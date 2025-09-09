@@ -15,7 +15,7 @@ import Levelling from "./pages/Levelling";
 import LevellingReview from "./pages/LevellingReview";
 import SimpleCalc from "./pages/SimpleCalc";
 import CircleArc from "./pages/CircleArc";
-import CircleTeeTemplates from "./pages/CircleTeeTemplates";
+
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -52,7 +52,7 @@ export default function App() {
           <Route path="/levelling-review" element={<LevellingReview />} />
           <Route path="/simple-calc" element={<SimpleCalc />} />
           <Route path="/circlearc" element={<CircleArc />} />
-          <Route path="/circletee" element={<CircleTeeTemplates />} />
+          
 
           {/* fallback */}
           <Route path="*" element={<Navigate to={user ? "/" : "/login"} replace />} />
