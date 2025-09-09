@@ -56,7 +56,8 @@ export default function App() {
           <Route path="/simple-calc" element={<SimpleCalc />} />
           <Route path="/circlearc" element={<CircleArc />} />
           <Route path="/enh-calc" element={<ENHCalc />} />
-          <R<Route path="/notepad" element={<NotePad />} />oute path="/enh-tie" element={<ENHTie />} />
+          <Route path="/notepad" element={<NotePad />} />
+          <Route path="/enh-tie" element={<ENHTie />} />
           
           
 
