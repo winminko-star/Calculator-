@@ -72,12 +72,7 @@ export default function Home() {
   desc="Big keys • one decimal • clean UI"
   to="/simple-calc"
 />
-      <Btn
-  icon="🔧"
-  label="Circle Tee"
-  desc="Pipe tee branch template"
-  to="/circletee"
-/>
+  
     </div>
   );
       }
