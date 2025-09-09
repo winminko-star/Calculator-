@@ -11,33 +11,39 @@ export default function ENHCalc() {
   const [n2, setN2] = useState("");
   const [h2, setH2] = useState("");
 
-  // parse helper
-  const num = (v) => (v === "" ? NaN : parseFloat(v));
-
-  const out = useMemo(() => {
-    const E = num(e2) - num(e1);
-    const N = num(n2) - num(n1);
-    const H = num(h2) - num(h1);
-    return {
-      E: Number.isFinite(E) ? E : "",
-      N: Number.isFinite(N) ? N : "",
-      H: Number.isFinite(H) ? H : "",
-    };
-  }, [e1, n1, h1, e2, n2, h2]);
+  // --- helpers ---
+  const clean = (s) => {
+    // allow digits, one leading -, one dot; convert comma -> dot
+    s = (s || "").replace(",", ".").trim();
+    // keep only valid chars
+    s = s.replace(/[^0-9\.\-]/g, "");
+    // keep only first '-' at start
+    s = s.replace(/(?!^)-/g, "");
+    // keep only first '.'
+    const i = s.indexOf(".");
+    if (i !== -1) s = s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, "");
+    // limit to ~6 significant digits visually (optional)
+    return s.slice(0, 12);
+  };
+  const toNum = (s) => {
+    if (s === "" || s === "-" || s === "." || s === "-.") return NaN;
+    const v = parseFloat(s.replace(",", "."));
+    return Number.isFinite(v) ? v : NaN;
+  };
 
   const Row = ({ label, value, onChange, placeholder }) => (
     <div className="row" style={{ gap: 8 }}>
-      <div style={{ width: 120, fontWeight: 700 }}>{label}</div>
+      <div style={{ width: 140, fontWeight: 700 }}>{label}</div>
       <input
         className="input"
-        type="number"
+        type="text"
         inputMode="decimal"
-        step="any"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(clean(e.target.value))}
+        onWheel={(e) => e.currentTarget.blur()} // prevent accidental scroll-change
         style={{
-          width: 120,          // ၆ လုံးတောင်လောက်
+          width: 140,           // ခန့်မှန်းအားဖြင့်ဂဏန်း ၆ လုံးဝင်မယ်
           textAlign: "right",
           fontWeight: 700,
         }}
@@ -47,11 +53,11 @@ export default function ENHCalc() {
 
   const Out = ({ label, value }) => (
     <div className="row" style={{ gap: 8 }}>
-      <div style={{ width: 120, fontWeight: 700 }}>{label}</div>
+      <div style={{ width: 140, fontWeight: 700 }}>{label}</div>
       <div
         className="input"
         style={{
-          width: 120,
+          width: 140,
           textAlign: "right",
           fontWeight: 800,
           background: "#f8fafc",
@@ -62,13 +68,25 @@ export default function ENHCalc() {
     </div>
   );
 
+  // compute answers
+  const out = useMemo(() => {
+    const E = toNum(e2) - toNum(e1);
+    const N = toNum(n2) - toNum(n1);
+    const H = toNum(h2) - toNum(h1);
+    return {
+      E: Number.isFinite(E) ? E : "",
+      N: Number.isFinite(N) ? N : "",
+      H: Number.isFinite(H) ? H : "",
+    };
+  }, [e1, n1, h1, e2, n2, h2]);
+
   const clearAll = () => {
     setE1(""); setN1(""); setH1("");
     setE2(""); setN2(""); setH2("");
   };
 
   return (
-    <div className="container" style={{ maxWidth: 520, marginTop: 12 }}>
+    <div className="container" style={{ maxWidth: 560, marginTop: 12 }}>
       {/* Station */}
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="page-title">Station</div>
