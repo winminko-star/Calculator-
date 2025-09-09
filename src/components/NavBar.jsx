@@ -60,7 +60,6 @@ export default function NavBar({ user, onLogout }) {
           <Chip to="/levelling" label="Levelling" />
           <Chip to="/levelling-review" label="Levelling Review" /> 
           <Chip to="/simple-calc" label="Simple Calc" />
-          <Chip to="/circletee" label="Circle Tee" />
           <Chip to="/circlearc" label="Circle Arc" />
           
          </nav>
