@@ -15,6 +15,7 @@ import Levelling from "./pages/Levelling";
 import LevellingReview from "./pages/LevellingReview";
 import SimpleCalc from "./pages/SimpleCalc";
 import CircleArc from "./pages/CircleArc";
+import ENHCalc from "./pages/ENHCalc";
 
 
 export default function App() {
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/levelling-review" element={<LevellingReview />} />
           <Route path="/simple-calc" element={<SimpleCalc />} />
           <Route path="/circlearc" element={<CircleArc />} />
+          <Route path="/enh-calc" element={<ENHCalc />} />
           
 
           {/* fallback */}
