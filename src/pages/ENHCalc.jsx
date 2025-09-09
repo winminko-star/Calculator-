@@ -1,111 +1,116 @@
 // src/pages/ENHCalc.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 
-export default function ENHCalc() {
-  // Station (first set)
-  const [e1, setE1] = useState("");
-  const [n1, setN1] = useState("");
-  const [h1, setH1] = useState("");
-  // How you want in First Point (second set)
-  const [e2, setE2] = useState("");
-  const [n2, setN2] = useState("");
-  const [h2, setH2] = useState("");
+/* ---------------- small helpers ---------------- */
+const parseNum = (s) => {
+  if (s == null) return null;
+  const t = String(s).trim().replace(",", "."); // allow comma
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
+const fmt = (v) => (v == null ? "" : String(Math.round(v * 1000) / 1000));
 
-  // --- parse only (do NOT sanitize input value itself) ---
-  const toNum = (s) => {
-    if (!s) return NaN;
-    const v = parseFloat(String(s).replace(",", "."));
-    return Number.isFinite(v) ? v : NaN;
-  };
-
-  const Row = ({ label, value, onChange, placeholder }) => (
-    <div className="row" style={{ gap: 8 }}>
-      <div style={{ width: 160, fontWeight: 700 }}>{label}</div>
+/* one input row — UNCONTROLLED (keyboard won't dismiss) */
+const Row = React.memo(function Row({
+  label,
+  placeholder,
+  valueRef,
+  onValue,
+}) {
+  return (
+    <div className="row" style={{ gap: 8, alignItems: "center", marginBottom: 10 }}>
+      <div style={{ width: 24, fontWeight: 700 }}>{label}</div>
       <input
+        ref={valueRef}
         className="input"
-        type="text"              // keep keyboard open on mobile
-        inputMode="decimal"      // show numeric keypad with .
+        type="text"
+        inputMode="decimal"
         autoComplete="off"
         autoCorrect="off"
         spellCheck={false}
         placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}  // <-- no clean()/trim() here
+        defaultValue=""
+        onInput={(e) => onValue(e.currentTarget.value)}
         style={{
-          width: 160,
+          width: 160,            // ~၆လုံးစာအရွယ်
           textAlign: "right",
           fontWeight: 700,
         }}
       />
     </div>
   );
+});
 
-  const Out = ({ label, value }) => (
-    <div className="row" style={{ gap: 8 }}>
-      <div style={{ width: 160, fontWeight: 700 }}>{label}</div>
-      <div
-        className="input"
-        style={{
-          width: 160,
-          textAlign: "right",
-          fontWeight: 800,
-          background: "#f8fafc",
-        }}
-      >
-        {value === "" ? "" : value}
-      </div>
-    </div>
-  );
+/* ---------------- main page ---------------- */
+export default function ENHCalc() {
+  // refs (for clearing DOM values)
+  const e1Ref = useRef(null), n1Ref = useRef(null), h1Ref = useRef(null);
+  const e2Ref = useRef(null), n2Ref = useRef(null), h2Ref = useRef(null);
 
-  // compute answers (E-E, N-N, H-H)
-  const out = useMemo(() => {
-    const E = toNum(e2) - toNum(e1);
-    const N = toNum(n2) - toNum(n1);
-    const H = toNum(h2) - toNum(h1);
-    const fmt = (v) => (Number.isFinite(v) ? v : "");
-    return { E: fmt(E), N: fmt(N), H: fmt(H) };
-  }, [e1, n1, h1, e2, n2, h2]);
+  // state strings (calculation only; inputs themselves are uncontrolled)
+  const [e1, setE1] = useState("");  const [n1, setN1] = useState("");  const [h1, setH1] = useState("");
+  const [e2, setE2] = useState("");  const [n2, setN2] = useState("");  const [h2, setH2] = useState("");
+
+  // E-E, N-N, H-H
+  const ans = useMemo(() => {
+    const E1 = parseNum(e1), E2 = parseNum(e2);
+    const N1 = parseNum(n1), N2 = parseNum(n2);
+    const H1 = parseNum(h1), H2 = parseNum(h2);
+    return {
+      E: E1 == null || E2 == null ? null : E1 - E2,
+      N: N1 == null || N2 == null ? null : N1 - N2,
+      H: H1 == null || H2 == null ? null : H1 - H2,
+    };
+  }, [e1, e2, n1, n2, h1, h2]);
 
   const clearAll = () => {
     setE1(""); setN1(""); setH1("");
     setE2(""); setN2(""); setH2("");
+    [e1Ref, n1Ref, h1Ref, e2Ref, n2Ref, h2Ref].forEach(r => {
+      if (r.current) r.current.value = "";
+    });
+    e1Ref.current?.focus();
   };
 
   return (
-    <div className="container" style={{ maxWidth: 560, marginTop: 12 }}>
+    <div className="container" style={{ marginTop: 12 }}>
       {/* Station */}
-      <div className="card" style={{ marginBottom: 12 }}>
+      <div className="card">
         <div className="page-title">Station</div>
-        <div style={{ display: "grid", gap: 8 }}>
-          <Row label="E" value={e1} onChange={setE1} placeholder="E₁" />
-          <Row label="N" value={n1} onChange={setN1} placeholder="N₁" />
-          <Row label="H" value={h1} onChange={setH1} placeholder="H₁" />
-        </div>
+        <Row label="E" placeholder="E₁" valueRef={e1Ref} onValue={setE1} />
+        <Row label="N" placeholder="N₁" valueRef={n1Ref} onValue={setN1} />
+        <Row label="H" placeholder="H₁" valueRef={h1Ref} onValue={setH1} />
       </div>
 
-      {/* How you want in First Point */}
-      <div className="card" style={{ marginBottom: 12 }}>
+      {/* First Point (desired) */}
+      <div className="card">
         <div className="page-title">How you want in First Point</div>
-        <div style={{ display: "grid", gap: 8 }}>
-          <Row label="E" value={e2} onChange={setE2} placeholder="E₂" />
-          <Row label="N" value={n2} onChange={setN2} placeholder="N₂" />
-          <Row label="H" value={h2} onChange={setH2} placeholder="H₂" />
-        </div>
+        <Row label="E" placeholder="E₂" valueRef={e2Ref} onValue={setE2} />
+        <Row label="N" placeholder="N₂" valueRef={n2Ref} onValue={setN2} />
+        <Row label="H" placeholder="H₂" valueRef={h2Ref} onValue={setH2} />
       </div>
 
-      {/* New Station (answers) */}
-      <div className="card" style={{ marginBottom: 12 }}>
+      {/* Result */}
+      <div className="card">
         <div className="page-title">New Station</div>
-        <div style={{ display: "grid", gap: 8 }}>
-          <Out label="E" value={out.E} />
-          <Out label="N" value={out.N} />
-          <Out label="H" value={out.H} />
+        <div className="row" style={{ gap: 8, alignItems: "center", marginBottom: 10 }}>
+          <div style={{ width: 24, fontWeight: 700 }}>E</div>
+          <input className="input" readOnly value={fmt(ans.E)} style={{ width: 160, textAlign: "right", fontWeight: 700 }} />
         </div>
-      </div>
+        <div className="row" style={{ gap: 8, alignItems: "center", marginBottom: 10 }}>
+          <div style={{ width: 24, fontWeight: 700 }}>N</div>
+          <input className="input" readOnly value={fmt(ans.N)} style={{ width: 160, textAlign: "right", fontWeight: 700 }} />
+        </div>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <div style={{ width: 24, fontWeight: 700 }}>H</div>
+          <input className="input" readOnly value={fmt(ans.H)} style={{ width: 160, textAlign: "right", fontWeight: 700 }} />
+        </div>
 
-      <div className="row" style={{ justifyContent: "flex-end" }}>
-        <button className="btn" onClick={clearAll}>🧹 Clear</button>
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="btn" onClick={clearAll}>🧹 Clear</button>
+        </div>
       </div>
     </div>
   );
-      }
+        }
