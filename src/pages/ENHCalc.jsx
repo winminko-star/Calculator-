@@ -2,54 +2,44 @@
 import React, { useMemo, useState } from "react";
 
 export default function ENHCalc() {
-  // Station 1 (the reference)
+  // Station (first set)
   const [e1, setE1] = useState("");
   const [n1, setN1] = useState("");
   const [h1, setH1] = useState("");
-
-  // Station 2 (how you want in first point)
+  // How you want in First Point (second set)
   const [e2, setE2] = useState("");
   const [n2, setN2] = useState("");
   const [h2, setH2] = useState("");
 
-  // helper: clamp length (visual) and allow only valid numbers
-  const onlyNum = (v) => {
-    // allow "-", ".", numbers; trim spaces
-    const t = v.replace(/[^\d\.\-]/g, "");
-    // prevent more than one dot or minus not at start
-    const fixed = t
-      .replace(/(?!^)-/g, "")     // keep only leading -
-      .replace(/^(-?\d*)\./, "$1.") // first dot ok
-      .replace(/\.(?=.*\.)/g, ""); // drop extra dots
-    return fixed.slice(0, 6 + (fixed.includes(".") ? 1 : 0) + (fixed.startsWith("-") ? 1 : 0));
-  };
-
-  const fmt = (v) => (Number.isFinite(v) ? String(v) : "");
+  // parse helper
+  const num = (v) => (v === "" ? NaN : parseFloat(v));
 
   const out = useMemo(() => {
-    const E = Number(e2) - Number(e1);
-    const N = Number(n2) - Number(n1);
-    const H = Number(h2) - Number(h1);
+    const E = num(e2) - num(e1);
+    const N = num(n2) - num(n1);
+    const H = num(h2) - num(h1);
     return {
-      E: Number.isFinite(E) ? E : null,
-      N: Number.isFinite(N) ? N : null,
-      H: Number.isFinite(H) ? H : null,
+      E: Number.isFinite(E) ? E : "",
+      N: Number.isFinite(N) ? N : "",
+      H: Number.isFinite(H) ? H : "",
     };
   }, [e1, n1, h1, e2, n2, h2]);
 
   const Row = ({ label, value, onChange, placeholder }) => (
     <div className="row" style={{ gap: 8 }}>
-      <div style={{ width: 80, fontWeight: 600 }}>{label}</div>
+      <div style={{ width: 120, fontWeight: 700 }}>{label}</div>
       <input
         className="input"
+        type="number"
         inputMode="decimal"
+        step="any"
         value={value}
-        onChange={(e) => onChange(onlyNum(e.target.value))}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         style={{
-          width: 120,  // ~ up to 6 digits
-          fontWeight: 700,
+          width: 120,          // ၆ လုံးတောင်လောက်
           textAlign: "right",
+          fontWeight: 700,
         }}
       />
     </div>
@@ -57,33 +47,29 @@ export default function ENHCalc() {
 
   const Out = ({ label, value }) => (
     <div className="row" style={{ gap: 8 }}>
-      <div style={{ width: 80, fontWeight: 600 }}>{label}</div>
+      <div style={{ width: 120, fontWeight: 700 }}>{label}</div>
       <div
         className="input"
         style={{
           width: 120,
-          fontWeight: 800,
           textAlign: "right",
+          fontWeight: 800,
           background: "#f8fafc",
         }}
       >
-        {value == null ? "" : fmt(value)}
+        {value === "" ? "" : value}
       </div>
     </div>
   );
 
-  const clearAll = () => { setE1(""); setN1(""); setH1(""); setE2(""); setN2(""); setH2(""); };
+  const clearAll = () => {
+    setE1(""); setN1(""); setH1("");
+    setE2(""); setN2(""); setH2("");
+  };
 
   return (
     <div className="container" style={{ maxWidth: 520, marginTop: 12 }}>
-      <div className="card" style={{ marginBottom: 12 }}>
-        <div className="page-title">ENH Difference</div>
-        <div className="small" style={{ marginTop: -6 }}>
-          Formula: <b>E₂ − E₁</b>, <b>N₂ − N₁</b>, <b>H₂ − H₁</b>
-        </div>
-      </div>
-
-      {/* Station (first set) */}
+      {/* Station */}
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="page-title">Station</div>
         <div style={{ display: "grid", gap: 8 }}>
@@ -93,7 +79,7 @@ export default function ENHCalc() {
         </div>
       </div>
 
-      {/* How you want in First Point (second set) */}
+      {/* How you want in First Point */}
       <div className="card" style={{ marginBottom: 12 }}>
         <div className="page-title">How you want in First Point</div>
         <div style={{ display: "grid", gap: 8 }}>
@@ -118,4 +104,4 @@ export default function ENHCalc() {
       </div>
     </div>
   );
-    }
+      }
