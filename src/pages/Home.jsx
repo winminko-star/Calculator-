@@ -70,7 +70,7 @@ export default function Home() {
       `}</style>
 
       <Btn icon="🧭" label="2D Drawing (E,N)" desc="Points • Lines (length) • Angle" to="/drawing2d" />
-      <Btn icon="📂" label="All Review" desc="Saved drawings • dates • auto cleanup" to="/review" />
+      <Btn icon="📂" label="2D Review" desc="Saved drawings • dates • auto cleanup" to="/review" />
       <Btn icon="📐" label="Right Triangle" desc="Hypotenuse, legs, angles…" to="/righttriangle" />
       <Btn icon="⭕" label="Circle Center" desc="Center/Radius from points" to="/circlecenter" />
       <Btn icon="📏" label="Levelling" desc="Rise/Fall, RL, misclosure…" to="/levelling" />
