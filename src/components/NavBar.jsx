@@ -54,7 +54,7 @@ export default function NavBar({ user, onLogout }) {
         >
           <Chip to="/" label="Home" />
           <Chip to="/drawing2d" label="2D Drawing" />
-          <Chip to="/review" label="All Review" />
+          <Chip to="/review" label="2D Review" />
           <Chip to="/righttriangle" label="Right Triangle" />
           <Chip to="/circlecenter" label="Circle Center" />
           <Chip to="/levelling" label="Levelling" />
