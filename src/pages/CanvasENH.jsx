@@ -4,10 +4,13 @@ import { ref, push } from "firebase/database";
 import { db } from "../firebase";
 
 export default function CanvasENH() {
+  // rows count (string for free typing)
   const [count, setCount] = useState(4);
   const [countStr, setCountStr] = useState("4");
+
+  // ENH rows (blank by default)
   const [values, setValues] = useState(["", "", "", ""]);
-  const [specialJoins, setSpecialJoins] = useState([]);
+  const [specialJoins, setSpecialJoins] = useState([]); // [{a,b}]
   const [sjInput, setSjInput] = useState("");
   const [closeShape, setCloseShape] = useState(true);
 
@@ -27,8 +30,9 @@ export default function CanvasENH() {
     if (raw) {
       try {
         const data = JSON.parse(raw);
-        setCount(data.count ?? 4);
-        setValues(Array.from({ length: data.count ?? 4 }, (_, i) => data.values?.[i] ?? ""));
+        const n = data.count ?? 4;
+        setCount(n);
+        setValues(Array.from({ length: n }, (_, i) => data.values?.[i] ?? ""));
         setSpecialJoins(data.specialJoins || []);
         setCloseShape(!!data.closeShape);
       } catch {}
@@ -37,7 +41,7 @@ export default function CanvasENH() {
     }
   }, []);
 
-  // ---- count apply (parse/clamp) ----
+  // ---- count apply (parse/clamp HERE only) ----
   const applyCount = () => {
     let n = parseInt(countStr, 10);
     if (!Number.isFinite(n)) n = 3;
@@ -49,7 +53,19 @@ export default function CanvasENH() {
       return next;
     });
   };
-  const updateRow = (i, s) => setValues(v => v.map((x, k) => (k === i ? s : x)));
+
+  const updateRow = (i, s) => setValues(v => v.map((x,k)=> k===i ? s : x));
+
+  // ---- Special Join add/remove (FIXED) ----
+  const addSJ = () => {
+    const arr = sjInput.split(",").map(s => Number(s.trim()));
+    if (arr.length !== 2 || !Number.isInteger(arr[0]) || !Number.isInteger(arr[1])) {
+      alert("Special Join format: a,b"); return;
+    }
+    setSpecialJoins(p => [...p, { a: arr[0], b: arr[1] }]);
+    setSjInput("");
+  };
+  const removeSJ = (idx) => setSpecialJoins(p => p.filter((_,i)=>i!==idx));
 
   // ---- parse / math ----
   const parsePoints = () => {
@@ -75,19 +91,19 @@ export default function CanvasENH() {
     return Math.acos(c) * 180 / Math.PI;
   }
 
-  // ---- responsive canvas (keep aspect ratio) ----
+  // ---- responsive canvas ----
   function syncCanvasSize() {
     const box = canvasBoxRef.current, cv = canvasRef.current;
     if (!box || !cv) return;
     const dpr = window.devicePixelRatio || 1;
-    const w = Math.max(280, Math.min( box.clientWidth - 24, 1200 )); // padding margin guard
-    const h = Math.round(w * 0.68); // keep 1000x680 ratio
+    const w = Math.max(280, Math.min(box.clientWidth - 24, 1200));
+    const h = Math.round(w * 0.68); // keep 1000x680-ish
     cv.style.width  = `${w}px`;
     cv.style.height = `${h}px`;
     cv.width  = Math.floor(w * dpr);
     cv.height = Math.floor(h * dpr);
     const cx = cv.getContext("2d");
-    cx.setTransform(dpr, 0, 0, dpr, 0, 0); // 1 CSS px == 1 unit
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   useEffect(() => {
     syncCanvasSize();
@@ -190,7 +206,7 @@ const clearAll = () => {
   draw();
 };
 
-// custom keyboard
+// custom keyboard input
 const pressKey = (k) => {
   if (activeIndex == null) return;
   if (k === "DEL") {
@@ -210,11 +226,11 @@ const levels = useMemo(() => {
     list.push(p.id);
     m.set(p.H, list);
   });
-  return Array.from(m.entries()).sort((a,b)=>a[0]-b[0]); // [[H, [ids]]...]
+  return Array.from(m.entries()).sort((a,b)=>a[0]-b[0]); // [[H,[ids]]...]
 }, [values]);
   // ===== CanvasENH.jsx — PART 3/3 =====
-  const card = { background:"#f8fafc", padding:16, borderRadius:12, boxShadow:"0 2px 6px rgba(2,6,23,.08)" };
-  const btn  = (bg,col="#fff") => ({ padding:"8px 12px", borderRadius:8, border:0, background:bg, color:col, fontWeight:700, cursor:"pointer" });
+  const card  = { background:"#f8fafc", padding:16, borderRadius:12, boxShadow:"0 2px 6px rgba(2,6,23,.08)" };
+  const btn   = (bg,col="#fff") => ({ padding:"8px 12px", borderRadius:8, border:0, background:bg, color:col, fontWeight:700, cursor:"pointer" });
   const input = { padding:"8px 10px", border:"1px solid #cbd5e1", borderRadius:8, outline:"none", background:"#fff" };
 
   return (
@@ -236,7 +252,7 @@ const levels = useMemo(() => {
               placeholder="E,N,H"
               value={v}
               onFocus={()=>{ setActiveIndex(i); setShowKeyboard(true); }}
-              style={{ ...input, width:230, background:"#fff" }}
+              style={{ ...input, width:230 }}
             />
             <button style={btn("#e2e8f0", "#0f172a")} onClick={()=>updateRow(i,"")}>×</button>
           </div>
@@ -253,7 +269,8 @@ const levels = useMemo(() => {
         <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:8 }}>
           {specialJoins.map((sj,i)=>(
             <span key={i} style={{ background:"#e2e8f0", color:"#0f172a", borderRadius:999, padding:"4px 10px", fontWeight:600 }}>
-              {sj.a} ↔ {sj.b} <button onClick={()=>removeSJ(i)} style={{ ...btn("transparent", "#0f172a"), padding:0, marginLeft:6 }}>×</button>
+              {sj.a} ↔ {sj.b}
+              <button onClick={()=>removeSJ(i)} style={{ ...btn("transparent", "#0f172a"), padding:0, marginLeft:6 }}>×</button>
             </span>
           ))}
         </div>
@@ -275,11 +292,11 @@ const levels = useMemo(() => {
         {/* Levels table */}
         <div style={{ marginTop:14 }}>
           <h3 style={{ margin:"12px 0 6px 0" }}>Levels (H)</h3>
-          <div style={{ border:"1px solid #e2e8f0", borderRadius:8, overflow:"hidden" }}>
+          <div style={{ border:"1px solid #e2e8f0", borderRadius:8, overflow:"hidden", background:"#fff" }}>
             {levels.length === 0 ? (
               <div style={{ padding:8, color:"#64748b" }}>No H values</div>
             ) : levels.map(([H, ids]) => (
-              <div key={H} style={{ display:"flex", justifyContent:"space-between", padding:"6px 10px", background:"#fff", borderBottom:"1px solid #e2e8f0" }}>
+              <div key={H} style={{ display:"flex", justifyContent:"space-between", padding:"6px 10px", borderBottom:"1px solid #e2e8f0" }}>
                 <div>H = <b>{H}</b></div>
                 <div>Points: {ids.join(", ")}</div>
               </div>
@@ -312,4 +329,4 @@ const levels = useMemo(() => {
       )}
     </div>
   );
-    }
+            }
