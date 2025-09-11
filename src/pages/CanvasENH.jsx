@@ -16,7 +16,9 @@ export default function CanvasENH() {
 
   // custom keyboard
   const [showKeyboard, setShowKeyboard] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(null);
+  // which input is using the keyboard: 'row' | 'count' | 'sj' | null
+  const [kbMode, setKbMode] = useState(null);
+  const [activeIndex, setActiveIndex] = useState(null); // only for 'row'
 
   // canvas + responsive container
   const canvasRef = useRef(null);
@@ -56,7 +58,7 @@ export default function CanvasENH() {
 
   const updateRow = (i, s) => setValues(v => v.map((x,k)=> k===i ? s : x));
 
-  // ---- Special Join add/remove (FIXED) ----
+  // ---- Special Join add/remove ----
   const addSJ = () => {
     const arr = sjInput.split(",").map(s => Number(s.trim()));
     if (arr.length !== 2 || !Number.isInteger(arr[0]) || !Number.isInteger(arr[1])) {
@@ -88,7 +90,7 @@ export default function CanvasENH() {
     if (d === 0) return null;
     let c = (v1.x * v2.x + v1.y * v2.y) / d;
     c = Math.max(-1, Math.min(1, c));
-    return Math.acos(c) * 180 / Math.PI;
+    return Math.acos(c) * 180 / Math.PI; // 0..180
   }
 
   // ---- responsive canvas ----
@@ -97,7 +99,7 @@ export default function CanvasENH() {
     if (!box || !cv) return;
     const dpr = window.devicePixelRatio || 1;
     const w = Math.max(280, Math.min(box.clientWidth - 24, 1200));
-    const h = Math.round(w * 0.68); // keep 1000x680-ish
+    const h = Math.round(w * 0.68); // keep ~1000x680
     cv.style.width  = `${w}px`;
     cv.style.height = `${h}px`;
     cv.width  = Math.floor(w * dpr);
@@ -206,15 +208,35 @@ const clearAll = () => {
   draw();
 };
 
-// custom keyboard input
+// custom keyboard input (supports row / count / sj)
 const pressKey = (k) => {
-  if (activeIndex == null) return;
+  if (!kbMode) return;
+
   if (k === "DEL") {
-    setValues(v => v.map((s,i)=> i===activeIndex ? s.slice(0,-1) : s));
-  } else if (k === "OK") {
-    setShowKeyboard(false); setActiveIndex(null);
-  } else {
-    setValues(v => v.map((s,i)=> i===activeIndex ? s + k : s));
+    if (kbMode === "row" && activeIndex != null) {
+      setValues(v => v.map((s,i)=> i===activeIndex ? s.slice(0,-1) : s));
+    } else if (kbMode === "count") {
+      setCountStr(s => s.slice(0,-1));
+    } else if (kbMode === "sj") {
+      setSjInput(s => s.slice(0,-1));
+    }
+    return;
+  }
+  if (k === "OK") {
+    setShowKeyboard(false);
+    if (kbMode === "row") setActiveIndex(null);
+    setKbMode(null);
+    return;
+  }
+
+  if (kbMode === "row" && activeIndex != null) {
+    if ("0123456789-.,".includes(k)) {
+      setValues(v => v.map((s,i)=> i===activeIndex ? (s + k) : s));
+    }
+  } else if (kbMode === "count") {
+    if ("0123456789".includes(k)) setCountStr(s => s + k);
+  } else if (kbMode === "sj") {
+    if ("0123456789,".includes(k)) setSjInput(s => s + k);
   }
 };
 
@@ -239,11 +261,23 @@ const levels = useMemo(() => {
       <div style={card}>
         <h2 style={{ margin:0, marginBottom:8, color:"#0f172a" }}>Input</h2>
 
+        {/* Count (custom keyboard) */}
         <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10 }}>
-          <input type="number" value={countStr} onChange={(e)=>setCountStr(e.target.value)} placeholder="rows" style={{ ...input, width:80 }} />
+          <input
+            type="text"
+            value={countStr}
+            readOnly
+            onFocus={() => { setKbMode('count'); setShowKeyboard(true); }}
+            placeholder="rows"
+            style={{ ...input, width:80, cursor:"pointer",
+                     borderColor: kbMode==='count' ? "#0ea5e9" : "#cbd5e1",
+                     boxShadow: kbMode==='count' ? "0 0 0 3px rgba(14,165,233,.25)" : "none",
+                     backgroundColor: kbMode==='count' ? "#e0f2fe" : "#fff" }}
+          />
           <button style={btn("#0ea5e9")} onClick={applyCount}>Apply</button>
         </div>
 
+        {/* Rows (highlight when active) */}
         {values.map((v,i)=>(
           <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
             <div style={{ width:52, color:"#475569" }}>No.{i+1}:</div>
@@ -251,8 +285,14 @@ const levels = useMemo(() => {
               readOnly
               placeholder="E,N,H"
               value={v}
-              onFocus={()=>{ setActiveIndex(i); setShowKeyboard(true); }}
-              style={{ ...input, width:230 }}
+              onFocus={() => { setKbMode('row'); setActiveIndex(i); setShowKeyboard(true); }}
+              style={{
+                ...input, width:230, cursor:"pointer",
+                borderColor: activeIndex===i && kbMode==='row' ? "#0ea5e9" : "#cbd5e1",
+                boxShadow: activeIndex===i && kbMode==='row' ? "0 0 0 3px rgba(14,165,233,.25)" : "none",
+                backgroundColor: activeIndex===i && kbMode==='row' ? "#e0f2fe" : "#fff",
+                transition:"all .15s"
+              }}
             />
             <button style={btn("#e2e8f0", "#0f172a")} onClick={()=>updateRow(i,"")}>×</button>
           </div>
@@ -260,9 +300,19 @@ const levels = useMemo(() => {
 
         <div style={{ height:1, background:"#e2e8f0", margin:"10px 0" }} />
 
+        {/* Special Join (custom keyboard) */}
         <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8 }}>
           <div style={{ width:92, color:"#475569" }}>Special Join</div>
-          <input value={sjInput} onChange={(e)=>setSjInput(e.target.value)} placeholder="e.g. 3,6" style={{ ...input, flex:1 }} />
+          <input
+            value={sjInput}
+            readOnly
+            onFocus={() => { setKbMode('sj'); setShowKeyboard(true); }}
+            placeholder="e.g. 3,6"
+            style={{ ...input, flex:1, cursor:"pointer",
+                     borderColor: kbMode==='sj' ? "#0ea5e9" : "#cbd5e1",
+                     boxShadow: kbMode==='sj' ? "0 0 0 3px rgba(14,165,233,.25)" : "none",
+                     backgroundColor: kbMode==='sj' ? "#e0f2fe" : "#fff" }}
+          />
           <button style={btn("#22c55e")} onClick={addSJ}>Add</button>
         </div>
 
@@ -317,16 +367,26 @@ const levels = useMemo(() => {
           position:"fixed", left:0, right:0, bottom:0, background:"#111827", padding:12,
           display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, boxShadow:"0 -8px 20px rgba(0,0,0,.25)"
         }}>
-          {["7","8","9","DEL","4","5","6","-","1","2","3",",",".","0","OK"].map(k=>(
-            <button key={k} onClick={()=>pressKey(k)}
-              style={{ gridColumn: k==="OK" ? "span 2" : "auto", padding:"16px 0", border:0, borderRadius:10,
-                       background: k==="OK" ? "#22c55e" : (k==="DEL" ? "#ef4444" : "#0ea5e9"),
-                       color:"#fff", fontSize:18, fontWeight:800 }}>
+          {(
+            kbMode === "count"
+              ? ["7","8","9","DEL","4","5","6","", "1","2","3","", "0","OK"]
+              : kbMode === "sj"
+                ? ["7","8","9","DEL","4","5","6",",","1","2","3","","0",",","OK"]
+                : /* row */ ["7","8","9","DEL","4","5","6","-","1","2","3",",",".","0","OK"]
+          ).map((k,idx)=> k ? (
+            <button key={idx} onClick={()=>pressKey(k)}
+              style={{
+                gridColumn: k==="OK" ? "span 2" : "auto",
+                padding:"16px 0", border:0, borderRadius:10,
+                background: k==="OK" ? "#22c55e" : (k==="DEL" ? "#ef4444" : "#0ea5e9"),
+                color:"#fff", fontSize:18, fontWeight:800
+              }}>
               {k}
             </button>
-          ))}
+          ) : <span key={idx} />)}
         </div>
       )}
     </div>
   );
-            }
+}
+  
