@@ -1,3 +1,4 @@
+// src/pages/SimpleCalc.jsx
 import React, { useMemo, useState } from "react";
 
 const keys = [
@@ -35,7 +36,7 @@ export default function SimpleCalc() {
         const prev = s[s.length - 1];
         if (isOp(prev)) {
           // replace previous operator (keep negative like "( -" also ok)
-          if (!(k === "-" && (prev === "("))) s = s.slice(0, -1);
+          if (!(k === "-" && prev === "(")) s = s.slice(0, -1);
         }
       }
 
@@ -75,19 +76,17 @@ export default function SimpleCalc() {
       className="container grid"
       style={{
         gap: 16,
-        // nice body color
-        background:
-          "linear-gradient(180deg, #e0f2fe 0%, #f8fafc 35%, #f1f5f9 100%)",
+        background: "linear-gradient(180deg, #e0f2fe 0%, #f8fafc 35%, #f1f5f9 100%)",
         minHeight: "calc(100vh - 56px)",
         paddingTop: 16,
       }}
     >
+      {/* header & display */}
       <div
         className="card"
         style={{
           border: "none",
-          background:
-            "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
+          background: "linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%)",
           color: "white",
         }}
       >
@@ -95,7 +94,7 @@ export default function SimpleCalc() {
           🧮 Simple Calculator
         </div>
 
-        {/* display */}
+        {/* display (STABLE, NO JUMP) */}
         <div
           style={{
             background: "rgba(255,255,255,0.15)",
@@ -103,21 +102,36 @@ export default function SimpleCalc() {
             padding: 12,
           }}
         >
+          {/* expression line */}
           <div
             style={{
-              minHeight: 28,
+              height: 32,               // fixed height
+              lineHeight: "32px",
               fontSize: 18,
               letterSpacing: 0.5,
-              wordBreak: "break-all",
+              whiteSpace: "nowrap",     // no wrap
+              overflowX: "auto",        // horizontal scroll if long
+              overflowY: "hidden",
+              wordBreak: "keep-all",
             }}
           >
             {expr || "0"}
           </div>
+
+          {/* preview line (reserve height even when empty) */}
           <div
-            className="small"
-            style={{ marginTop: 4, fontSize: 22, fontWeight: 800 }}
+            style={{
+              marginTop: 4,
+              height: 36,               // fixed height
+              lineHeight: "36px",
+              fontSize: 22,
+              fontWeight: 800,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
           >
-            {preview}
+            {preview || "\u00A0" /* keep space so height never collapses */}
           </div>
         </div>
       </div>
@@ -138,12 +152,7 @@ export default function SimpleCalc() {
           }}
         >
           {keys.flat().map((k) => (
-            <Key
-              key={k}
-              label={k}
-              active={flash === k}
-              onClick={() => push(k)}
-            />
+            <Key key={k} label={k} active={flash === k} onClick={() => push(k)} />
           ))}
         </div>
       </div>
@@ -173,8 +182,8 @@ function Key({ label, onClick, active }) {
         transition: "background 120ms, transform 60ms",
         touchAction: "manipulation",
       }}
-      onPointerDown={(e) => e.currentTarget.style.transform = "scale(0.98)"}
-      onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
+      onPointerDown={(e) => (e.currentTarget.style.transform = "scale(0.98)")}
+      onPointerUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
     >
       {label}
     </button>
