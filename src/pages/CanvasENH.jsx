@@ -90,105 +90,126 @@ export default function CanvasENH() {
     c = Math.max(-1, Math.min(1, c));
     return Math.acos(c) * 180 / Math.PI; // 0..180
 }
-  // ===== CanvasENH.jsx — PART 2/3 =====
-  function draw() {
-    const cv = canvasRef.current; if (!cv) return;
-    const cx = cv.getContext("2d");
-    cx.clearRect(0, 0, cv.width, cv.height);
+  // ===== CanvasENH.jsx — PART 2/3 (REPLACE THIS WHOLE PART) =====
+function draw() {
+  const cv = canvasRef.current;
+  if (!cv) return;
+  const cx = cv.getContext("2d");
+  cx.clearRect(0, 0, cv.width, cv.height);
 
-    const pts = parsePoints(); if (pts.length < 2) return;
+  const pts = parsePoints();
+  if (pts.length < 2) return;
 
-    // fit-to-canvas
-    const pad = 80;
-    const minE = Math.min(...pts.map(p => p.E));
-    const maxE = Math.max(...pts.map(p => p.E));
-    const minN = Math.min(...pts.map(p => p.N));
-    const maxN = Math.max(...pts.map(p => p.N));
-    const w = maxE - minE || 1, h = maxN - minN || 1;
-    const scale = Math.min((cv.width - 2 * pad) / w, (cv.height - 2 * pad) / h);
-    const toXY = (p) => ({
-      x: pad + (p.E - minE) * scale,
-      y: cv.height - (pad + (p.N - minN) * scale)  // invert Y
-    });
+  // --- fit to canvas ---
+  const pad = 80;
+  const minE = Math.min(...pts.map(p => p.E));
+  const maxE = Math.max(...pts.map(p => p.E));
+  const minN = Math.min(...pts.map(p => p.N));
+  const maxN = Math.max(...pts.map(p => p.N));
+  const w = maxE - minE || 1;
+  const h = maxN - minN || 1;
+  const scale = Math.min(
+    (cv.width  - 2 * pad) / w,
+    (cv.height - 2 * pad) / h
+  );
+  const toXY = (p) => ({
+    x: pad + (p.E - minE) * scale,
+    y: cv.height - (pad + (p.N - minN) * scale) // invert Y
+  });
 
-    cx.lineWidth = 2;
-    cx.strokeStyle = "#38bdf8";
-    cx.fillStyle = "#0f172a";
-    cx.font = "12px ui-monospace,monospace";
+  // --- styles ---
+  cx.lineWidth = 2;
+  cx.strokeStyle = "#2563eb";
+  cx.font = "12px ui-monospace,monospace";
 
-    // connections: series + optional close + special joins
-    const cons = [];
-    for (let i = 0; i < pts.length - 1; i++) cons.push([pts[i], pts[i + 1]]);
-    if (closeShape && pts.length >= 3) cons.push([pts.at(-1), pts[0]]);
-    specialJoins.forEach(({ a, b }) => {
-      const A = pts.find(p => p.id === a);
-      const B = pts.find(p => p.id === b);
-      if (A && B) cons.push([A, B]);
-    });
+  // --- connections: series + close + special joins ---
+  const cons = [];
+  for (let i = 0; i < pts.length - 1; i++) cons.push([pts[i], pts[i + 1]]);
+  if (closeShape && pts.length >= 3) cons.push([pts.at(-1), pts[0]]);
+  specialJoins.forEach(({ a, b }) => {
+    const A = pts.find(p => p.id === a);
+    const B = pts.find(p => p.id === b);
+    if (A && B) cons.push([A, B]);
+  });
 
-    // lines + length labels
-    cons.forEach(([A, B]) => {
-      const a = toXY(A), b = toXY(B);
-      cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke();
-      const L = Math.round(dist(A, B));
-      cx.fillStyle = "#334155";
-      cx.fillText(`${L} mm`, (a.x + b.x) / 2 + 6, (a.y + b.y) / 2 - 6);
-    });
+  // --- draw lines + length(mm) ---
+  cons.forEach(([A, B]) => {
+    const a = toXY(A), b = toXY(B);
+    cx.beginPath();
+    cx.moveTo(a.x, a.y);
+    cx.lineTo(b.x, b.y);
+    cx.stroke();
 
-    // interior angles (series only)
-    cx.fillStyle = "#ef4444";
-    if (pts.length >= 3) {
-      for (let i = 1; i < pts.length - 1; i++) {
-        const d = angleDeg(pts[i - 1], pts[i], pts[i + 1]);
-        if (d != null) {
-          const p = toXY(pts[i]);
-          cx.fillText(`${d.toFixed(0)}°`, p.x + 8, p.y - 8);
-        }
-      }
-      if (closeShape) {
-        const d1 = angleDeg(pts.at(-2), pts.at(-1), pts[0]);
-        const d0 = angleDeg(pts.at(-1), pts[0], pts[1]);
-        if (d1 != null) { const p = toXY(pts.at(-1)); cx.fillText(`${d1.toFixed(0)}°`, p.x + 8, p.y - 8); }
-        if (d0 != null) { const p = toXY(pts[0]);     cx.fillText(`${d0.toFixed(0)}°`, p.x + 8, p.y - 8); }
+    const L = Math.round(dist(A, B));
+    cx.fillStyle = "#334155";
+    cx.fillText(`${L} mm`, (a.x + b.x) / 2 + 4, (a.y + b.y) / 2 - 4);
+  });
+
+  // --- points ---
+  pts.forEach(P => {
+    const p = toXY(P);
+    cx.fillStyle = "#ffffff";
+    cx.beginPath();
+    cx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+    cx.fill();
+    cx.fillStyle = "#1e40af";
+    cx.fillText(`${P.id}`, p.x + 8, p.y - 8);
+  });
+
+  // --- angles (≤180°) on series path ---
+  cx.fillStyle = "#dc2626";
+  if (pts.length >= 3) {
+    for (let i = 1; i < pts.length - 1; i++) {
+      const d = angleDeg(pts[i - 1], pts[i], pts[i + 1]);
+      if (d != null) {
+        const p = toXY(pts[i]);
+        cx.fillText(`${d.toFixed(0)}°`, p.x - 6, p.y - 6);
       }
     }
-
-    // points
-    pts.forEach(P => {
-      const p = toXY(P);
-      cx.fillStyle = "#e2e8f0";
-      cx.beginPath(); cx.arc(p.x, p.y, 4, 0, Math.PI * 2); cx.fill();
-      cx.fillStyle = "#60a5fa"; cx.fillText(`${P.id}`, p.x + 8, p.y + 12);
-    });
+    if (closeShape) {
+      const d1 = angleDeg(pts.at(-2), pts.at(-1), pts[0]);
+      const d0 = angleDeg(pts.at(-1), pts[0], pts[1]);
+      if (d1 != null) {
+        const p = toXY(pts.at(-1));
+        cx.fillText(`${d1.toFixed(0)}°`, p.x - 6, p.y - 6);
+      }
+      if (d0 != null) {
+        const p = toXY(pts[0]);
+        cx.fillText(`${d0.toFixed(0)}°`, p.x - 6, p.y - 6);
+      }
+    }
   }
+}
 
-  useEffect(() => { draw(); }, [values, specialJoins, closeShape]);
+// auto redraw when inputs change
+useEffect(() => { draw(); }, [values, specialJoins, closeShape]);
 
-  // Save data to Firebase (no image)
-  const saveReview = () => {
-    const snap = { ts: Date.now(), count, values, specialJoins, closeShape };
-    push(ref(db, "enh_reviews"), snap)
-      .then(() => alert("✅ Saved"))
-      .catch(err => alert("❌ " + err.message));
-  };
+// Save data to Firebase (no image)
+const saveReview = () => {
+  const snap = { ts: Date.now(), count, values, specialJoins, closeShape };
+  push(ref(db, "enh_reviews"), snap)
+    .then(() => alert("✅ Saved"))
+    .catch(err => alert("❌ " + err.message));
+};
 
-  const clearAll = () => {
-    setValues(Array(count).fill(""));
-    setSpecialJoins([]);
-    draw();
-  };
+// Clear all rows / joins
+const clearAll = () => {
+  setValues(Array(count).fill(""));
+  setSpecialJoins([]);
+  draw();
+};
 
-  // Custom keyboard handlers
-  const pressKey = (k) => {
-    if (activeIndex == null) return;
-    if (k === "DEL") {
-      setValues(v => v.map((s, i) => (i === activeIndex ? s.slice(0, -1) : s)));
-    } else if (k === "OK") {
-      setShowKeyboard(false); setActiveIndex(null);
-    } else {
-      setValues(v => v.map((s, i) => (i === activeIndex ? s + k : s)));
-    }
-  };
+// Custom keyboard handlers
+const pressKey = (k) => {
+  if (activeIndex == null) return;
+  if (k === "DEL") {
+    setValues(v => v.map((s, i) => (i === activeIndex ? s.slice(0, -1) : s)));
+  } else if (k === "OK") {
+    setShowKeyboard(false); setActiveIndex(null);
+  } else {
+    setValues(v => v.map((s, i) => (i === activeIndex ? s + k : s)));
+  }
+};
   // ===== CanvasENH.jsx — PART 3/3 =====
   // Small style helpers
   const card = { background: "#f8fafc", padding: 16, borderRadius: 12, boxShadow: "0 2px 6px rgba(2,6,23,.08)" };
