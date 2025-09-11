@@ -63,7 +63,6 @@ export default function NavBar({ user, onLogout }) {
           <Chip to="/circlearc" label="Circle Arc" />
           <Chip to="/enh-calc" label="ENH Changer" />
           <Chip to="/enh-tie" label="ENH Tie" />
-          <Chip to="/enh-series" label="ENH Series" />
           <Chip to="/notepad" label="Note Pad" />
           
           
