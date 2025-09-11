@@ -18,6 +18,7 @@ import CircleArc from "./pages/CircleArc";
 import ENHCalc from "./pages/ENHCalc";
 import ENHTie from "./pages/ENHTie";
 import NotePad from "./pages/NotePad";
+import ENSeriesCalc from "./pages/ENSeriesCalc";
 
 
 export default function App() {
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/enh-calc" element={<ENHCalc />} />
           <Route path="/notepad" element={<NotePad />} />
           <Route path="/enh-tie" element={<ENHTie />} />
+          <Route path="/enh-series" element={<ENSeriesCalc />} />
           
           
 
