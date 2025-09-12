@@ -130,12 +130,13 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     ctx.strokeText(p.label, s.x + 8, s.y - 8);
     ctx.fillStyle = "#0f172a"; ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
-              }
+}
+// src/pages/Drawing2D.jsx  (Part 2/3  logic)
 export default function Drawing2D() {
   // data
   const [points, setPoints] = useState([]);
   const [lines, setLines]   = useState([]);   // {id,p1,p2,lenMm}
-  const [angles, setAngles] = useState([]);   // {id,a,b,c,deg}
+  const [angles, setAngles] = useState([]);
 
   // inputs
   const [E, setE] = useState("");   // mm
@@ -151,7 +152,7 @@ export default function Drawing2D() {
   const [tempLine, setTempLine] = useState(null);    // {x1,y1,x2,y2}
   const [changingRef, setChangingRef] = useState(false);
 
-  // Swal lock + red-line timer
+  // 🔒 Swal state (singleton) + ⏱ red-line timer
   const swalOpenRef = useRef(false);
   const tempTimerRef = useRef(null);
 
@@ -337,29 +338,49 @@ export default function Drawing2D() {
     if (autoFit) setTimeout(() => fitView(next), 0);
   };
 
-  /* ---------- Swal helper: OK ပိတ် + 3s နောက် red line ပျောက် ---------- */
+  /* ---------- Swal helper: one modal, OK-only, update content, red line 3s after close ---------- */
   const showPerpDistance = async (dist) => {
-    if (swalOpenRef.current) {
-      try { await Swal.close(); } catch {}
+    const html = `<div style="font-size:18px;font-weight:700;margin-top:6px;">${dist.toFixed(2)} ${UNIT_LABEL}</div>`;
+
+    // modal not open → open once
+    if (!swalOpenRef.current) {
+      swalOpenRef.current = true;
+      await Swal.fire({
+        icon: "info",
+        title: "Perpendicular Distance",
+        html,
+        confirmButtonText: "OK",
+        showConfirmButton: true,
+        allowOutsideClick: false,
+        allowEscapeKey: true,
+        // toast: false (default) ⇒ full modal (OK always visible)
+      });
+      swalOpenRef.current = false;
+
+      // close → start 3s timer to hide red line
+      if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
+      tempTimerRef.current = setTimeout(() => setTempLine(null), 3000);
+      return;
     }
-    swalOpenRef.current = true;
 
-    await Swal.fire({
-      icon: "info",
-      title: "Perpendicular Distance",
-      html: `<div style="font-size:18px;font-weight:700;margin-top:6px;">
-               ${dist.toFixed(2)} ${UNIT_LABEL}
-             </div>`,
-      confirmButtonText: "OK",
-      showConfirmButton: true,
-      allowOutsideClick: false,
-      allowEscapeKey: true,
-    });
-
-    swalOpenRef.current = false;
-
-    if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
-    tempTimerRef.current = setTimeout(() => setTempLine(null), 3000);
+    // modal open already → update content only (no reopen flash)
+    try {
+      Swal.update({ title: "Perpendicular Distance", html });
+    } catch {
+      // fallback: if update fails for any reason, reopen once
+      await Swal.fire({
+        icon: "info",
+        title: "Perpendicular Distance",
+        html,
+        confirmButtonText: "OK",
+        showConfirmButton: true,
+        allowOutsideClick: false,
+        allowEscapeKey: true,
+      });
+      swalOpenRef.current = false;
+      if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
+      tempTimerRef.current = setTimeout(() => setTempLine(null), 3000);
+    }
   };
 
   /* ---------- gestures (pan/pinch/select/erase/refLine) ---------- */
@@ -459,12 +480,11 @@ export default function Drawing2D() {
         return [];
       }
       if (mode==="refLine") {
-        // Ref line set/change
+        // Ref line set/change (popup မထုတ်ဘဲ မြန်မြန်)
         if (changingRef || !refLine) {
           if (next.length===2) {
             setRefLine({ aId: next[0], bId: next[1] });
             setChangingRef(false);
-            Swal.fire({ icon:"success", title: refLine? "Ref line updated!" : "Ref line set!", confirmButtonText:"OK" });
             return [];
           }
           return next;
@@ -480,11 +500,11 @@ export default function Drawing2D() {
             const px=a.x+t*vx, py=a.y+t*vy;
             const dist=Math.hypot(c.x-px,c.y-py);
 
-            // refresh temp red line
+            // refresh temp red line (no overlap)
             setTempLine(null);
             setTempLine({ x1:c.x,y1:c.y,x2:px,y2:py });
 
-            // Swal OK + 3s later hide red line
+            // One modal, update content, OK-only
             showPerpDistance(dist);
           }
           return [];
@@ -508,10 +528,7 @@ export default function Drawing2D() {
     });
     alert("Saved ");
   };
-
-  // expose helpers to Part 3
-  return { /* to satisfy linter, actual JSX is in Part 3 */ };
-                       }
+}
 /* -------------------- UI -------------------- */
   return (
     <div className="grid">
@@ -689,4 +706,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-                    }
+        }
