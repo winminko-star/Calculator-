@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
-import Swal from "sweetalert2";
 
 /** Units: coordinates are in millimetres (mm). zoom = px per mm */
 const UNIT_LABEL = "mm";
@@ -130,30 +129,31 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     ctx.strokeText(p.label, s.x + 8, s.y - 8);
     ctx.fillStyle = "#0f172a"; ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
-}
-// src/pages/Drawing2D.jsx  (Part 2/3  logic)
+  }
 export default function Drawing2D() {
   // data
   const [points, setPoints] = useState([]);
   const [lines, setLines]   = useState([]);   // {id,p1,p2,lenMm}
-  const [angles, setAngles] = useState([]);
+  const [angles, setAngles] = useState([]);   // {id,a,b,c,deg}
 
   // inputs
-  const [E, setE] = useState("");   // mm
-  const [N, setN] = useState("");   // mm
+  const [E, setE] = useState("");
+  const [N, setN] = useState("");
   const [title, setTitle] = useState("");
 
   // modes / selection
   const [mode, setMode] = useState("line"); // 'line' | 'angle' | 'eraseLine' | 'refLine'
   const [selected, setSelected] = useState([]);
 
-  // Ref line feature
+  // Ref line
   const [refLine, setRefLine] = useState(null);      // {aId,bId}
   const [tempLine, setTempLine] = useState(null);    // {x1,y1,x2,y2}
   const [changingRef, setChangingRef] = useState(false);
 
-  // 🔒 Swal state (singleton) + ⏱ red-line timer
-  const swalOpenRef = useRef(false);
+  // ✅ Measure overlay (no Swal)
+  const [measure, setMeasure] = useState({ open: false, value: null });
+
+  // red-line auto hide timer
   const tempTimerRef = useRef(null);
 
   // view
@@ -175,7 +175,6 @@ export default function Drawing2D() {
   const sizeRef = useRef({ wCss: 360, hCss: 420 });
   const pointers = useRef(new Map());
 
-  // next point label
   const nextLabel = () => labelFromIndex(points.length);
 
   /* ---------- Restore from AllReview (wmk_restore) ---------- */
@@ -309,11 +308,11 @@ export default function Drawing2D() {
   const clearAll  = () => {
     setPoints([]); setLines([]); setAngles([]); setSelected([]);
     setRefLine(null); setTempLine(null); setChangingRef(false);
+    setMeasure({ open:false, value:null });
   };
   const clearLines = () => setLines([]);
   const removeLastLine = () => setLines(ls => ls.slice(0, -1));
 
-  // center on A, keep current zoom
   const centerOnA = () => {
     if (!points.length) return;
     const A = points[0];
@@ -322,7 +321,6 @@ export default function Drawing2D() {
     setTy(+A.y * z);
   };
 
-  // auto-fit when points change (if ON)
   useEffect(() => { if (autoFit) fitView(points); }, [points]); // eslint-disable-line
 
   /* ---------- add point ---------- */
@@ -338,52 +336,7 @@ export default function Drawing2D() {
     if (autoFit) setTimeout(() => fitView(next), 0);
   };
 
-  /* ---------- Swal helper: one modal, OK-only, update content, red line 3s after close ---------- */
-  const showPerpDistance = async (dist) => {
-    const html = `<div style="font-size:18px;font-weight:700;margin-top:6px;">${dist.toFixed(2)} ${UNIT_LABEL}</div>`;
-
-    // modal not open → open once
-    if (!swalOpenRef.current) {
-      swalOpenRef.current = true;
-      await Swal.fire({
-        icon: "info",
-        title: "Perpendicular Distance",
-        html,
-        confirmButtonText: "OK",
-        showConfirmButton: true,
-        allowOutsideClick: false,
-        allowEscapeKey: true,
-        // toast: false (default) ⇒ full modal (OK always visible)
-      });
-      swalOpenRef.current = false;
-
-      // close → start 3s timer to hide red line
-      if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
-      tempTimerRef.current = setTimeout(() => setTempLine(null), 3000);
-      return;
-    }
-
-    // modal open already → update content only (no reopen flash)
-    try {
-      Swal.update({ title: "Perpendicular Distance", html });
-    } catch {
-      // fallback: if update fails for any reason, reopen once
-      await Swal.fire({
-        icon: "info",
-        title: "Perpendicular Distance",
-        html,
-        confirmButtonText: "OK",
-        showConfirmButton: true,
-        allowOutsideClick: false,
-        allowEscapeKey: true,
-      });
-      swalOpenRef.current = false;
-      if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
-      tempTimerRef.current = setTimeout(() => setTempLine(null), 3000);
-    }
-  };
-
-  /* ---------- gestures (pan/pinch/select/erase/refLine) ---------- */
+  /* ---------- gestures ---------- */
   const onPointerDown = (e) => {
     e.currentTarget.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
@@ -429,9 +382,9 @@ export default function Drawing2D() {
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     const world = { x: (mx - sizeRef.current.wCss/2 - tx)/zoom, y: (sizeRef.current.hCss/2 - my + ty)/zoom };
 
-    // --- erase-line mode ---
+    // erase-line
     if (mode === "eraseLine") {
-      const pxTol = 12; // 12px
+      const pxTol = 12;
       const mmTol = pxTol / zoom;
       let bestIdx = -1, bestD = Infinity;
 
@@ -452,7 +405,7 @@ export default function Drawing2D() {
       return;
     }
 
-    // --- select-near point ---
+    // select-near point
     const hitR = 12 / zoom;
     let pick=null, best=Infinity;
     for (const p of points) {
@@ -480,7 +433,7 @@ export default function Drawing2D() {
         return [];
       }
       if (mode==="refLine") {
-        // Ref line set/change (popup မထုတ်ဘဲ မြန်မြန်)
+        // define / change ref line (no popup)
         if (changingRef || !refLine) {
           if (next.length===2) {
             setRefLine({ aId: next[0], bId: next[1] });
@@ -490,7 +443,7 @@ export default function Drawing2D() {
           return next;
         }
 
-        // perpendicular measurement (refLine already set)
+        // measure to ref line
         if (refLine) {
           if (pick.id===refLine.aId || pick.id===refLine.bId) return [];
           const a=points.find(p=>p.id===refLine.aId), b=points.find(p=>p.id===refLine.bId), c=points.find(p=>p.id===pick.id);
@@ -500,12 +453,12 @@ export default function Drawing2D() {
             const px=a.x+t*vx, py=a.y+t*vy;
             const dist=Math.hypot(c.x-px,c.y-py);
 
-            // refresh temp red line (no overlap)
+            // refresh temp red line
             setTempLine(null);
             setTempLine({ x1:c.x,y1:c.y,x2:px,y2:py });
 
-            // One modal, update content, OK-only
-            showPerpDistance(dist);
+            // open overlay panel (stable, no blink)
+            setMeasure({ open:true, value: `${dist.toFixed(2)} ${UNIT_LABEL}` });
           }
           return [];
         }
@@ -514,26 +467,23 @@ export default function Drawing2D() {
     });
   };
 
-  /* ---------- save (DB only, no image) ---------- */
+  /* ---------- save ---------- */
   const saveToFirebase = async () => {
     const now = Date.now();
-    const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
     await set(push(dbRef(db, "drawings")), {
       createdAt: now,
-      expiresAt,
       title: title || "Untitled",
       unitLabel: UNIT_LABEL,
       state: { points, lines, angles, view: { zoom, tx, ty } },
       meta: { points: points.length, lines: lines.length, triples: angles.length },
     });
-    alert("Saved ");
+    alert("Saved");
   };
-}
-/* -------------------- UI -------------------- */
+  /* -------------------- UI -------------------- */
   return (
     <div className="grid">
       {/* Canvas */}
-      <div className="card" style={{ padding: 8 }}>
+      <div className="card" style={{ padding: 8, position:"relative" }}>
         <div ref={wrapRef} style={{ width: "100%" }}>
           <canvas
             ref={canvasRef}
@@ -549,25 +499,58 @@ export default function Drawing2D() {
           />
         </div>
 
-        {/* Horizontal Scale slider (under canvas) */}
+        {/* ✅ Measure Overlay (no swal) */}
+        {measure.open && (
+          <div
+            style={{
+              position:"absolute",
+              right:12, bottom:12,
+              background:"rgba(15,23,42,0.96)",
+              color:"#fff",
+              border:"1px solid #334155",
+              borderRadius:12,
+              padding:"10px 12px",
+              boxShadow:"0 8px 24px rgba(0,0,0,0.18)",
+              display:"flex",
+              alignItems:"center",
+              gap:10
+            }}
+          >
+            <div style={{ fontSize:14, opacity:0.75 }}>Perpendicular</div>
+            <div style={{ fontSize:18, fontWeight:800 }}>{measure.value}</div>
+            <button
+              className="btn"
+              onClick={()=>{
+                setMeasure({ open:false, value:null });
+                if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
+                tempTimerRef.current = setTimeout(()=> setTempLine(null), 3000);
+              }}
+              style={{ background:"#0ea5e9" }}
+            >
+              OK
+            </button>
+          </div>
+        )}
+
+        {/* Horizontal Scale slider */}
         <div style={{ marginTop: 10 }}>
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
-            <span className="small">Scale (px/{UNIT_LABEL})</span>
-            <span className="small">{Math.max(0.0001, Math.round(zoom * 1000) / 1000)} px/{UNIT_LABEL}</span>
+            <span className="small">Scale (px/mm)</span>
+            <span className="small">{Math.max(0.0001, Math.round(zoom * 1000) / 1000)} px/mm</span>
           </div>
           <input
             type="range"
-            min={MIN_S}
-            max={MAX_S}
+            min={-200}
+            max={80}
             step={0.01}
             value={sval}
             onChange={(e) => onSliderChange(e.target.value)}
             style={{ width: "100%" }}
           />
           <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}>
-            <span className="small">{MIN_S}</span>
+            <span className="small">-200</span>
             <span className="small">0</span>
-            <span className="small">{MAX_S}</span>
+            <span className="small">80</span>
           </div>
         </div>
       </div>
@@ -585,13 +568,13 @@ export default function Drawing2D() {
           <button className="btn" onClick={saveToFirebase}>Save</button>
         </div>
 
-        <div className="row" style={{ marginBottom: 8 }}>
+        <div className="row" style={{ marginBottom: 8, gap:8 }}>
           <input
             className="input"
             type="number"
             inputMode="decimal"
             step="any"
-            placeholder={`E (${UNIT_LABEL})`}
+            placeholder={`E (mm)`}
             value={E}
             onChange={(e)=>setE(e.target.value)}
             style={{ width: 110 }}
@@ -601,7 +584,7 @@ export default function Drawing2D() {
             type="number"
             inputMode="decimal"
             step="any"
-            placeholder={`N (${UNIT_LABEL})`}
+            placeholder={`N (mm)`}
             value={N}
             onChange={(e)=>setN(e.target.value)}
             style={{ width: 110 }}
@@ -609,73 +592,49 @@ export default function Drawing2D() {
           <button className="btn" onClick={addPoint}>Add (label {nextLabel()})</button>
         </div>
 
-        {/* Toolbar  scrollable single row */}
+        {/* Toolbar */}
         <div className="row" style={{ overflowX:"auto", paddingBottom:4 }}>
-          <button
-            className="btn"
-            onClick={() => { setMode("line"); setSelected([]); }}
-            style={{ background: mode === "line" ? "#0ea5e9" : "#64748b" }}
-          >
-            Line
-          </button>
+          <button className="btn"
+            onClick={()=>{ setMode("line"); setSelected([]); }}
+            style={{ background: mode==="line" ? "#0ea5e9" : "#64748b" }}> Line</button>
 
-          <button
-            className="btn"
-            onClick={() => { setMode("angle"); setSelected([]); }}
-            style={{ background: mode === "angle" ? "#0ea5e9" : "#64748b" }}
-          >
-            Angle
-          </button>
+          <button className="btn"
+            onClick={()=>{ setMode("angle"); setSelected([]); }}
+            style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b" }}> Angle</button>
 
-          <button
-            className="btn"
-            onClick={() => { setMode("eraseLine"); setSelected([]); }}
-            style={{ background: mode === "eraseLine" ? "#0ea5e9" : "#64748b" }}
-          >
-            Erase line (tap)
-          </button>
+          <button className="btn"
+            onClick={()=>{ setMode("eraseLine"); setSelected([]); }}
+            style={{ background: mode==="eraseLine" ? "#0ea5e9" : "#64748b" }}> Erase line (tap)</button>
 
-          {/* Ref line main toggle */}
-          <button
-            className="btn"
-            onClick={() => { setMode("refLine"); setSelected([]); }}
-            style={{ background: mode === "refLine" ? "#0ea5e9" : "#64748b" }}
-          >
-            📐 Ref line
-          </button>
+          {/* Ref line */}
+          <button className="btn"
+            onClick={()=>{ setMode("refLine"); setSelected([]); }}
+            style={{ background: mode==="refLine" ? "#0ea5e9" : "#64748b" }}> 📐 Ref line</button>
 
-          {/* Ref line status + actions */}
           {refLine && (
             <div style={{ display:"inline-flex", alignItems:"center", gap:8, marginLeft:8 }}>
               <span className="small" style={{ background:"#e2e8f0", color:"#0f172a", borderRadius:12, padding:"4px 8px" }}>
                 Ref: {points.find(p=>p.id===refLine.aId)?.label}–{points.find(p=>p.id===refLine.bId)?.label}
               </span>
-
-              <button
-                className="btn"
-                onClick={() => { setChangingRef(true); setSelected([]); setMode("refLine"); }}
-                style={{ background: changingRef ? "#f59e0b" : "#94a3b8" }}
-                title="Tap 2 points to redefine"
-              >
+              <button className="btn"
+                onClick={()=>{ setChangingRef(true); setSelected([]); setMode("refLine"); }}
+                style={{ background:"#94a3b8" }}>
                 Change
               </button>
-
-              <button
-                className="btn"
-                onClick={() => { setRefLine(null); setTempLine(null); setSelected([]); setChangingRef(false); }}
-                style={{ background: "#ef4444" }}
-              >
+              <button className="btn"
+                onClick={()=>{ setRefLine(null); setTempLine(null); setSelected([]); setChangingRef(false); setMeasure({open:false,value:null}); }}
+                style={{ background:"#ef4444" }}>
                 Clear
               </button>
             </div>
           )}
 
-          <button className="btn" onClick={centerOnA}>Find A</button>
-          <button className="btn" onClick={fitView}>Fit</button>
-          <button className="btn" onClick={resetView}>Reset</button>
-          <button className="btn" onClick={clearAll}>Clear All</button>
-          <button className="btn" onClick={removeLastLine}>Remove last line</button>
-          <button className="btn" onClick={clearLines}>Clear lines</button>
+          <button className="btn" onClick={centerOnA}> Find A</button>
+          <button className="btn" onClick={fitView}> Fit</button>
+          <button className="btn" onClick={resetView}> Reset</button>
+          <button className="btn" onClick={clearAll}> Clear All</button>
+          <button className="btn" onClick={removeLastLine}> Remove last line</button>
+          <button className="btn" onClick={clearLines}> Clear lines</button>
 
           <label className="row" style={{ gap:8, marginLeft:8 }}>
             <input type="checkbox" checked={autoFit} onChange={(e)=>setAutoFit(e.target.checked)} />
@@ -690,7 +649,7 @@ export default function Drawing2D() {
         {lines.length===0 && <div className="small">No lines yet.</div>}
         {lines.map(l=>(
           <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
-            <div>#{l.id} &nbsp; {l.p1} — {l.p2} &nbsp; <b>{Math.round(l.lenMm)} {UNIT_LABEL}</b></div>
+            <div>#{l.id} &nbsp; {l.p1} — {l.p2} &nbsp; <b>{Math.round(l.lenMm)} mm</b></div>
           </div>
         ))}
       </div>
@@ -706,4 +665,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-        }
+              }
