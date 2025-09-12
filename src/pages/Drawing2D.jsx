@@ -70,7 +70,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
   ctx.clearRect(0, 0, wCss, hCss);
 
   // grid
-  const step = Math.max(zoom * 1, 24); // 1mm grid (min gap 24px)
+  const step = Math.max(zoom * 1, 24); // 1mm grid (min 24px)
   const originX = wCss / 2 + tx;
   const originY = hCss / 2 + ty;
 
@@ -131,12 +131,11 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     ctx.fillStyle = "#0f172a"; ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
               }
-// src/pages/Drawing2D.jsx  (Part 2/3  logic)
 export default function Drawing2D() {
   // data
   const [points, setPoints] = useState([]);
   const [lines, setLines]   = useState([]);   // {id,p1,p2,lenMm}
-  const [angles, setAngles] = useState([]);
+  const [angles, setAngles] = useState([]);   // {id,a,b,c,deg}
 
   // inputs
   const [E, setE] = useState("");   // mm
@@ -147,10 +146,14 @@ export default function Drawing2D() {
   const [mode, setMode] = useState("line"); // 'line' | 'angle' | 'eraseLine' | 'refLine'
   const [selected, setSelected] = useState([]);
 
-  // refLine feature
-  const [refLine, setRefLine] = useState(null);     // {aId,bId}
-  const [tempLine, setTempLine] = useState(null);   // {x1,y1,x2,y2}
+  // Ref line feature
+  const [refLine, setRefLine] = useState(null);      // {aId,bId}
+  const [tempLine, setTempLine] = useState(null);    // {x1,y1,x2,y2}
   const [changingRef, setChangingRef] = useState(false);
+
+  // Swal lock + red-line timer
+  const swalOpenRef = useRef(false);
+  const tempTimerRef = useRef(null);
 
   // view
   const BASE_ZOOM = 60, MIN_Z = 0.0005, MAX_Z = 2400;
@@ -241,7 +244,7 @@ export default function Drawing2D() {
       const ctx = cvs.getContext("2d");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctxRef.current = ctx;
-      drawScene(ctx, w, h, zoom, tx, ty, points, lines, angles, refLine, tempLine);
+      drawScene(ctx, w, h, zoom, tx, ty, points, lines, angles, tempLine);
     };
 
     applySize();
@@ -255,13 +258,20 @@ export default function Drawing2D() {
       window.removeEventListener("orientationchange", onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoFit, points, zoom, tx, ty, refLine, tempLine]);
+  }, [autoFit, points, zoom, tx, ty, tempLine]);
 
   // draw
   useEffect(() => {
     const ctx = ctxRef.current; if (!ctx) return;
-    drawScene(ctx, sizeRef.current.wCss, sizeRef.current.hCss, zoom, tx, ty, points, lines, angles, refLine, tempLine);
-  }, [points, lines, angles, zoom, tx, ty, refLine, tempLine]);
+    drawScene(ctx, sizeRef.current.wCss, sizeRef.current.hCss, zoom, tx, ty, points, lines, angles, tempLine);
+  }, [points, lines, angles, zoom, tx, ty, tempLine]);
+
+  // cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
+    };
+  }, []);
 
   /* ---------- fit/reset/clear ---------- */
   const fitView = (pts = points) => {
@@ -295,7 +305,10 @@ export default function Drawing2D() {
   };
 
   const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
-  const clearAll  = () => { setPoints([]); setLines([]); setAngles([]); setSelected([]); setRefLine(null); setTempLine(null); };
+  const clearAll  = () => {
+    setPoints([]); setLines([]); setAngles([]); setSelected([]);
+    setRefLine(null); setTempLine(null); setChangingRef(false);
+  };
   const clearLines = () => setLines([]);
   const removeLastLine = () => setLines(ls => ls.slice(0, -1));
 
@@ -322,6 +335,31 @@ export default function Drawing2D() {
     setPoints(next);
     setE(""); setN("");
     if (autoFit) setTimeout(() => fitView(next), 0);
+  };
+
+  /* ---------- Swal helper: OK ပိတ် + 3s နောက် red line ပျောက် ---------- */
+  const showPerpDistance = async (dist) => {
+    if (swalOpenRef.current) {
+      try { await Swal.close(); } catch {}
+    }
+    swalOpenRef.current = true;
+
+    await Swal.fire({
+      icon: "info",
+      title: "Perpendicular Distance",
+      html: `<div style="font-size:18px;font-weight:700;margin-top:6px;">
+               ${dist.toFixed(2)} ${UNIT_LABEL}
+             </div>`,
+      confirmButtonText: "OK",
+      showConfirmButton: true,
+      allowOutsideClick: false,
+      allowEscapeKey: true,
+    });
+
+    swalOpenRef.current = false;
+
+    if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
+    tempTimerRef.current = setTimeout(() => setTempLine(null), 3000);
   };
 
   /* ---------- gestures (pan/pinch/select/erase/refLine) ---------- */
@@ -432,7 +470,7 @@ export default function Drawing2D() {
           return next;
         }
 
-        // perpendicular measurement
+        // perpendicular measurement (refLine already set)
         if (refLine) {
           if (pick.id===refLine.aId || pick.id===refLine.bId) return [];
           const a=points.find(p=>p.id===refLine.aId), b=points.find(p=>p.id===refLine.bId), c=points.find(p=>p.id===pick.id);
@@ -442,20 +480,12 @@ export default function Drawing2D() {
             const px=a.x+t*vx, py=a.y+t*vy;
             const dist=Math.hypot(c.x-px,c.y-py);
 
+            // refresh temp red line
             setTempLine(null);
             setTempLine({ x1:c.x,y1:c.y,x2:px,y2:py });
 
-            Swal.fire({
-              icon:"info",
-              title:"Perpendicular Distance",
-              html:`<div style="font-size:18px;font-weight:700;margin-top:6px;">
-                      ${dist.toFixed(2)} ${UNIT_LABEL}
-                    </div>`,
-              confirmButtonText:"OK",
-              showConfirmButton:true,
-              allowOutsideClick:false,
-              allowEscapeKey:true,
-            }).then(()=>{ setTempLine(null); });
+            // Swal OK + 3s later hide red line
+            showPerpDistance(dist);
           }
           return [];
         }
@@ -478,7 +508,10 @@ export default function Drawing2D() {
     });
     alert("Saved ");
   };
-}
+
+  // expose helpers to Part 3
+  return { /* to satisfy linter, actual JSX is in Part 3 */ };
+                       }
 /* -------------------- UI -------------------- */
   return (
     <div className="grid">
@@ -536,10 +569,26 @@ export default function Drawing2D() {
         </div>
 
         <div className="row" style={{ marginBottom: 8 }}>
-          <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder={`E (${UNIT_LABEL})`} value={E} onChange={(e)=>setE(e.target.value)} />
-          <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder={`N (${UNIT_LABEL})`} value={N} onChange={(e)=>setN(e.target.value)} />
+          <input
+            className="input"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            placeholder={`E (${UNIT_LABEL})`}
+            value={E}
+            onChange={(e)=>setE(e.target.value)}
+            style={{ width: 110 }}
+          />
+          <input
+            className="input"
+            type="number"
+            inputMode="decimal"
+            step="any"
+            placeholder={`N (${UNIT_LABEL})`}
+            value={N}
+            onChange={(e)=>setN(e.target.value)}
+            style={{ width: 110 }}
+          />
           <button className="btn" onClick={addPoint}>Add (label {nextLabel()})</button>
         </div>
 
@@ -640,4 +689,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-                                     }
+                    }
