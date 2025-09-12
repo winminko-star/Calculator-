@@ -323,7 +323,7 @@ export default function Drawing2D() {
             const perp=Math.hypot(c.x-px, c.y-py);
             // sign of E by cross product: left of A→B = +, right = −
             const crossZ = vx*(c.y-a.y) - vy*(c.x-a.x);
-            const ESigned = (crossZ >= 0 ? 1 : -1) * perp;
+            const ESigned = (crossZ >= 0 ? -1 : 1) * perp;
 
             // N signed along A→B from FIRST pick
             const NSigned = t * abLen;
