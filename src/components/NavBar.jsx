@@ -65,6 +65,7 @@ export default function NavBar({ user, onLogout }) {
           <Chip to="/enh-tie" label="ENH Tie" />
           <Chip to="/enh-canvas" label="ENH Canvas" />
           <Chip to="/enh-review" label="ENH Review" />
+          <Chip to="/pipe-ends-slope" label="Pipe Ends Slope" />
           <Chip to="/notepad" label="Note Pad" />
           
           
