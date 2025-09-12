@@ -235,9 +235,12 @@ export function usePipeEndsSlope(){
   // expose to Part 3
   return { rawA,setRawA, rawB,setRawB, ptsA,ptsB, fitA,fitB, metrics };
 }
-// src/pages/PipeEndsSlope.jsx (Part 3/3)
+// src/pages/PipeEndsSlope.jsx (Part 3/3) — with Custom Keyboard for ENH input
 export default function PipeEndsSlopePage(){
   const st = usePipeEndsSlope();
+
+  // which textarea is active? "A" | "B"
+  const [activeField, setActiveField] = React.useState("A");
 
   const Info = ({label, value, accent})=>(
     <div style={{
@@ -249,6 +252,72 @@ export default function PipeEndsSlopePage(){
     }}>
       <div style={{ fontSize:12, color:"#64748b" }}>{label}</div>
       <div style={{ fontWeight:800, fontSize:16, color:accent||"#0f172a" }}>{value}</div>
+    </div>
+  );
+
+  // ---------- keyboard handlers ----------
+  const applyToActive = (fn) => {
+    if (activeField === "A") st.setRawA(fn(st.rawA));
+    else st.setRawB(fn(st.rawB));
+  };
+
+  const onKeyPress = (k) => {
+    if (k === "AC") return applyToActive(() => "");
+    if (k === "DEL") return applyToActive((s)=>s.slice(0,-1));
+    if (k === "↵")   return applyToActive((s)=>s + "\n");
+
+    // quick tokens
+    if (k === " , ") return applyToActive((s)=>s + ", ");
+    if (k === "SPC") return applyToActive((s)=>s + " ");
+    if (k === "TAB") return applyToActive((s)=>s + "\t");
+
+    // regular char append
+    return applyToActive((s)=>s + k);
+  };
+
+  const Key = ({label, wide, accent}) => (
+    <button
+      onClick={()=>onKeyPress(label)}
+      style={{
+        height: 44,
+        padding: "0 12px",
+        borderRadius: 12,
+        border: "1px solid #e5e7eb",
+        background: accent ? "#0ea5e9" : "#f8fafc",
+        color: accent ? "#fff" : "#0f172a",
+        fontWeight: 800,
+        fontSize: 16,
+        gridColumn: wide ? "span 2" : "span 1",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  const Keyboard = () => (
+    <div
+      style={{
+        display:"grid",
+        gridTemplateColumns:"repeat(6, 1fr)",
+        gap:8,
+        background:"#ffffff",
+        border:"1px solid #e5e7eb",
+        borderRadius:12,
+        padding:8
+      }}
+    >
+      {/* Row 1 */}
+      <Key label="7" /><Key label="8" /><Key label="9" />
+      <Key label="," /><Key label=" , " /><Key label="DEL" />
+      {/* Row 2 */}
+      <Key label="4" /><Key label="5" /><Key label="6" />
+      <Key label="-" /><Key label="." /><Key label="AC" />
+      {/* Row 3 */}
+      <Key label="1" /><Key label="2" /><Key label="3" />
+      <Key label="SPC" /><Key label="TAB" /><Key label="↵" />
+      {/* Row 4 */}
+      <Key label="0" wide />
+      <Key label="E" /><Key label="N" /><Key label="H" />
     </div>
   );
 
@@ -277,32 +346,85 @@ export default function PipeEndsSlopePage(){
 
   return (
     <div className="grid" style={{ gap:12 }}>
-      {/* Inputs */}
+      {/* Inputs + keyboards */}
       <div className="card" style={{ background:"#ffffff", border:"1px solid #e5e7eb" }}>
         <div className="page-title">Pipe Ends — ENH Points</div>
-        <div style={{ display:"grid", gap:12 }}>
-          <div>
-            <div className="small" style={{ marginBottom:6, fontWeight:700 }}>End A</div>
-            <textarea
-              rows={6}
-              value={st.rawA}
-              onChange={e=>st.setRawA(e.target.value)}
-              placeholder={`E,N,H per line\n1200.0, 350.0, 15.2\n1198.5 352.2 15.3\n1201.1, 348.9, 15.1`}
-              style={{ width:"100%", fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace",
-                border:"1px solid #e5e7eb", borderRadius:10, padding:10, outline:"none" }}
-            />
+
+        {/* End A */}
+        <div style={{ display:"grid", gap:8, marginBottom:12 }}>
+          <div className="row" style={{ justifyContent:"space-between" }}>
+            <div className="small" style={{ fontWeight:700 }}>End A</div>
+            <div className="row" style={{ gap:6 }}>
+              <label className="row" style={{
+                gap:6, padding:"4px 8px", border:"1px solid #e5e7eb", borderRadius:10,
+                background: activeField==="A" ? "#dbeafe" : "#f8fafc", color:"#0f172a", cursor:"pointer"
+              }}>
+                <input
+                  type="radio"
+                  name="activeField"
+                  checked={activeField==="A"}
+                  onChange={()=>setActiveField("A")}
+                />
+                <span className="small">Keyboard → A</span>
+              </label>
+            </div>
           </div>
-          <div>
-            <div className="small" style={{ marginBottom:6, fontWeight:700 }}>End B</div>
-            <textarea
-              rows={6}
-              value={st.rawB}
-              onChange={e=>st.setRawB(e.target.value)}
-              placeholder={`E,N,H per line\n1210.2, 365.0, 28.1\n1208.7 366.9 28.0\n1211.4, 363.1, 28.2`}
-              style={{ width:"100%", fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace",
-                border:"1px solid #e5e7eb", borderRadius:10, padding:10, outline:"none" }}
-            />
+
+          <textarea
+            rows={6}
+            value={st.rawA}
+            onChange={e=>st.setRawA(e.target.value)}
+            onFocus={()=>setActiveField("A")}
+            placeholder={`E,N,H per line\n1200.0, 350.0, 15.2\n1198.5 352.2 15.3\n1201.1, 348.9, 15.1`}
+            style={{
+              width:"100%", fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace",
+              border:"1px solid #e5e7eb", borderRadius:10, padding:10, outline:"none"
+            }}
+          />
+
+          {/* Keyboard for A (shared handler uses activeField) */}
+          <Keyboard />
+        </div>
+
+        {/* End B */}
+        <div style={{ display:"grid", gap:8 }}>
+          <div className="row" style={{ justifyContent:"space-between" }}>
+            <div className="small" style={{ fontWeight:700 }}>End B</div>
+            <div className="row" style={{ gap:6 }}>
+              <label className="row" style={{
+                gap:6, padding:"4px 8px", border:"1px solid #e5e7eb", borderRadius:10,
+                background: activeField==="B" ? "#dbeafe" : "#f8fafc", color:"#0f172a", cursor:"pointer"
+              }}>
+                <input
+                  type="radio"
+                  name="activeField"
+                  checked={activeField==="B"}
+                  onChange={()=>setActiveField("B")}
+                />
+                <span className="small">Keyboard → B</span>
+              </label>
+            </div>
           </div>
+
+          <textarea
+            rows={6}
+            value={st.rawB}
+            onChange={e=>st.setRawB(e.target.value)}
+            onFocus={()=>setActiveField("B")}
+            placeholder={`E,N,H per line\n1210.2, 365.0, 28.1\n1208.7 366.9 28.0\n1211.4, 363.1, 28.2`}
+            style={{
+              width:"100%", fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace",
+              border:"1px solid #e5e7eb", borderRadius:10, padding:10, outline:"none"
+            }}
+          />
+
+          {/* Keyboard for B (same component; activeField controls target) */}
+          <Keyboard />
+        </div>
+
+        <div className="small" style={{ marginTop:10, color:"#64748b" }}>
+          Tips: <b>comma</b> (,) / <b>space</b> (SPC) / <b>tab</b> (TAB) နဲ့ delimiter ချရေးနိုင်ပါတယ်။  
+          နောက်တစ်ကြောင်းသို့ <b>↵</b> (Enter) ကို သုံးပါ။ <b>AC</b>=အကုန်	clear၊ <b>DEL</b>=နောက်စာလုံးဖျက်။
         </div>
       </div>
 
@@ -331,4 +453,4 @@ export default function PipeEndsSlopePage(){
       </div>
     </div>
   );
-      }
+        }
