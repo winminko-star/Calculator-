@@ -20,6 +20,7 @@ import ENHTie from "./pages/ENHTie";
 import NotePad from "./pages/NotePad";
 import CanvasENH from "./pages/CanvasENH";
 import ENHReview from "./pages/ENHReview";
+import PipeEndsSlopePage from "./pages/PipeEndsSlope.jsx";
 
 
 
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="/enh-tie" element={<ENHTie />} />
           <Route path="/enh-canvas" element={<CanvasENH />} />
           <Route path="/enh-review" element={<ENHReview />} />
+          <Route path="/pipe-ends-slope" element={<PipeEndsSlopePage />} />
           
           
           
