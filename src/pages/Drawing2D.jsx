@@ -1,4 +1,3 @@
-// src/pages/Drawing2D.jsx (Part 1/3)
 import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
@@ -20,6 +19,7 @@ const angleDeg = (a, b, c) => {
   const m1 = Math.hypot(v1.x, v1.y) || 1;
   const m2 = Math.hypot(v2.x, v2.y) || 1;
   const cos = Math.min(1, Math.max(-1, dot / (m1 * m2)));
+  // smaller angle 0..180
   return +(Math.acos(cos) * 180 / Math.PI).toFixed(2);
 };
 
@@ -35,7 +35,7 @@ const labelFromIndex = (i) => {
   return s;
 };
 
-// rounded label pill for angles
+// angle label pill
 function drawLabelPill(ctx, x, y, text) {
   ctx.font = "bold 14px system-ui";
   const padX = 6, padY = 4;
@@ -70,7 +70,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
   ctx.clearRect(0, 0, wCss, hCss);
 
   // grid
-  const step = Math.max(zoom * 1, 24);
+  const step = Math.max(zoom * 1, 24); // 1mm grid (min gap 24px)
   const originX = wCss / 2 + tx;
   const originY = hCss / 2 + ty;
 
@@ -87,7 +87,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
 
   const W2S = (p) => ({ x: wCss/2 + p.x * zoom + tx, y: hCss/2 - p.y * zoom + ty });
 
-  // lines
+  // lines + length label
   ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2; ctx.fillStyle = "#0f172a"; ctx.font = "13px system-ui";
   lines.forEach(l => {
     const a = points.find(p => p.id === l.p1), b = points.find(p => p.id === l.p2);
@@ -105,7 +105,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     drawLabelPill(ctx, sb.x + 10, sb.y - 10, `${t.deg}`);
   });
 
-  // temp perpendicular line
+  // temp perpendicular drop (red dashed)
   if (tempLine) {
     const s1 = W2S({x:tempLine.x1,y:tempLine.y1});
     const s2 = W2S({x:tempLine.x2,y:tempLine.y2});
@@ -130,26 +130,26 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     ctx.strokeText(p.label, s.x + 8, s.y - 8);
     ctx.fillStyle = "#0f172a"; ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
-}
-// src/pages/Drawing2D.jsx (Part 2/3 logic)
+    }
 export default function Drawing2D() {
   // data
   const [points, setPoints] = useState([]);
-  const [lines, setLines]   = useState([]);
-  const [angles, setAngles] = useState([]);
+  const [lines, setLines]   = useState([]);   // {id,p1,p2,lenMm}
+  const [angles, setAngles] = useState([]);   // {id,a,b,c,deg}
 
   // inputs
-  const [E, setE] = useState("");
-  const [N, setN] = useState("");
+  const [E, setE] = useState("");   // mm
+  const [N, setN] = useState("");   // mm
   const [title, setTitle] = useState("");
 
   // modes / selection
-  const [mode, setMode] = useState("line");
+  const [mode, setMode] = useState("line"); // 'line' | 'angle' | 'eraseLine' | 'refLine'
   const [selected, setSelected] = useState([]);
 
-  // refLine feature
-  const [refLine, setRefLine] = useState(null);
-  const [tempLine, setTempLine] = useState(null);
+  // Ref line feature
+  const [refLine, setRefLine] = useState(null);      // {aId,bId}
+  const [tempLine, setTempLine] = useState(null);    // {x1,y1,x2,y2}
+  const [changingRef, setChangingRef] = useState(false);
 
   // view
   const BASE_ZOOM = 60, MIN_Z = 0.0005, MAX_Z = 2400;
@@ -157,6 +157,7 @@ export default function Drawing2D() {
   const [tx, setTx] = useState(0), [ty, setTy] = useState(0);
   const [autoFit, setAutoFit] = useState(true);
 
+  // Horizontal scale slider
   const MIN_S = -200, MAX_S = 80;
   const [sval, setSval] = useState(0);
   const sliderToZoom = (s) => Math.min(MAX_Z, Math.max(MIN_Z, BASE_ZOOM * Math.pow(2, s/10)));
@@ -169,9 +170,60 @@ export default function Drawing2D() {
   const sizeRef = useRef({ wCss: 360, hCss: 420 });
   const pointers = useRef(new Map());
 
+  // next point label
   const nextLabel = () => labelFromIndex(points.length);
 
-  /* restore from localStorage skipped for brevity (same as before) */
+  /* ---------- Restore from AllReview (wmk_restore) ---------- */
+  useEffect(() => {
+    const raw = localStorage.getItem("wmk_restore");
+    if (!raw) return;
+    try {
+      const st = JSON.parse(raw) || {};
+      const ptsIn  = Array.isArray(st.points) ? st.points : [];
+      const lnsIn  = Array.isArray(st.lines)  ? st.lines  : [];
+      const angIn  = Array.isArray(st.angles) ? st.angles : [];
+      const viewIn = st.view || {};
+
+      const pts = ptsIn.map((p, i) => ({
+        id: p.id || `p${i}`,
+        label: p.label || labelFromIndex(i),
+        x: Number(p.x) || 0,
+        y: Number(p.y) || 0,
+      }));
+      setPoints(pts);
+
+      setLines(lnsIn.map((l) => {
+        const a = pts.find(p => p.id === l.p1) || { x:0, y:0 };
+        const b = pts.find(p => p.id === l.p2) || { x:0, y:0 };
+        return { id: l.id || safeId(), p1: l.p1, p2: l.p2, lenMm: typeof l.lenMm === "number" ? l.lenMm : distMm(a,b) };
+      }));
+
+      setAngles(angIn.map(a => ({
+        id: a.id || safeId(), a: a.a, b: a.b, c: a.c,
+        deg: typeof a.deg === "number" ? a.deg : angleDeg(
+          pts.find(p=>p.id===a.a)||{x:0,y:0},
+          pts.find(p=>p.id===a.b)||{x:0,y:0},
+          pts.find(p=>p.id===a.c)||{x:0,y:0},
+        )
+      })));
+
+      if (typeof st.title === "string") setTitle(st.title);
+
+      if (typeof viewIn.zoom === "number") {
+        setAutoFit(false);
+        setZoom(viewIn.zoom);
+        setTx(viewIn.tx || 0);
+        setTy(viewIn.ty || 0);
+      } else {
+        setAutoFit(true);
+        setTimeout(() => fitView(pts), 0);
+      }
+    } catch (e) {
+      console.warn("restore failed", e);
+    } finally {
+      localStorage.removeItem("wmk_restore");
+    }
+  }, []);
 
   /* ---------- size / DPR ---------- */
   useEffect(() => {
@@ -201,6 +253,7 @@ export default function Drawing2D() {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFit, points, zoom, tx, ty, tempLine]);
 
   // draw
@@ -210,10 +263,57 @@ export default function Drawing2D() {
   }, [points, lines, angles, zoom, tx, ty, tempLine]);
 
   /* ---------- fit/reset/clear ---------- */
-  const fitView = (pts = points) => { /* ... same as before ... */ };
-  const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
-  const clearAll  = () => { setPoints([]); setLines([]); setAngles([]); setSelected([]); setRefLine(null); setTempLine(null); };
+  const fitView = (pts = points) => {
+    if (!pts || pts.length === 0) return;
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const w = maxX - minX, h = maxY - minY;
+    const { wCss, hCss } = sizeRef.current;
 
+    if (w === 0 && h === 0) {
+      const targetZ = Math.min(wCss, hCss) * 0.5;
+      const nz = Math.min(MAX_Z, Math.max(MIN_Z, targetZ));
+      setZoom(nz);
+      const p = pts[0];
+      setTx(-p.x * nz);
+      setTy(+p.y * nz);
+      return;
+    }
+
+    const pad = 0.1 * Math.max(w, h);
+    const zX = (wCss * 0.9) / (w + pad * 2);
+    const zY = (hCss * 0.9) / (h + pad * 2);
+    const nz = Math.min(MAX_Z, Math.max(MIN_Z, Math.min(zX, zY)));
+    setZoom(nz);
+    setSval(zoomToSlider(nz));
+
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    setTx(-cx * nz);
+    setTy(+cy * nz);
+  };
+
+  const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
+  const clearAll  = () => {
+    setPoints([]); setLines([]); setAngles([]); setSelected([]);
+    setRefLine(null); setTempLine(null); setChangingRef(false);
+  };
+  const clearLines = () => setLines([]);
+  const removeLastLine = () => setLines(ls => ls.slice(0, -1));
+
+  // center on A, keep current zoom
+  const centerOnA = () => {
+    if (!points.length) return;
+    const A = points[0];
+    const z = zoom;
+    setTx(-A.x * z);
+    setTy(+A.y * z);
+  };
+
+  // auto-fit when points change (if ON)
+  useEffect(() => { if (autoFit) fitView(points); }, [points]); // eslint-disable-line
+
+  /* ---------- add point ---------- */
   const addPoint = () => {
     if (E === "" || N === "") return;
     const x = Number(E), y = Number(N);
@@ -226,13 +326,78 @@ export default function Drawing2D() {
     if (autoFit) setTimeout(() => fitView(next), 0);
   };
 
-  /* ---------- gestures ---------- */
+  /* ---------- gestures (pan/pinch/select/erase/ref) ---------- */
+  const onPointerDown = (e) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
+  };
+
+  const onPointerMove = (e) => {
+    const prev = pointers.current.get(e.pointerId); if (!prev) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: prev.t });
+
+    const pts = [...pointers.current.values()];
+    if (pts.length === 1) {
+      setTx(v => v + (e.clientX - prev.x));
+      setTy(v => v + (e.clientY - prev.y));
+    } else if (pts.length >= 2) {
+      const [p1, p2] = pts;
+      const distPrev = Math.hypot(p1.x - prev.x, p1.y - prev.y) || 1;
+      const distNow  = Math.hypot(p1.x - p2.x, p1.y - p2.y) || 1;
+
+      const wrap = wrapRef.current, rect = wrap.getBoundingClientRect();
+      const mid = { x: (p1.x + p2.x)/2 - rect.left, y: (p1.y + p2.y)/2 - rect.top };
+      const { wCss:w, hCss:h } = sizeRef.current;
+
+      setZoom(z => {
+        const nz = Math.min(MAX_Z, Math.max(MIN_Z, z * (distNow / distPrev)));
+        const wx = ((mid.x - (w/2) - tx) ) / z;
+        const wy = ((h/2) - (mid.y - ty) ) / z;
+        const sx_after = w/2 + wx * nz + tx;
+        const sy_after = h/2 - wy * nz + ty;
+        setTx(v => v + (mid.x - sx_after));
+        setTy(v => v + (mid.y - sy_after));
+        return nz;
+      });
+    }
+  };
+
   const onPointerUp = (e) => {
+    const down = pointers.current.get(e.pointerId);
+    pointers.current.delete(e.pointerId);
+
+    // quick tap only
+    if (!down || Date.now() - down.t > 200 || pointers.current.size !== 0) return;
+
     const rect = e.currentTarget.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     const world = { x: (mx - sizeRef.current.wCss/2 - tx)/zoom, y: (sizeRef.current.hCss/2 - my + ty)/zoom };
 
-    // nearest point
+    // erase-line mode: tap near a segment to remove
+    if (mode === "eraseLine") {
+      const pxTol = 12; // 12px
+      const mmTol = pxTol / zoom;
+      let bestIdx = -1, bestD = Infinity;
+
+      lines.forEach((ln, idx) => {
+        const a = points.find(p => p.id === ln.p1);
+        const b = points.find(p => p.id === ln.p2);
+        if (!a || !b) return;
+        // point-to-segment distance in mm
+        const vx = b.x - a.x, vy = b.y - a.y;
+        const t = Math.max(0, Math.min(1, ((world.x - a.x)*vx + (world.y - a.y)*vy) / (vx*vx + vy*vy || 1)));
+        const cx = a.x + t*vx, cy = a.y + t*vy;
+        const d = Math.hypot(world.x - cx, world.y - cy);
+        if (d < bestD) { bestD = d; bestIdx = idx; }
+      });
+
+      if (bestIdx !== -1 && bestD <= mmTol) {
+        setLines(ls => ls.filter((_, i) => i !== bestIdx));
+      }
+      return;
+    }
+
+    // select-near point
     const hitR = 12 / zoom;
     let pick=null, best=Infinity;
     for (const p of points) {
@@ -241,41 +406,80 @@ export default function Drawing2D() {
     }
     if (!pick) return;
 
-    if (mode==="refLine") {
-      setSelected(sel=>{
-        const next=[...sel,pick.id];
-        if(next.length===2 && !refLine){
-          setRefLine({aId:next[0],bId:next[1]});
-          Swal.fire({icon:"success",title:"Ref line set!",timer:1000,showConfirmButton:false});
-          return [];
-        }
-        if(refLine){
-          const a=points.find(p=>p.id===refLine.aId);
-          const b=points.find(p=>p.id===refLine.bId);
-          const c=points.find(p=>p.id===pick.id);
-          if(a&&b&&c){
-            const vx=b.x-a.x, vy=b.y-a.y;
-            const t=((c.x-a.x)*vx+(c.y-a.y)*vy)/(vx*vx+vy*vy||1);
-            const px=a.x+t*vx, py=a.y+t*vy;
-            const dist=Math.hypot(c.x-px,c.y-py);
-            setTempLine({x1:c.x,y1:c.y,x2:px,y2:py});
+    // Ref line mode (changeable)
+    if (mode === "refLine") {
+      if (changingRef || !refLine) {
+        setSelected(sel => {
+          const next = [...sel, pick.id];
+          if (next.length === 2) {
+            setRefLine({ aId: next[0], bId: next[1] });
+            setChangingRef(false);
             Swal.fire({
-              icon:"info",title:`Perp distance: ${dist.toFixed(2)} ${UNIT_LABEL}`,
-              timer:2000,showConfirmButton:false,
-              willClose:()=>setTempLine(null)
+              icon: "success",
+              title: refLine ? "Ref line updated!" : "Ref line set!",
+              timer: 1000, showConfirmButton: false
             });
+            return [];
           }
-          return [];
-        }
-        return next;
-      });
+          return next;
+        });
+        return;
+      }
+
+      // refLine already set → perpendicular drop for other point
+      if (pick.id === refLine.aId || pick.id === refLine.bId) {
+        Swal.fire({
+          icon: "info",
+          title: "Tip",
+          text: "တခြား point ကိုနှိပ်ပြီး perpendicular ကိုတိုင်းပါ။ 'Change' နဲ့ Ref line ကိုပြန်ရွေးနိုင်ပါတယ်။",
+          timer: 1400, showConfirmButton: false
+        });
+        return;
+      }
+      const a = points.find(p => p.id === refLine.aId);
+      const b = points.find(p => p.id === refLine.bId);
+      const c = points.find(p => p.id === pick.id);
+      if (a && b && c) {
+        const vx = b.x - a.x, vy = b.y - a.y;
+        const t = ((c.x - a.x) * vx + (c.y - a.y) * vy) / (vx * vx + vy * vy || 1);
+        const px = a.x + t * vx, py = a.y + t * vy;
+        const dist = Math.hypot(c.x - px, c.y - py);
+
+        setTempLine({ x1: c.x, y1: c.y, x2: px, y2: py });
+        Swal.fire({
+          icon: "info",
+          title: `Perp distance: ${dist.toFixed(2)} ${UNIT_LABEL}`,
+          timer: 2000, showConfirmButton: false,
+          willClose: () => setTempLine(null)
+        });
+      }
       return;
     }
 
-    // ... existing line/angle/erase modes remain unchanged ...
+    // normal line/angle selections
+    setSelected(sel=>{
+      const next=[...sel, pick.id];
+
+      if (mode==="line" && next.length===2) {
+        const [aId,bId]=next; if (aId!==bId) {
+          const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
+          setLines(ls=>[...ls,{ id:safeId(), p1:a.id, p2:b.id, lenMm: distMm(a,b) }]);
+        }
+        return [];
+      }
+      if (mode==="angle" && next.length===3) {
+        const [aId,bId,cId]=next;
+        if (new Set(next).size===3) {
+          const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId), c=points.find(x=>x.id===cId);
+          setAngles(ag=>[...ag,{ id:safeId(), a:a.id, b:b.id, c:c.id, deg:angleDeg(a,b,c) }]);
+        }
+        return [];
+      }
+      return next;
+    });
   };
 
-  /* ---------- save ---------- */
+  /* ---------- save (DB only, no image) ---------- */
   const saveToFirebase = async () => {
     const now = Date.now();
     await set(push(dbRef(db, "drawings")), {
@@ -287,7 +491,7 @@ export default function Drawing2D() {
     });
     alert("Saved");
   };
-  // src/pages/Drawing2D.jsx (Part 3/3 UI)
+  /* -------------------- UI -------------------- */
   return (
     <div className="grid">
       {/* Canvas */}
@@ -295,7 +499,10 @@ export default function Drawing2D() {
         <div ref={wrapRef} style={{ width: "100%" }}>
           <canvas
             ref={canvasRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
             style={{
               display:"block", width:"100%", background:"#fff",
               borderRadius:12, border:"1px solid #e5e7eb",
@@ -303,32 +510,146 @@ export default function Drawing2D() {
             }}
           />
         </div>
+
+        {/* Horizontal Scale slider (under canvas) */}
+        <div style={{ marginTop: 10 }}>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
+            <span className="small">Scale (px/{UNIT_LABEL})</span>
+            <span className="small">{Math.max(0.0001, Math.round(zoom * 1000) / 1000)} px/{UNIT_LABEL}</span>
+          </div>
+          <input
+            type="range"
+            min={MIN_S}
+            max={MAX_S}
+            step={0.01}
+            value={sval}
+            onChange={(e) => onSliderChange(e.target.value)}
+            style={{ width: "100%" }}
+          />
+          <div className="row" style={{ justifyContent: "space-between", marginTop: 4 }}>
+            <span className="small">{MIN_S}</span>
+            <span className="small">0</span>
+            <span className="small">{MAX_S}</span>
+          </div>
+        </div>
       </div>
 
-      {/* Controls */}
+      {/* Controls: title + add point */}
       <div className="card">
         <div className="row" style={{ marginBottom: 8 }}>
-          <input className="input" placeholder="Title"
-            value={title} onChange={(e)=>setTitle(e.target.value)}
-            style={{ flex:"1 1 260px" }} />
+          <input
+            className="input"
+            placeholder="Title (e.g. P83 pipe)"
+            value={title}
+            onChange={(e)=>setTitle(e.target.value)}
+            style={{ flex: "1 1 260px" }}
+          />
           <button className="btn" onClick={saveToFirebase}>Save</button>
         </div>
 
         <div className="row" style={{ marginBottom: 8 }}>
-          <input className="input" placeholder={`E (${UNIT_LABEL})`}
-            value={E} onChange={(e)=>setE(e.target.value)} />
-          <input className="input" placeholder={`N (${UNIT_LABEL})`}
-            value={N} onChange={(e)=>setN(e.target.value)} />
+          <input className="input" type="number" inputMode="decimal" step="any"
+                 placeholder={`E (${UNIT_LABEL})`} value={E} onChange={(e)=>setE(e.target.value)} />
+          <input className="input" type="number" inputMode="decimal" step="any"
+                 placeholder={`N (${UNIT_LABEL})`} value={N} onChange={(e)=>setN(e.target.value)} />
           <button className="btn" onClick={addPoint}>Add (label {nextLabel()})</button>
         </div>
 
+        {/* Toolbar  scrollable single row */}
         <div className="row" style={{ overflowX:"auto", paddingBottom:4 }}>
-          <button className="btn"
-            onClick={()=>{setMode("line");setSelected([]);}}
-            style={{background:mode==="line"?"#0ea5e9":"#64748b"}}>Line</button>
-          <button className="btn"
-            onClick={()=>{setMode("angle");setSelected([]);}}
-            style={{background:mode==="angle"?"#0ea5e9":"#64748b"}}>Angle</button>
-          <button className="btn"
-            onClick={()=>{setMode("eraseLine");setSelected([]);}}
-            style={{background:mode==="eraseLine"?"#0ea5e
+          <button
+            className="btn"
+            onClick={() => { setMode("line"); setSelected([]); }}
+            style={{ background: mode === "line" ? "#0ea5e9" : "#64748b" }}
+          >
+            Line
+          </button>
+
+          <button
+            className="btn"
+            onClick={() => { setMode("angle"); setSelected([]); }}
+            style={{ background: mode === "angle" ? "#0ea5e9" : "#64748b" }}
+          >
+            Angle
+          </button>
+
+          <button
+            className="btn"
+            onClick={() => { setMode("eraseLine"); setSelected([]); }}
+            style={{ background: mode === "eraseLine" ? "#0ea5e9" : "#64748b" }}
+          >
+            Erase line (tap)
+          </button>
+
+          {/* Ref line main toggle */}
+          <button
+            className="btn"
+            onClick={() => { setMode("refLine"); setSelected([]); }}
+            style={{ background: mode === "refLine" ? "#0ea5e9" : "#64748b" }}
+          >
+            📐 Ref line
+          </button>
+
+          {/* Ref line status + actions */}
+          {refLine && (
+            <div style={{ display:"inline-flex", alignItems:"center", gap:8, marginLeft:8 }}>
+              <span className="small" style={{ background:"#e2e8f0", color:"#0f172a", borderRadius:12, padding:"4px 8px" }}>
+                Ref: {points.find(p=>p.id===refLine.aId)?.label}–{points.find(p=>p.id===refLine.bId)?.label}
+              </span>
+
+              <button
+                className="btn"
+                onClick={() => { setChangingRef(true); setSelected([]); setMode("refLine"); }}
+                style={{ background: changingRef ? "#f59e0b" : "#94a3b8" }}
+                title="Tap 2 points to redefine"
+              >
+                Change
+              </button>
+
+              <button
+                className="btn"
+                onClick={() => { setRefLine(null); setTempLine(null); setSelected([]); setChangingRef(false); }}
+                style={{ background: "#ef4444" }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
+          <button className="btn" onClick={centerOnA}>Find A</button>
+          <button className="btn" onClick={fitView}>Fit</button>
+          <button className="btn" onClick={resetView}>Reset</button>
+          <button className="btn" onClick={clearAll}>Clear All</button>
+          <button className="btn" onClick={removeLastLine}>Remove last line</button>
+          <button className="btn" onClick={clearLines}>Clear lines</button>
+
+          <label className="row" style={{ gap:8, marginLeft:8 }}>
+            <input type="checkbox" checked={autoFit} onChange={(e)=>setAutoFit(e.target.checked)} />
+            <span className="small">Auto fit</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Lists */}
+      <div className="card">
+        <div className="page-title">Lines</div>
+        {lines.length===0 && <div className="small">No lines yet.</div>}
+        {lines.map(l=>(
+          <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
+            <div>#{l.id} &nbsp; {l.p1} — {l.p2} &nbsp; <b>{Math.round(l.lenMm)} {UNIT_LABEL}</b></div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="page-title">Angles</div>
+        {angles.length===0 && <div className="small">No angles yet.</div>}
+        {angles.map(t=>(
+          <div key={t.id} className="small">
+            #{t.id} &nbsp; at <b>{t.b}</b> from <b>{t.a}</b>,<b>{t.b}</b>,<b>{t.c}</b> = <b>{t.deg}°</b>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+      }
