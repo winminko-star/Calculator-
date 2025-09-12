@@ -235,12 +235,12 @@ export function usePipeEndsSlope(){
   // expose to Part 3
   return { rawA,setRawA, rawB,setRawB, ptsA,ptsB, fitA,fitB, metrics };
 }
-// src/pages/PipeEndsSlope.jsx (Part 3/3) — with Custom Keyboard for ENH input
+// src/pages/PipeEndsSlope.jsx (Part 3/3) — single shared Custom Keyboard (A/B target)
 export default function PipeEndsSlopePage(){
   const st = usePipeEndsSlope();
 
-  // which textarea is active? "A" | "B"
-  const [activeField, setActiveField] = React.useState("A");
+  // one keyboard, choose target: "A" | "B"
+  const [target, setTarget] = React.useState("A");
 
   const Info = ({label, value, accent})=>(
     <div style={{
@@ -255,31 +255,26 @@ export default function PipeEndsSlopePage(){
     </div>
   );
 
-  // ---------- keyboard handlers ----------
-  const applyToActive = (fn) => {
-    if (activeField === "A") st.setRawA(fn(st.rawA));
+  /* ---------- custom keyboard ---------- */
+  const applyTo = (fn) => {
+    if (target === "A") st.setRawA(fn(st.rawA));
     else st.setRawB(fn(st.rawB));
   };
 
   const onKeyPress = (k) => {
-    if (k === "AC") return applyToActive(() => "");
-    if (k === "DEL") return applyToActive((s)=>s.slice(0,-1));
-    if (k === "↵")   return applyToActive((s)=>s + "\n");
-
-    // quick tokens
-    if (k === " , ") return applyToActive((s)=>s + ", ");
-    if (k === "SPC") return applyToActive((s)=>s + " ");
-    if (k === "TAB") return applyToActive((s)=>s + "\t");
-
-    // regular char append
-    return applyToActive((s)=>s + k);
+    if (k === "AC")  return applyTo(()=> "");
+    if (k === "DEL") return applyTo(s=> s.slice(0, -1));
+    if (k === "↵")   return applyTo(s=> s + "\n");
+    if (k === "SPC") return applyTo(s=> s + " ");
+    if (k === " , ") return applyTo(s=> s + ", ");
+    return applyTo(s=> s + k); // normal char
   };
 
   const Key = ({label, wide, accent}) => (
     <button
       onClick={()=>onKeyPress(label)}
       style={{
-        height: 44,
+        height: 42,
         padding: "0 12px",
         borderRadius: 12,
         border: "1px solid #e5e7eb",
@@ -288,6 +283,7 @@ export default function PipeEndsSlopePage(){
         fontWeight: 800,
         fontSize: 16,
         gridColumn: wide ? "span 2" : "span 1",
+        touchAction: "manipulation",
       }}
     >
       {label}
@@ -314,39 +310,34 @@ export default function PipeEndsSlopePage(){
       <Key label="-" /><Key label="." /><Key label="AC" />
       {/* Row 3 */}
       <Key label="1" /><Key label="2" /><Key label="3" />
-      <Key label="SPC" /><Key label="TAB" /><Key label="↵" />
-      {/* Row 4 */}
-      <Key label="0" wide />
+      <Key label="SPC" /><Key label="↵" /><Key label="0" />
+      {/* Row 4 quick tokens */}
       <Key label="E" /><Key label="N" /><Key label="H" />
+      <Key label="/" /><Key label=";" /><Key label=":" />
     </div>
   );
 
-  const CenterBox = (title, fit)=>(
-    <div className="card" style={{ background:"#fff", border:"1px solid #e5e7eb" }}>
-      <div className="page-title">{title}</div>
-      {!fit && <div className="small">Need ≥ 3 points.</div>}
-      {fit && (
-        <div style={{ display:"grid", gap:8 }}>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-            <Info label="Center E" value={fit.center.E.toFixed(3)} accent="#0ea5e9"/>
-            <Info label="Center N" value={fit.center.N.toFixed(3)} accent="#0ea5e9"/>
-            <Info label="Center H" value={fit.center.H.toFixed(3)} accent="#0ea5e9"/>
-            <Info label="Radius" value={fit.R.toFixed(3)+" mm"} accent="#16a34a"/>
-            <Info label="RMS error" value={fit.rms.toFixed(3)+" mm"} accent="#ef4444"/>
-          </div>
-          <div className="small" style={{ opacity:0.8 }}>
-            Plane normal ≈ [
-              {fit.planeNormal.map(v=>v.toFixed(4)).join(", ")}
-            ]
-          </div>
-        </div>
-      )}
-    </div>
+  const chip = (id, text)=>(
+    <button
+      onClick={()=>setTarget(id)}
+      style={{
+        padding:"6px 10px",
+        border:"1px solid #e5e7eb",
+        borderRadius:9999,
+        background: target===id ? "#0ea5e9" : "#f8fafc",
+        color: target===id ? "#fff" : "#0f172a",
+        fontWeight:700
+      }}
+    >
+      {text}
+    </button>
   );
+
+  const activeBg = (id)=>({ background: target===id ? "#dbeafe" : "#fff" });
 
   return (
-    <div className="grid" style={{ gap:12 }}>
-      {/* Inputs + keyboards */}
+    <div className="grid" style={{ gap: 12 }}>
+      {/* Inputs + one shared keyboard */}
       <div className="card" style={{ background:"#ffffff", border:"1px solid #e5e7eb" }}>
         <div className="page-title">Pipe Ends — ENH Points</div>
 
@@ -354,83 +345,85 @@ export default function PipeEndsSlopePage(){
         <div style={{ display:"grid", gap:8, marginBottom:12 }}>
           <div className="row" style={{ justifyContent:"space-between" }}>
             <div className="small" style={{ fontWeight:700 }}>End A</div>
-            <div className="row" style={{ gap:6 }}>
-              <label className="row" style={{
-                gap:6, padding:"4px 8px", border:"1px solid #e5e7eb", borderRadius:10,
-                background: activeField==="A" ? "#dbeafe" : "#f8fafc", color:"#0f172a", cursor:"pointer"
-              }}>
-                <input
-                  type="radio"
-                  name="activeField"
-                  checked={activeField==="A"}
-                  onChange={()=>setActiveField("A")}
-                />
-                <span className="small">Keyboard → A</span>
-              </label>
-            </div>
           </div>
-
           <textarea
             rows={6}
             value={st.rawA}
-            onChange={e=>st.setRawA(e.target.value)}
-            onFocus={()=>setActiveField("A")}
+            onChange={(e)=>st.setRawA(e.target.value)}
+            onFocus={()=>setTarget("A")}
             placeholder={`E,N,H per line\n1200.0, 350.0, 15.2\n1198.5 352.2 15.3\n1201.1, 348.9, 15.1`}
             style={{
-              width:"100%", fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace",
-              border:"1px solid #e5e7eb", borderRadius:10, padding:10, outline:"none"
+              width:"100%",
+              fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace",
+              border:"1px solid #e5e7eb", borderRadius:10, padding:10, outline:"none",
+              ...activeBg("A")
             }}
           />
-
-          {/* Keyboard for A (shared handler uses activeField) */}
-          <Keyboard />
         </div>
 
         {/* End B */}
         <div style={{ display:"grid", gap:8 }}>
           <div className="row" style={{ justifyContent:"space-between" }}>
             <div className="small" style={{ fontWeight:700 }}>End B</div>
-            <div className="row" style={{ gap:6 }}>
-              <label className="row" style={{
-                gap:6, padding:"4px 8px", border:"1px solid #e5e7eb", borderRadius:10,
-                background: activeField==="B" ? "#dbeafe" : "#f8fafc", color:"#0f172a", cursor:"pointer"
-              }}>
-                <input
-                  type="radio"
-                  name="activeField"
-                  checked={activeField==="B"}
-                  onChange={()=>setActiveField("B")}
-                />
-                <span className="small">Keyboard → B</span>
-              </label>
-            </div>
           </div>
-
           <textarea
             rows={6}
             value={st.rawB}
-            onChange={e=>st.setRawB(e.target.value)}
-            onFocus={()=>setActiveField("B")}
+            onChange={(e)=>st.setRawB(e.target.value)}
+            onFocus={()=>setTarget("B")}
             placeholder={`E,N,H per line\n1210.2, 365.0, 28.1\n1208.7 366.9 28.0\n1211.4, 363.1, 28.2`}
             style={{
-              width:"100%", fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace",
-              border:"1px solid #e5e7eb", borderRadius:10, padding:10, outline:"none"
+              width:"100%",
+              fontFamily:"ui-monospace, SFMono-Regular, Menlo, monospace",
+              border:"1px solid #e5e7eb", borderRadius:10, padding:10, outline:"none",
+              ...activeBg("B")
             }}
           />
+        </div>
 
-          {/* Keyboard for B (same component; activeField controls target) */}
+        {/* Keyboard Target chips + shared Keyboard */}
+        <div className="row" style={{ gap:8, marginTop:10, flexWrap:"wrap" }}>
+          <span className="small" style={{ color:"#64748b" }}>Keyboard target:</span>
+          {chip("A","End A")}
+          {chip("B","End B")}
+        </div>
+        <div style={{ marginTop:8 }}>
           <Keyboard />
         </div>
 
-        <div className="small" style={{ marginTop:10, color:"#64748b" }}>
-          Tips: <b>comma</b> (,) / <b>space</b> (SPC) / <b>tab</b> (TAB) နဲ့ delimiter ချရေးနိုင်ပါတယ်။  
-          နောက်တစ်ကြောင်းသို့ <b>↵</b> (Enter) ကို သုံးပါ။ <b>AC</b>=အကုန်	clear၊ <b>DEL</b>=နောက်စာလုံးဖျက်။
+        <div className="small" style={{ color:"#64748b", marginTop:6 }}>
+          Tips: <b> , </b> (comma) / <b>SPC</b> (space) / <b>↵</b> (newline) / <b>DEL</b> / <b>AC</b> ကိုသုံးပါ။
         </div>
       </div>
 
       {/* Outputs */}
-      {CenterBox("End A — Fitted Center", st.fitA)}
-      {CenterBox("End B — Fitted Center", st.fitB)}
+      <div className="card" style={{ background:"#fff", border:"1px solid #e5e7eb" }}>
+        <div className="page-title">End A — Fitted Center</div>
+        {!st.fitA && <div className="small">Need ≥ 3 points.</div>}
+        {st.fitA && (
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <Info label="Center E" value={st.fitA.center.E.toFixed(3)} accent="#0ea5e9"/>
+            <Info label="Center N" value={st.fitA.center.N.toFixed(3)} accent="#0ea5e9"/>
+            <Info label="Center H" value={st.fitA.center.H.toFixed(3)} accent="#0ea5e9"/>
+            <Info label="Radius" value={st.fitA.R.toFixed(3)+" mm"} accent="#16a34a"/>
+            <Info label="RMS error" value={st.fitA.rms.toFixed(3)+" mm"} accent="#ef4444"/>
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ background:"#fff", border:"1px solid #e5e7eb" }}>
+        <div className="page-title">End B — Fitted Center</div>
+        {!st.fitB && <div className="small">Need ≥ 3 points.</div>}
+        {st.fitB && (
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <Info label="Center E" value={st.fitB.center.E.toFixed(3)} accent="#0ea5e9"/>
+            <Info label="Center N" value={st.fitB.center.N.toFixed(3)} accent="#0ea5e9"/>
+            <Info label="Center H" value={st.fitB.center.H.toFixed(3)} accent="#0ea5e9"/>
+            <Info label="Radius" value={st.fitB.R.toFixed(3)+" mm"} accent="#16a34a"/>
+            <Info label="RMS error" value={st.fitB.rms.toFixed(3)+" mm"} accent="#ef4444"/>
+          </div>
+        )}
+      </div>
 
       <div className="card" style={{ background:"#fff", border:"1px solid #e5e7eb" }}>
         <div className="page-title">Axis & Slope</div>
