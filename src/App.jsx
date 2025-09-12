@@ -22,6 +22,7 @@ import NotePad from "./pages/NotePad";
 import CanvasENH from "./pages/CanvasENH";
 import ENHReview from "./pages/ENHReview";
 import PipeEndsSlopePage from "./pages/PipeEndsSlope.jsx";
+import FlangeOnAxisPage from "./pages/FlangeOnAxis.jsx";
 
 
 
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="/enh-canvas" element={<CanvasENH />} />
           <Route path="/enh-review" element={<ENHReview />} />
           <Route path="/pipe-ends-slope" element={<PipeEndsSlopePage />} />
+          <Route path="/flange-on-axis" element={<FlangeOnAxisPage />} />
           
           
           
