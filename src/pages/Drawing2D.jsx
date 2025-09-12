@@ -130,12 +130,13 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     ctx.strokeText(p.label, s.x + 8, s.y - 8);
     ctx.fillStyle = "#0f172a"; ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
-    }
+              }
+// src/pages/Drawing2D.jsx  (Part 2/3  logic)
 export default function Drawing2D() {
   // data
   const [points, setPoints] = useState([]);
   const [lines, setLines]   = useState([]);   // {id,p1,p2,lenMm}
-  const [angles, setAngles] = useState([]);   // {id,a,b,c,deg}
+  const [angles, setAngles] = useState([]);
 
   // inputs
   const [E, setE] = useState("");   // mm
@@ -146,9 +147,9 @@ export default function Drawing2D() {
   const [mode, setMode] = useState("line"); // 'line' | 'angle' | 'eraseLine' | 'refLine'
   const [selected, setSelected] = useState([]);
 
-  // Ref line feature
-  const [refLine, setRefLine] = useState(null);      // {aId,bId}
-  const [tempLine, setTempLine] = useState(null);    // {x1,y1,x2,y2}
+  // refLine feature
+  const [refLine, setRefLine] = useState(null);     // {aId,bId}
+  const [tempLine, setTempLine] = useState(null);   // {x1,y1,x2,y2}
   const [changingRef, setChangingRef] = useState(false);
 
   // view
@@ -240,7 +241,7 @@ export default function Drawing2D() {
       const ctx = cvs.getContext("2d");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctxRef.current = ctx;
-      drawScene(ctx, w, h, zoom, tx, ty, points, lines, angles, tempLine);
+      drawScene(ctx, w, h, zoom, tx, ty, points, lines, angles, refLine, tempLine);
     };
 
     applySize();
@@ -254,13 +255,13 @@ export default function Drawing2D() {
       window.removeEventListener("orientationchange", onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoFit, points, zoom, tx, ty, tempLine]);
+  }, [autoFit, points, zoom, tx, ty, refLine, tempLine]);
 
   // draw
   useEffect(() => {
     const ctx = ctxRef.current; if (!ctx) return;
-    drawScene(ctx, sizeRef.current.wCss, sizeRef.current.hCss, zoom, tx, ty, points, lines, angles, tempLine);
-  }, [points, lines, angles, zoom, tx, ty, tempLine]);
+    drawScene(ctx, sizeRef.current.wCss, sizeRef.current.hCss, zoom, tx, ty, points, lines, angles, refLine, tempLine);
+  }, [points, lines, angles, zoom, tx, ty, refLine, tempLine]);
 
   /* ---------- fit/reset/clear ---------- */
   const fitView = (pts = points) => {
@@ -294,10 +295,7 @@ export default function Drawing2D() {
   };
 
   const resetView = () => { setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
-  const clearAll  = () => {
-    setPoints([]); setLines([]); setAngles([]); setSelected([]);
-    setRefLine(null); setTempLine(null); setChangingRef(false);
-  };
+  const clearAll  = () => { setPoints([]); setLines([]); setAngles([]); setSelected([]); setRefLine(null); setTempLine(null); };
   const clearLines = () => setLines([]);
   const removeLastLine = () => setLines(ls => ls.slice(0, -1));
 
@@ -326,7 +324,7 @@ export default function Drawing2D() {
     if (autoFit) setTimeout(() => fitView(next), 0);
   };
 
-  /* ---------- gestures (pan/pinch/select/erase/ref) ---------- */
+  /* ---------- gestures (pan/pinch/select/erase/refLine) ---------- */
   const onPointerDown = (e) => {
     e.currentTarget.setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
@@ -366,14 +364,13 @@ export default function Drawing2D() {
     const down = pointers.current.get(e.pointerId);
     pointers.current.delete(e.pointerId);
 
-    // quick tap only
     if (!down || Date.now() - down.t > 200 || pointers.current.size !== 0) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     const world = { x: (mx - sizeRef.current.wCss/2 - tx)/zoom, y: (sizeRef.current.hCss/2 - my + ty)/zoom };
 
-    // erase-line mode: tap near a segment to remove
+    // --- erase-line mode ---
     if (mode === "eraseLine") {
       const pxTol = 12; // 12px
       const mmTol = pxTol / zoom;
@@ -383,7 +380,6 @@ export default function Drawing2D() {
         const a = points.find(p => p.id === ln.p1);
         const b = points.find(p => p.id === ln.p2);
         if (!a || !b) return;
-        // point-to-segment distance in mm
         const vx = b.x - a.x, vy = b.y - a.y;
         const t = Math.max(0, Math.min(1, ((world.x - a.x)*vx + (world.y - a.y)*vy) / (vx*vx + vy*vy || 1)));
         const cx = a.x + t*vx, cy = a.y + t*vy;
@@ -397,7 +393,7 @@ export default function Drawing2D() {
       return;
     }
 
-    // select-near point
+    // --- select-near point ---
     const hitR = 12 / zoom;
     let pick=null, best=Infinity;
     for (const p of points) {
@@ -406,57 +402,6 @@ export default function Drawing2D() {
     }
     if (!pick) return;
 
-    // Ref line mode (changeable)
-    if (mode === "refLine") {
-      if (changingRef || !refLine) {
-        setSelected(sel => {
-          const next = [...sel, pick.id];
-          if (next.length === 2) {
-            setRefLine({ aId: next[0], bId: next[1] });
-            setChangingRef(false);
-            Swal.fire({
-              icon: "success",
-              title: refLine ? "Ref line updated!" : "Ref line set!",
-              timer: 1000, showConfirmButton: false
-            });
-            return [];
-          }
-          return next;
-        });
-        return;
-      }
-
-      // refLine already set → perpendicular drop for other point
-      if (pick.id === refLine.aId || pick.id === refLine.bId) {
-        Swal.fire({
-          icon: "info",
-          title: "Tip",
-          text: "တခြား point ကိုနှိပ်ပြီး perpendicular ကိုတိုင်းပါ။ 'Change' နဲ့ Ref line ကိုပြန်ရွေးနိုင်ပါတယ်။",
-          timer: 1400, showConfirmButton: false
-        });
-        return;
-      }
-      const a = points.find(p => p.id === refLine.aId);
-      const b = points.find(p => p.id === refLine.bId);
-      const c = points.find(p => p.id === pick.id);
-      if (a && b && c) {
-        const vx = b.x - a.x, vy = b.y - a.y;
-        const t = ((c.x - a.x) * vx + (c.y - a.y) * vy) / (vx * vx + vy * vy || 1);
-        const px = a.x + t * vx, py = a.y + t * vy;
-        const dist = Math.hypot(c.x - px, c.y - py);
-
-        setTempLine({ x1: c.x, y1: c.y, x2: px, y2: py });
-        Swal.fire({
-          icon: "info",
-          title: `Perp distance: ${dist.toFixed(2)} ${UNIT_LABEL}`,
-          timer: 2000, showConfirmButton: false,
-          willClose: () => setTempLine(null)
-        });
-      }
-      return;
-    }
-
-    // normal line/angle selections
     setSelected(sel=>{
       const next=[...sel, pick.id];
 
@@ -475,6 +420,46 @@ export default function Drawing2D() {
         }
         return [];
       }
+      if (mode==="refLine") {
+        // Ref line set/change
+        if (changingRef || !refLine) {
+          if (next.length===2) {
+            setRefLine({ aId: next[0], bId: next[1] });
+            setChangingRef(false);
+            Swal.fire({ icon:"success", title: refLine? "Ref line updated!" : "Ref line set!", confirmButtonText:"OK" });
+            return [];
+          }
+          return next;
+        }
+
+        // perpendicular measurement
+        if (refLine) {
+          if (pick.id===refLine.aId || pick.id===refLine.bId) return [];
+          const a=points.find(p=>p.id===refLine.aId), b=points.find(p=>p.id===refLine.bId), c=points.find(p=>p.id===pick.id);
+          if (a && b && c) {
+            const vx=b.x-a.x, vy=b.y-a.y;
+            const t=((c.x-a.x)*vx+(c.y-a.y)*vy)/(vx*vx+vy*vy||1);
+            const px=a.x+t*vx, py=a.y+t*vy;
+            const dist=Math.hypot(c.x-px,c.y-py);
+
+            setTempLine(null);
+            setTempLine({ x1:c.x,y1:c.y,x2:px,y2:py });
+
+            Swal.fire({
+              icon:"info",
+              title:"Perpendicular Distance",
+              html:`<div style="font-size:18px;font-weight:700;margin-top:6px;">
+                      ${dist.toFixed(2)} ${UNIT_LABEL}
+                    </div>`,
+              confirmButtonText:"OK",
+              showConfirmButton:true,
+              allowOutsideClick:false,
+              allowEscapeKey:true,
+            }).then(()=>{ setTempLine(null); });
+          }
+          return [];
+        }
+      }
       return next;
     });
   };
@@ -482,16 +467,19 @@ export default function Drawing2D() {
   /* ---------- save (DB only, no image) ---------- */
   const saveToFirebase = async () => {
     const now = Date.now();
+    const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
     await set(push(dbRef(db, "drawings")), {
       createdAt: now,
+      expiresAt,
       title: title || "Untitled",
       unitLabel: UNIT_LABEL,
       state: { points, lines, angles, view: { zoom, tx, ty } },
       meta: { points: points.length, lines: lines.length, triples: angles.length },
     });
-    alert("Saved");
+    alert("Saved ");
   };
-  /* -------------------- UI -------------------- */
+}
+/* -------------------- UI -------------------- */
   return (
     <div className="grid">
       {/* Canvas */}
@@ -652,4 +640,4 @@ export default function Drawing2D() {
       </div>
     </div>
   );
-      }
+                                     }
