@@ -1,0 +1,41 @@
+/* src/App.css */
+/* Layout */
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#f1f5f9; color:#0f172a; }
+
+/* Containers */
+.header { position: sticky; top: 0; z-index: 40; background:#ffffffcc; backdrop-filter: blur(6px); border-bottom:1px solid #e5e7eb; }
+.container { max-width: 980px; margin: 0 auto; padding: 12px; }
+.nav { display:flex; gap:8px; }
+
+/* Cards & grid */
+.grid { max-width: 980px; margin: 12px auto; display: grid; gap: 12px; padding: 0 12px; }
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:12px; box-shadow: 0 2px 10px rgba(0,0,0,.04); }
+
+/* Rows / text */
+.row { display:flex; align-items:center; gap:8px; }
+.page-title { font-size:18px; font-weight:800; color:#0f172a; margin-bottom:8px; }
+.small { font-size:12px; color:#64748b; }
+
+/* Inputs & buttons */
+.input {
+  height: 38px; padding: 0 10px; border:1px solid #e5e7eb; border-radius:10px;
+  outline: none; background:#fff; color:#0f172a; min-width: 0;
+}
+.input:focus { border-color:#0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,.15); }
+
+.btn {
+  height: 38px; padding: 0 12px; border-radius:10px; border:none; cursor:pointer;
+  background:#64748b; color:#fff; font-weight:700;
+}
+.btn:hover { filter: brightness(0.95); }
+.btn:active { transform: translateY(0.5px); }
+
+/* Chips (NavLink) */
+a.active-chip { background:#0ea5e9 !important; color:#fff !important; }
+
+/* Scrollbars (soft) */
+::-webkit-scrollbar { height: 8px; width: 8px; }
+::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius: 9999px; }
