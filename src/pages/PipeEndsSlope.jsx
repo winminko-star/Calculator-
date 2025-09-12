@@ -173,7 +173,7 @@ function solve3x3(A,b){
   return x;
                      }
 // src/pages/PipeEndsSlope.jsx (Part 2/3)
-export default function PipeEndsSlope(){
+export function usePipeEndsSlope(){
   const [rawA,setRawA]=useState("");
   const [rawB,setRawB]=useState("");
 
@@ -237,7 +237,7 @@ export default function PipeEndsSlope(){
 }
 // src/pages/PipeEndsSlope.jsx (Part 3/3)
 export default function PipeEndsSlopePage(){
-  const st = PipeEndsSlope();
+  const st = usePipeEndsSlope();
 
   const Info = ({label, value, accent})=>(
     <div style={{
