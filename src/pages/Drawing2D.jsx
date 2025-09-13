@@ -617,7 +617,7 @@ export default function Drawing2DPage() {
         {circles.map((c, idx)=>(
           <div key={c.id} className="row" style={{ justifyContent:"space-between" }}>
             <div className="small">
-              <b>C{idx+1}</b> @ {points.find(p=>p.id===c.centerId)?.label || "?""}
+              <b>C{idx+1}</b> @ {points.find(p=>p.id===c.centerId)?.label || "?"}
               &nbsp; R = {c.r} {UNIT_LABEL}
             </div>
             <button className="btn" onClick={()=>delCircle(c.id)} style={{ background:"#ef4444" }}>Delete</button>
