@@ -324,7 +324,7 @@ function useDrawing2D() {
   const onPointerDown=(e)=>{ e.currentTarget.setPointerCapture?.(e.pointerId); pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now()}); };
   const onPointerMove=(e)=>{
     const prev=pointers.current.get(e.pointerId); if(!prev) return;
-    pointers.current.set(e.pointerId,{x	e.clientX,y:e.clientY,t:prev.t});
+    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:prev.t});
     const pts=[...pointers.current.values()];
     if(pts.length===1){ setTx(v=>v+(e.clientX-prev.x)); setTy(v=>v+(e.clientY-prev.y)); }
     else if(pts.length>=2){
