@@ -11,6 +11,10 @@ const safeId = () =>
   (crypto?.randomUUID?.() || Math.random().toString(36)).slice(0, 8);
 
 const distMm = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+const distENH = (a, b) => {
+  const dz = (b.h ?? 0) - (a.h ?? 0);
+  return Math.hypot(b.x - a.x, b.y - a.y, dz);
+};
 
 const angleDeg = (a, b, c) => {
   const v1 = { x: a.x - b.x, y: a.y - b.y };
@@ -121,7 +125,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     ctx.strokeText(p.label,s.x+8,s.y-8);
     ctx.fillStyle="#0f172a"; ctx.fillText(p.label,s.x+8,s.y-8);
   });
-  }
+    }
 // src/pages/Drawing2D.jsx (Part 2/3)
 export default function Drawing2D() {
   // data
@@ -132,6 +136,7 @@ export default function Drawing2D() {
   // inputs
   const [E, setE] = useState("");
   const [N, setN] = useState("");
+  const [H, setH] = useState("");    // NEW
   const [title, setTitle] = useState("");
 
   // modes
@@ -144,7 +149,7 @@ export default function Drawing2D() {
   const [measure, setMeasure] = useState({ open:false, value:null }); // {E,N,fromLabel}
   const tempTimerRef = useRef(null);
 
-  // tie-line measure
+  // tie-line measure (ENH)
   const [tieTemp, setTieTemp] = useState(null);
   const [tieOverlay, setTieOverlay] = useState({ open:false, value:null });
 
@@ -169,13 +174,65 @@ export default function Drawing2D() {
 
   const nextLabel=()=>labelFromIndex(points.length);
 
+  /* ---------- Restore from Review (wmk_restore) ---------- */
+  useEffect(() => {
+    const raw = localStorage.getItem("wmk_restore");
+    if (!raw) return;
+    try {
+      const st = JSON.parse(raw) || {};
+      const ptsIn  = Array.isArray(st.points) ? st.points : [];
+      const lnsIn  = Array.isArray(st.lines)  ? st.lines  : [];
+      const angIn  = Array.isArray(st.angles) ? st.angles : [];
+      const viewIn = st.view || null;
+
+      const pts = ptsIn.map((p, i) => ({
+        id: p.id || `p${i}`,
+        label: p.label || labelFromIndex(i),
+        x: Number(p.x) || 0,
+        y: Number(p.y) || 0,
+        h: Number(p.h ?? 0) || 0,
+      }));
+      setPoints(pts);
+
+      setLines(lnsIn.map((l) => {
+        const a = pts.find(p => p.id === l.p1) || { x:0, y:0 };
+        const b = pts.find(p => p.id === l.p2) || { x:0, y:0 };
+        return { id: l.id || safeId(), p1: l.p1, p2: l.p2, lenMm: typeof l.lenMm === "number" ? l.lenMm : distMm(a,b) };
+      }));
+
+      setAngles(angIn.map(a => ({
+        id: a.id || safeId(), a: a.a, b: a.b, c: a.c,
+        deg: typeof a.deg === "number" ? a.deg : angleDeg(
+          pts.find(p=>p.id===a.a)||{x:0,y:0},
+          pts.find(p=>p.id===a.b)||{x:0,y:0},
+          pts.find(p=>p.id===a.c)||{x:0,y:0},
+        )
+      })));
+
+      if (typeof st.title === "string") setTitle(st.title);
+
+      if (viewIn && typeof viewIn.zoom === "number") {
+        setAutoFit(false);
+        setZoom(viewIn.zoom);
+        setTx(viewIn.tx || 0);
+        setTy(viewIn.ty || 0);
+      } else {
+        setAutoFit(true);
+        setTimeout(() => fitView(pts), 0);
+      }
+    } catch (e) {
+      console.warn("restore failed", e);
+    } finally {
+      localStorage.removeItem("wmk_restore");
+    }
+  }, []);
+
   /* ---------- size / draw ---------- */
   useEffect(()=>{
     const cvs=canvasRef.current, wrap=wrapRef.current; if(!cvs||!wrap) return;
     const apply=()=>{
       const dpr=window.devicePixelRatio||1;
       const w=Math.max(320,Math.floor(wrap.clientWidth||360));
-      // show controls below: around 55% screen, or 75% of width
       const maxH = Math.round(window.innerHeight * 0.55);
       const h = Math.min(Math.max(Math.floor(w * 0.75), 260), Math.max(320, maxH));
       sizeRef.current={wCss:w,hCss:h};
@@ -237,13 +294,14 @@ export default function Drawing2D() {
   };
   useEffect(()=>{ if(autoFit) fitView(points); },[points]); // eslint-disable-line
 
-  /* ---------- add point ---------- */
+  /* ---------- add point (E,N,H) ---------- */
   const addPoint=()=>{
     if(E===""||N==="") return;
-    const x=Number(E), y=Number(N); if(!isFinite(x)||!isFinite(y)) return;
-    const id=safeId(); const pt={id,label:nextLabel(),x,y};
+    const x=Number(E), y=Number(N), h = H === "" ? 0 : Number(H);
+    if(!isFinite(x)||!isFinite(y)||!isFinite(h)) return;
+    const id=safeId(); const pt={id,label:nextLabel(),x,y,h};
     const next=[...points,pt]; setPoints(next);
-    setE(""); setN(""); if(autoFit) setTimeout(()=>fitView(next),0);
+    setE(""); setN(""); setH(""); if(autoFit) setTimeout(()=>fitView(next),0);
   };
 
   /* ---------- gestures ---------- */
@@ -320,7 +378,7 @@ export default function Drawing2D() {
         return [];
       }
 
-      // REF LINE
+      // REF LINE measure (E,N)
       if(mode==="refLine"){
         if(!refLine && next.length===2){ setRefLine({aId:next[0], bId:next[1]}); return []; }
         if(refLine){
@@ -334,9 +392,9 @@ export default function Drawing2D() {
             const t=((c.x-a.x)*vx + (c.y-a.y)*vy)/(abLen*abLen);
             const px=a.x + t*vx, py=a.y + t*vy;
             const perp=Math.hypot(c.x-px, c.y-py);
-            // left of A->B = +E ; right = -E  (clockwise = negative)
+            // left of A->B = +E ; right = -E  (keep your preferred sign)
             const crossZ = vx*(c.y-a.y) - vy*(c.x-a.x);
-            const ESigned = (crossZ >= 0 ? -1 : 1) * perp;   // (flip per your previous UI)
+            const ESigned = (crossZ >= 0 ? -1 : 1) * perp;
             const NSigned = t * abLen;
 
             setTempLine(null);
@@ -348,19 +406,20 @@ export default function Drawing2D() {
         }
       }
 
-      // TIE LINE
+      // TIE LINE (ENH 3D)
       if(mode==="tieLine" && next.length===2){
         const [aId,bId]=next; if(aId!==bId){
           const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
           const dE = +(b.x - a.x).toFixed(2);
           const dN = +(b.y - a.y).toFixed(2);
-          const L  = +distMm(a,b).toFixed(2);
+          const dH = +((b.h ?? 0) - (a.h ?? 0)).toFixed(2);
+          const L3 = +distENH(a,b).toFixed(2);
           setTieTemp({ x1:a.x, y1:a.y, x2:b.x, y2:b.y });
           setTieOverlay({
             open:true,
-            value:{ from:a.label, to:b.label, dE, dN, L }
+            value:{ from:a.label, to:b.label, dE, dN, dH, L: L3 }
           });
-          // auto hide green line after 3s
+          // auto hide after 3s
           if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
           tempTimerRef.current = setTimeout(()=>{ setTieTemp(null); setTieOverlay({open:false,value:null}); }, 3000);
         }
@@ -472,7 +531,10 @@ export default function Drawing2D() {
               ΔN: {tieOverlay.value.dN} {UNIT_LABEL}
             </div>
             <div style={{ fontWeight:800 }}>
-              L: {tieOverlay.value.L} {UNIT_LABEL}
+              ΔH: {tieOverlay.value.dH} {UNIT_LABEL}
+            </div>
+            <div style={{ fontWeight:800 }}>
+              L(ENH): {tieOverlay.value.L} {UNIT_LABEL}
             </div>
           </div>
         )}
@@ -570,6 +632,11 @@ export default function Drawing2D() {
             placeholder={`N (${UNIT_LABEL})`} value={N} onChange={(e)=>setN(e.target.value)}
             style={{ width:110 }}
           />
+          <input
+            className="input" type="number" inputMode="decimal" step="any"
+            placeholder="H (level)" value={H} onChange={(e)=>setH(e.target.value)}
+            style={{ width:110 }}
+          />
           <button className="btn" onClick={addPoint}>Add (label {nextLabel()})</button>
         </div>
       </div>
@@ -602,6 +669,50 @@ export default function Drawing2D() {
             </div>
           );
         })}
+      </div>
+
+      {/* H / Level Table */}
+      <div className="card">
+        <div className="page-title">Levels (H)</div>
+        {points.length === 0 && <div className="small">No points.</div>}
+        {points.length > 0 && (() => {
+          const groups = new Map();
+          points.forEach(p => {
+            const key = (Math.round((p.h ?? 0) * 1000) / 1000).toFixed(3);
+            (groups.get(key) || groups.set(key, []).get(key)).push(p);
+          });
+          const rows = [...groups.entries()]
+            .sort((a,b) => Number(a[0]) - Number(b[0]))
+            .map(([h, arr]) => ({
+              h: Number(h),
+              count: arr.length,
+              labels: arr.map(p => p.label).join(", "),
+            }));
+
+          const th = { textAlign:"left", padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:12, color:"#64748b" };
+          const td = { padding:"8px 10px", borderBottom:"1px solid #f1f5f9" };
+
+          return (
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead>
+                <tr>
+                  <th style={th}>H (level)</th>
+                  <th style={th}>Points</th>
+                  <th style={th}>Labels</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r,i)=>(
+                  <tr key={i}>
+                    <td style={td}>{r.h.toFixed(3)}</td>
+                    <td style={td}>{r.count}</td>
+                    <td style={td}>{r.labels}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })()}
       </div>
     </div>
   ); // return
