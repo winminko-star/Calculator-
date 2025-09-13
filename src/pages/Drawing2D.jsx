@@ -1,16 +1,16 @@
-// src/pages/Drawing2D.jsx  (Part 1/3)
+// src/pages/Drawing2D.jsx (Part 1/3)
 import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
 
-/** Units: coordinates are in millimetres (mm). zoom = px per mm */
+/** Coordinates in millimetres (mm). zoom = px per mm */
 const UNIT_LABEL = "mm";
 
 /* ---------------- helpers ---------------- */
 const safeId = () =>
   (crypto?.randomUUID?.() || Math.random().toString(36)).slice(0, 8);
 
-const distMm = (a, b) => Math.hypot(b.x - a.x, b.y - a.y); // mm
+const distMm = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
 
 const angleDeg = (a, b, c) => {
   const v1 = { x: a.x - b.x, y: a.y - b.y };
@@ -19,23 +19,17 @@ const angleDeg = (a, b, c) => {
   const m1 = Math.hypot(v1.x, v1.y) || 1;
   const m2 = Math.hypot(v2.x, v2.y) || 1;
   const cos = Math.min(1, Math.max(-1, dot / (m1 * m2)));
-  // smaller angle 0..180
   return +(Math.acos(cos) * 180 / Math.PI).toFixed(2);
 };
 
-// auto labels: A, B, ..., Z, AA, AB, ...
+// auto labels: A, B, … Z, AA, AB …
 const labelFromIndex = (i) => {
-  let s = "";
-  i += 1;
-  while (i > 0) {
-    i--;
-    s = String.fromCharCode(65 + (i % 26)) + s;
-    i = Math.floor(i / 26);
-  }
+  let s = ""; i += 1;
+  while (i > 0) { i--; s = String.fromCharCode(65 + (i % 26)) + s; i = Math.floor(i / 26); }
   return s;
 };
 
-// rounded label pill for angles
+// angle label pill
 function drawLabelPill(ctx, x, y, text) {
   ctx.font = "bold 14px system-ui";
   const padX = 6, padY = 4;
@@ -58,8 +52,7 @@ function drawLabelPill(ctx, x, y, text) {
   ctx.fillStyle = "rgba(255,255,255,0.9)";
   ctx.strokeStyle = "#0ea5e9";
   ctx.lineWidth = 2;
-  ctx.fill();
-  ctx.stroke();
+  ctx.fill(); ctx.stroke();
 
   ctx.fillStyle = "#0f172a";
   ctx.fillText(text, bx + padX, by + h - padY - 2);
@@ -77,88 +70,55 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
   ctx.strokeStyle = "#e5e7eb";
   ctx.lineWidth = 1;
   for (let gx = originX % step; gx < wCss; gx += step) {
-    ctx.beginPath();
-    ctx.moveTo(gx, 0);
-    ctx.lineTo(gx, hCss);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, hCss); ctx.stroke();
   }
   for (let gy = originY % step; gy < hCss; gy += step) {
-    ctx.beginPath();
-    ctx.moveTo(0, gy);
-    ctx.lineTo(wCss, gy);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(wCss, gy); ctx.stroke();
   }
 
   // axes
-  ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(0, hCss / 2 + ty);
-  ctx.lineTo(wCss, hCss / 2 + ty);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(wCss / 2 + tx, 0);
-  ctx.lineTo(wCss / 2 + tx, hCss);
-  ctx.stroke();
+  ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, hCss / 2 + ty); ctx.lineTo(wCss, hCss / 2 + ty); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(wCss / 2 + tx, 0); ctx.lineTo(wCss / 2 + tx, hCss); ctx.stroke();
 
-  const W2S = (p) => ({
-    x: wCss / 2 + p.x * zoom + tx,
-    y: hCss / 2 - p.y * zoom + ty,
-  });
+  const W2S = (p) => ({ x: wCss/2 + p.x*zoom + tx, y: hCss/2 - p.y*zoom + ty });
 
-  // lines
+  // lines + length
   ctx.strokeStyle = "#0ea5e9";
   ctx.lineWidth = 2;
   ctx.font = "13px system-ui";
   ctx.fillStyle = "#0f172a";
   lines.forEach((l) => {
-    const a = points.find((p) => p.id === l.p1),
-      b = points.find((p) => p.id === l.p2);
+    const a = points.find((p) => p.id === l.p1), b = points.find((p) => p.id === l.p2);
     if (!a || !b) return;
-    const s1 = W2S(a),
-      s2 = W2S(b);
-    ctx.beginPath();
-    ctx.moveTo(s1.x, s1.y);
-    ctx.lineTo(s2.x, s2.y);
-    ctx.stroke();
-    ctx.fillText(
-      `${Math.round(l.lenMm)} ${UNIT_LABEL}`,
-      (s1.x + s2.x) / 2 + 6,
-      (s1.y + s2.y) / 2 - 6
-    );
+    const s1 = W2S(a), s2 = W2S(b);
+    ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
+    ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, (s1.x+s2.x)/2 + 6, (s1.y+s2.y)/2 - 6);
   });
 
   // circles
   circles.forEach((c) => {
     const cs = W2S({ x: c.cx, y: c.cy });
-    ctx.strokeStyle = "#16a34a";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(cs.x, cs.y, c.r * zoom, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.strokeStyle = "#16a34a"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cs.x, cs.y, c.r * zoom, 0, Math.PI * 2); ctx.stroke();
     ctx.fillStyle = "#0f172a";
     ctx.fillText(`R=${c.r} ${UNIT_LABEL}`, cs.x + 6, cs.y - 6);
   });
 
-  // temp red line (perp)
+  // temp perpendicular red line
   if (tempLine) {
     const s1 = W2S({ x: tempLine.x1, y: tempLine.y1 });
     const s2 = W2S({ x: tempLine.x2, y: tempLine.y2 });
-    ctx.strokeStyle = "#ef4444";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 6]);
-    ctx.beginPath();
-    ctx.moveTo(s1.x, s1.y);
-    ctx.lineTo(s2.x, s2.y);
-    ctx.stroke();
+    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
+    ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
     ctx.setLineDash([]);
   }
 
   // angle pills
   angles.forEach((t) => {
     const a = points.find((p) => p.id === t.a),
-      b = points.find((p) => p.id === t.b),
-      c = points.find((p) => p.id === t.c);
+          b = points.find((p) => p.id === t.b),
+          c = points.find((p) => p.id === t.c);
     if (!a || !b || !c) return;
     const sb = W2S(b);
     drawLabelPill(ctx, sb.x + 10, sb.y - 10, `${t.deg}`);
@@ -166,27 +126,17 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
 
   // points
   points.forEach((p) => {
-    const s = W2S(p);
-    const r = 6;
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = "#ef4444";
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, r - 1, 0, Math.PI * 2);
-    ctx.fill();
+    const s = W2S(p), r = 6;
+    ctx.lineWidth = 2; ctx.strokeStyle = "#fff";
+    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = "#ef4444"; ctx.beginPath(); ctx.arc(s.x, s.y, r - 1, 0, Math.PI * 2); ctx.fill();
 
     ctx.font = "13px system-ui";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#fff";
-    ctx.strokeText(p.label, s.x + 8, s.y - 8);
-    ctx.fillStyle = "#0f172a";
-    ctx.fillText(p.label, s.x + 8, s.y - 8);
+    ctx.lineWidth = 3; ctx.strokeStyle = "#fff"; ctx.strokeText(p.label, s.x + 8, s.y - 8);
+    ctx.fillStyle = "#0f172a"; ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
-              }
-// src/pages/Drawing2D.jsx  (Part 2/3)
+}
+// src/pages/Drawing2D.jsx (Part 2/3)
 function useDrawing2D() {
   // data
   const [points, setPoints]   = useState([]);     // {id,label,x,y,h}
@@ -195,9 +145,9 @@ function useDrawing2D() {
   const [circles, setCircles] = useState([]);     // {id,cx,cy,r}
 
   // inputs
-  const [E, setE] = useState("");
-  const [N, setN] = useState("");
-  const [H, setH] = useState("");
+  const [E, setE]   = useState("");
+  const [N, setN]   = useState("");
+  const [H, setH]   = useState("");
   const [title, setTitle] = useState("");
 
   // circle inputs
@@ -297,7 +247,7 @@ function useDrawing2D() {
   };
   useEffect(()=>{ if(autoFit) fitView(points); },[points]); // eslint-disable-line
 
-  /* add point (with H) */
+  /* add point (with optional H) */
   const addPoint=()=>{
     if(E===""||N==="") return;
     const x=Number(E), y=Number(N);
@@ -311,7 +261,7 @@ function useDrawing2D() {
     if(autoFit) setTimeout(()=>fitView(next),0);
   };
 
-  /* add circle */
+  /* add circle (center + radius) */
   const addCircle = ()=>{
     if (cE===""||cN===""||cR==="") return;
     const cx=Number(cE), cy=Number(cN), r=Math.abs(Number(cR));
@@ -321,13 +271,17 @@ function useDrawing2D() {
   };
 
   /* gestures */
-  const onPointerDown=(e)=>{ e.currentTarget.setPointerCapture?.(e.pointerId); pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now()}); };
+  const onPointerDown=(e)=>{ e.currentTarget.setPointerCapture?.(e.pointerId); pointers.current.set(e.pointerId,{ x: e.clientX, y: e.clientY, t: Date.now() }); };
   const onPointerMove=(e)=>{
     const prev=pointers.current.get(e.pointerId); if(!prev) return;
-    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:prev.t});
+    // ✅ build-error fixed: use colon after x
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: prev.t });
+
     const pts=[...pointers.current.values()];
-    if(pts.length===1){ setTx(v=>v+(e.clientX-prev.x)); setTy(v=>v+(e.clientY-prev.y)); }
-    else if(pts.length>=2){
+    if(pts.length===1){
+      setTx(v=>v+(e.clientX-prev.x));
+      setTy(v=>v+(e.clientY-prev.y));
+    } else if(pts.length>=2){
       const [p1,p2]=pts;
       const distPrev=Math.hypot(p1.x-prev.x,p1.y-prev.y)||1;
       const distNow=Math.hypot(p1.x-p2.x,p1.y-p2.y)||1;
@@ -393,19 +347,24 @@ function useDrawing2D() {
       }
 
       if(mode==="refLine"){
-        // choose ref line
+        // Step-1 choose 2 points as reference (order matters: FIRST -> SECOND)
         if(!refLine && next.length===2){ setRefLine({aId:next[0], bId:next[1]}); return []; }
-        // measure to 3rd pick
+
+        // Step-2 pick third point to measure from FIRST
         if(refLine){
           if(pick.id===refLine.aId || pick.id===refLine.bId) return [];
           const a=points.find(p=>p.id===refLine.aId);
           const b=points.find(p=>p.id===refLine.bId);
-          const c=pick; if(a&&b&&c){
+          const c=pick;
+          if(a&&b&&c){
             const vx=b.x-a.x, vy=b.y-a.y;
             const abLen=Math.hypot(vx,vy)||1;
+
             const t=((c.x-a.x)*vx + (c.y-a.y)*vy)/(abLen*abLen);
             const px=a.x + t*vx, py=a.y + t*vy;
+
             const perp=Math.hypot(c.x-px, c.y-py);
+            // cross product sign: left of A->B = positive
             const crossZ = vx*(c.y-a.y) - vy*(c.x-a.x);
             const ESigned = (crossZ >= 0 ? -perp : +perp);
             const NSigned = t * abLen;
@@ -428,7 +387,7 @@ function useDrawing2D() {
     });
   };
 
-  /* save (DB only, no image) */
+  /* save (DB only) */
   const saveToFirebase = async () => {
     const now = Date.now();
     await set(push(dbRef(db, "drawings")), {
@@ -484,12 +443,8 @@ function useDrawing2D() {
     // level table
     levelSummary,
   };
-    }
-// src/pages/Drawing2D.jsx  (Part 3/3)
-function PageShell({ children }) {
-  return <div className="grid">{children}</div>;
-}
-
+      }
+// src/pages/Drawing2D.jsx (Part 3/3)
 export default function Drawing2DPage() {
   const st = useDrawing2D();
   const [full, setFull] = useState(false); // full view overlay
@@ -497,9 +452,22 @@ export default function Drawing2DPage() {
   const th = { textAlign:"left", padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:12, color:"#64748b" };
   const td = { padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:13 };
 
-  // ——— actions ———
+  // toolbar button style
+  const tb = (active) => ({
+    display: "inline-block",
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "none",
+    background: active ? "#0ea5e9" : "#64748b",
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: 13,
+    marginRight: 8,
+    flex: "0 0 auto",
+  });
+
+  // Ref line ↺ Change
   const onRefChange = () => {
-    // Fix: change works reliably
     st.setMeasure({ open:false, value:null });
     st.setTempLine(null);
     st.setSelected([]);
@@ -507,23 +475,9 @@ export default function Drawing2DPage() {
     st.setMode("refLine");
   };
 
-  // toolbar button style
-  const tb = (active) => ({
-    display: "block",
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "none",
-    marginBottom: 8,
-    background: active ? "#0ea5e9" : "#64748b",
-    color: "#fff",
-    fontWeight: 700,
-    fontSize: 13,
-  });
-
   return (
     <div className="grid" style={{ position: "relative" }}>
-      {/* Canvas Card */}
+      {/* Canvas */}
       <div className="card" style={{ padding: 8, position: "relative" }}>
         <div ref={st.wrapRef} style={{ width: "100%" }}>
           <canvas
@@ -568,7 +522,7 @@ export default function Drawing2DPage() {
               className="btn"
               onClick={()=>{
                 st.setMeasure({ open:false, value:null });
-                if (st.tempLine) setTimeout(()=>st.setTempLine(null), 3000);
+                if (st.tempLine) setTimeout(()=>st.setTempLine(null), 3000); // OK နှိပ်ပြီး 3s နောက် ပျောက်
               }}
               style={{ background:"#0ea5e9" }}
             >
@@ -577,33 +531,109 @@ export default function Drawing2DPage() {
           </div>
         )}
 
-        {/* Scale slider (keep under canvas) */}
+        {/* Scale slider */}
         <div style={{ marginTop: 10 }}>
           <div className="row" style={{ justifyContent:"space-between", marginBottom:6 }}>
-            <span className="small">Scale (px/mm)</span>
-            <span className="small">{Math.max(0.0001, Math.round(st.zoom*1000)/1000)} px/mm</span>
+            <span className="small">Scale (px/{UNIT_LABEL})</span>
+            <span className="small">{Math.max(0.0001, Math.round(st.zoom*1000)/1000)} px/{UNIT_LABEL}</span>
           </div>
-          <input type="range" min={st.MIN_S} max={st.MAX_S} step={0.01}
-                 value={st.sval} onChange={(e)=>st.onSliderChange(e.target.value)} style={{ width:"100%" }}/>
+          <input
+            type="range"
+            min={st.MIN_S}
+            max={st.MAX_S}
+            step={0.01}
+            value={st.sval}
+            onChange={(e)=>st.onSliderChange(e.target.value)}
+            style={{ width:"100%" }}
+          />
           <div className="row" style={{ justifyContent:"space-between", marginTop:4 }}>
-            <span className="small">{st.MIN_S}</span><span className="small">0</span><span className="small">{st.MAX_S}</span>
+            <span className="small">{st.MIN_S}</span>
+            <span className="small">0</span>
+            <span className="small">{st.MAX_S}</span>
+          </div>
+        </div>
+
+        {/* === Action Bar (Horizontal scroll under zoom) === */}
+        <div
+          style={{
+            marginTop: 10,
+            padding: "8px",
+            background: "#f1f5f9",
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              overflowX: "auto",
+              whiteSpace: "nowrap",
+              WebkitOverflowScrolling: "touch",
+              paddingBottom: 2
+            }}
+          >
+            <button style={tb(st.mode==="line")}     onClick={()=>{ st.setMode("line"); st.setSelected([]); }}>Line</button>
+            <button style={tb(st.mode==="refLine")}  onClick={()=>{ st.setMode("refLine"); st.setSelected([]); }}>📐 Ref line</button>
+            <button style={tb(false)}                onClick={onRefChange}>↺ Change</button>
+            <button style={tb(st.mode==="angle")}    onClick={()=>{ st.setMode("angle"); st.setSelected([]); }}>Angle</button>
+            <button style={tb(st.mode==="eraseLine")}onClick={()=>{ st.setMode("eraseLine"); st.setSelected([]); }}>Erase (tap)</button>
+
+            <button style={tb(false)} onClick={st.centerOnA}>Find A</button>
+            <button style={tb(false)} onClick={st.removeLastLine}>Remove last</button>
+            <button style={tb(false)} onClick={st.clearLines}>Clear lines</button>
+            <button style={tb(false)} onClick={st.clearAll}>Clear All</button>
+            <button style={tb(false)} onClick={st.fitView}>Fit</button>
+            <button style={tb(false)} onClick={st.resetView}>Reset</button>
+
+            {st.refLine && (
+              <span
+                style={{
+                  display:"inline-block",
+                  padding:"10px 12px",
+                  background:"#e2e8f0",
+                  color:"#0f172a",
+                  borderRadius:10,
+                  fontSize:12,
+                  fontWeight:700
+                }}
+              >
+                Ref: {st.getLabel(st.refLine.aId)}–{st.getLabel(st.refLine.bId)}
+              </span>
+            )}
+
+            <label
+              style={{
+                display:"inline-flex", alignItems:"center", gap:6,
+                padding:"8px 10px", background:"#fff", border:"1px solid #e5e7eb",
+                borderRadius:10
+              }}
+            >
+              <input type="checkbox" checked={st.autoFit} onChange={(e)=>st.setAutoFit(e.target.checked)} />
+              <span className="small">Auto fit</span>
+            </label>
           </div>
         </div>
       </div>
 
-      {/* Title + ENH + Circle row (same as before) */}
+      {/* Controls: Title + ENH + Circle */}
       <div className="card">
         <div className="row" style={{ marginBottom: 8 }}>
-          <input className="input" placeholder="Title (e.g. P83 pipe)" value={st.title}
-                 onChange={(e)=>st.setTitle(e.target.value)} style={{ flex:"1 1 260px" }}/>
+          <input
+            className="input"
+            placeholder="Title (e.g. P83 pipe)"
+            value={st.title}
+            onChange={(e)=>st.setTitle(e.target.value)}
+            style={{ flex:"1 1 260px" }}
+          />
           <button className="btn" onClick={st.saveToFirebase}>Save</button>
         </div>
 
         <div className="row" style={{ marginBottom: 8, gap:8, flexWrap:"wrap" }}>
           <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder="E (mm)" value={st.E} onChange={(e)=>st.setE(e.target.value)} style={{ width:110 }}/>
+                 placeholder={`E (${UNIT_LABEL})`} value={st.E} onChange={(e)=>st.setE(e.target.value)} style={{ width:110 }}/>
           <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder="N (mm)" value={st.N} onChange={(e)=>st.setN(e.target.value)} style={{ width:110 }}/>
+                 placeholder={`N (${UNIT_LABEL})`} value={st.N} onChange={(e)=>st.setN(e.target.value)} style={{ width:110 }}/>
           <input className="input" type="number" inputMode="decimal" step="any"
                  placeholder="H (level)" value={st.H} onChange={(e)=>st.setH(e.target.value)} style={{ width:110 }}/>
           <button className="btn" onClick={st.addPoint}>Add (label {st.nextLabel()})</button>
@@ -627,50 +657,7 @@ export default function Drawing2DPage() {
         </div>
       </div>
 
-      {/* Right-side vertical toolbar (scrollable) */}
-      <div
-        style={{
-          position: "fixed",
-          right: 8,
-          top: 64,           // header height အထက်မှာဆို relative ပြင်ဆင်ပါ
-          bottom: 8,
-          width: 124,
-          overflowY: "auto",
-          padding: 8,
-          background: "rgba(241,245,249,0.9)",
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
-          zIndex: 11,
-        }}
-      >
-        <button style={tb(st.mode==="line")}     onClick={()=>{ st.setMode("line"); st.setSelected([]); }}>Line</button>
-        <button style={tb(st.mode==="refLine")}  onClick={()=>{ st.setMode("refLine"); st.setSelected([]); }}>📐 Ref line</button>
-        <button style={{...tb(false), background:"#94a3b8"}} onClick={onRefChange}>↺ Change Ref</button>
-        <button style={tb(st.mode==="angle")}    onClick={()=>{ st.setMode("angle"); st.setSelected([]); }}>Angle</button>
-        <button style={tb(st.mode==="eraseLine")}onClick={()=>{ st.setMode("eraseLine"); st.setSelected([]); }}>Erase (tap)</button>
-
-        <hr style={{ margin:"8px 0", borderColor:"#e5e7eb" }}/>
-        <button style={{...tb(false), background:"#475569"}} onClick={st.centerOnA}>Find A</button>
-        <button style={{...tb(false), background:"#475569"}} onClick={st.removeLastLine}>Remove last</button>
-        <button style={{...tb(false), background:"#475569"}} onClick={st.clearLines}>Clear lines</button>
-        <button style={{...tb(false), background:"#ef4444"}} onClick={st.clearAll}>Clear All</button>
-        <button style={{...tb(false), background:"#0ea5e9"}} onClick={st.fitView}>Fit</button>
-        <button style={{...tb(false), background:"#0ea5e9"}} onClick={st.resetView}>Reset</button>
-
-        {st.refLine && (
-          <div style={{ marginTop:8, fontSize:12, color:"#0f172a" }}>
-            Ref: <b>{st.getLabel(st.refLine.aId)}–{st.getLabel(st.refLine.bId)}</b>
-          </div>
-        )}
-
-        <label className="row" style={{ gap:6, marginTop:8, fontSize:12 }}>
-          <input type="checkbox" checked={st.autoFit} onChange={(e)=>st.setAutoFit(e.target.checked)} />
-          Auto fit
-        </label>
-      </div>
-
-      {/* Lines list → AB style */}
+      {/* Lists */}
       <div className="card">
         <div className="page-title">Lines</div>
         {st.lines.length===0 && <div className="small">No lines yet.</div>}
@@ -678,13 +665,12 @@ export default function Drawing2DPage() {
           <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
             <div>
               <b>{st.getLabel(l.p1)}–{st.getLabel(l.p2)}</b> &nbsp;
-              <b>{Math.round(l.lenMm)} mm</b>
+              <b>{Math.round(l.lenMm)} {UNIT_LABEL}</b>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Angles */}
       <div className="card">
         <div className="page-title">Angles</div>
         {st.angles.length===0 && <div className="small">No angles yet.</div>}
@@ -730,7 +716,7 @@ export default function Drawing2DPage() {
         )}
       </div>
 
-      {/* ===== Full View Overlay ===== */}
+      {/* ===== Full View Overlay (phone fullscreen pan/zoom + actions) ===== */}
       {full && (
         <div
           style={{
@@ -758,7 +744,13 @@ export default function Drawing2DPage() {
             <div style={{ display:"flex", gap:8, marginLeft:8, overflowX:"auto" }}>
               <button style={tb(st.mode==="line")}     onClick={()=>{ st.setMode("line"); st.setSelected([]); }}>Line</button>
               <button style={tb(st.mode==="refLine")}  onClick={()=>{ st.setMode("refLine"); st.setSelected([]); }}>📐 Ref</button>
-              <button style={{...tb(false), background:"#94a3b8"}} onClick={onRefChange}>↺ Change</button>
+              <button style={{...tb(false), background:"#94a3b8"}} onClick={()=>{
+                st.setMeasure({ open:false, value:null });
+                st.setTempLine(null);
+                st.setSelected([]);
+                st.setRefLine(null);
+                st.setMode("refLine");
+              }}>↺ Change</button>
               <button style={tb(st.mode==="angle")}    onClick={()=>{ st.setMode("angle"); st.setSelected([]); }}>Angle</button>
               <button style={tb(st.mode==="eraseLine")}onClick={()=>{ st.setMode("eraseLine"); st.setSelected([]); }}>Erase</button>
             </div>
@@ -788,4 +780,4 @@ export default function Drawing2DPage() {
       )}
     </div>
   );
-                               }
+              }
