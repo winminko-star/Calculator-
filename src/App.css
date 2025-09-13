@@ -39,7 +39,4 @@ a.active-chip { background:#0ea5e9 !important; color:#fff !important; }
 /* Scrollbars (soft) */
 ::-webkit-scrollbar { height: 8px; width: 8px; }
 ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius: 9999px; }
-html, body, #root {
-  max-width: 100vw;
-  overflow-x: hidden;
-       }
+
