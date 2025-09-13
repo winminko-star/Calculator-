@@ -570,10 +570,13 @@ export default function Drawing2D() {
             style={{ width:"100%" }}
           />
 
-          {/* Horizontal scrollable toolbar (NavBar-like) */}
+          {/* Horizontal scrollable toolbar (isolated) */}
           <div
+            // 👉 toolbar အတွင်း pointer/touch/wheel ကို canvas ဆီ မကျော်အောင် သတ်တား
             onPointerDown={(e)=>{ e.stopPropagation(); }}
+            onPointerMove={(e)=>{ e.stopPropagation(); }}
             onTouchStart={(e)=>{ e.stopPropagation(); }}
+            onTouchMove={(e)=>{ e.stopPropagation(); }}
             onWheel={(e)=>{ e.stopPropagation(); }}
             style={{
               marginTop:10,
@@ -583,68 +586,75 @@ export default function Drawing2D() {
               gap:8,
               flexWrap:"nowrap",
               whiteSpace:"nowrap",
-              overflowX:"auto",
+              overflowX:"auto",          // 👉 ဘေးဘက် scroll ကို ဒီ div ထဲပဲ
               overflowY:"hidden",
               paddingBottom:6,
               WebkitOverflowScrolling:"touch",
-              touchAction:"pan-x",
-              overscrollBehaviorX:"contain"
+              touchAction:"pan-x",       // 👉 x-axis scroll only
+              overscrollBehaviorX:"contain",
+              scrollbarWidth:"thin"
             }}
           >
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("line"); setSelected([]); }}
-              style={{ background: mode==="line" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
+              style={{ background: mode==="line" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}
             >Line</button>
 
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("tieLine"); setSelected([]); setTieOverlay({open:false,value:null}); setTieTemp(null); }}
-              style={{ background: mode==="tieLine" ? "#10b981" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
+              style={{ background: mode==="tieLine" ? "#10b981" : "#64748b", flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}
             >Tie line</button>
 
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("angle"); setSelected([]); }}
-              style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
+              style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}
             >Angle</button>
 
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("eraseLine"); setSelected([]); }}
-              style={{ background: mode==="eraseLine" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
+              style={{ background: mode==="eraseLine" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}
             >Erase line (tap)</button>
 
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("refLine"); setSelected([]); }}
-              style={{ background: mode==="refLine" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
+              style={{ background: mode==="refLine" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}
             >📐 Ref line</button>
 
             {refLine && (
               <div style={{ display:"inline-flex", alignItems:"center", gap:8, flex:"0 0 auto" }}>
-                <span className="small" style={{ background:"#e2e8f0", color:"#0f172a", borderRadius:12, padding:"4px 8px" }}>
+                <span className="small" style={{ background:"#e2e8f0", color:"#0f172a", borderRadius:12, padding:"4px 8px", flexShrink:0 }}>
                   Ref: {points.find(p=>p.id===refLine.aId)?.label}–{points.find(p=>p.id===refLine.bId)?.label}
                 </span>
                 <button className="btn"
                   onPointerDown={(e)=>e.stopPropagation()}
                   onClick={()=>{ setRefLine(null); setSelected([]); setMode("refLine"); }}
-                  style={{ background:"#94a3b8", flex:"0 0 auto" }}
+                  style={{ background:"#94a3b8", flex:"0 0 auto", flexShrink:0 }}
                 >Change</button>
                 <button className="btn"
                   onPointerDown={(e)=>e.stopPropagation()}
                   onClick={()=>{ setRefLine(null); setTempLine(null); setSelected([]); setMeasure({open:false,value:null}); }}
-                  style={{ background:"#ef4444", flex:"0 0 auto" }}
+                  style={{ background:"#ef4444", flex:"0 0 auto", flexShrink:0 }}
                 >Clear</button>
               </div>
             )}
 
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={centerOnA} style={{ flex:"0 0 auto", minWidth:"auto" }}>Find A</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={fitView} style={{ flex:"0 0 auto", minWidth:"auto" }}>Fit</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={resetView} style={{ flex:"0 0 auto", minWidth:"auto" }}>Reset</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearAll} style={{ background:"#ef4444", flex:"0 0 auto", minWidth:"auto" }}>Clear All</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={removeLastLine} style={{ flex:"0 0 auto", minWidth:"auto" }}>Remove last line</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearLines} style={{ flex:"0 0 auto", minWidth:"auto" }}>Clear lines</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={centerOnA}
+              style={{ flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}>Find A</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={fitView}
+              style={{ flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}>Fit</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={resetView}
+              style={{ flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}>Reset</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearAll}
+              style={{ background:"#ef4444", flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}>Clear All</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={removeLastLine}
+              style={{ flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}>Remove last line</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearLines}
+              style={{ flex:"0 0 auto", flexShrink:0, minWidth:"auto" }}>Clear lines</button>
           </div>
         </div>
       </div>
