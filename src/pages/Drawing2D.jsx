@@ -119,9 +119,16 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     ctx.strokeText(p.label,s.x+8,s.y-8);
     ctx.fillStyle="#0f172a"; ctx.fillText(p.label,s.x+8,s.y-8);
   });
-    }
+}
+
+export { UNIT_LABEL, safeId, distMm, angleDeg, labelFromIndex, drawScene };
 // src/pages/Drawing2D.jsx (Part 2/3)
-export default function Drawing2D() {
+import { ref as dbRef, push, set } from "firebase/database";
+import { UNIT_LABEL, safeId, distMm, angleDeg, labelFromIndex, drawScene } from "./Drawing2D.jsx";
+import { db } from "../firebase";
+import React, { useEffect, useRef, useState } from "react";
+
+function useDrawing2D() {
   // data
   const [points, setPoints]   = useState([]);     // {id,label,x,y,h}
   const [lines, setLines]     = useState([]);     // {id,p1,p2,lenMm}
@@ -131,7 +138,7 @@ export default function Drawing2D() {
   // inputs
   const [E, setE] = useState("");
   const [N, setN] = useState("");
-  const [H, setH] = useState("");                 // NEW: H level
+  const [H, setH] = useState("");
   const [title, setTitle] = useState("");
 
   // circle inputs
@@ -269,7 +276,7 @@ export default function Drawing2D() {
       const mid={x:(p1.x+p2.x)/2-rect.left, y:(p1.y+p2.y)/2-rect.top};
       const {wCss:w,hCss:h}=sizeRef.current;
       setZoom(z=>{
-        const nz=Math.min(MAX_Z,Math.max(MIN_Z), z*(distNow/distPrev));
+        const nz=Math.min(MAX_Z,Math.max(MIN_Z, z*(distNow/distPrev)));
         const wx=((mid.x-(w/2)-tx))/z, wy=((h/2)-(mid.y-ty))/z;
         const sx=w/2 + wx*nz + tx, sy=h/2 - wy*nz + ty;
         setTx(v=>v+(mid.x-sx)); setTy(v=>v+(mid.y-sy));
@@ -327,9 +334,7 @@ export default function Drawing2D() {
       }
 
       if(mode==="refLine"){
-        // choose two points as ref (FIRST → SECOND)
         if(!refLine && next.length===2){ setRefLine({aId:next[0], bId:next[1]}); return []; }
-        // with ref set, tap third to measure E (signed ⟂) + N (signed ‖)
         if(refLine){
           if(pick.id===refLine.aId || pick.id===refLine.bId) return [];
           const a=points.find(p=>p.id===refLine.aId);
@@ -341,7 +346,7 @@ export default function Drawing2D() {
             const px=a.x + t*vx, py=a.y + t*vy;
             const perp=Math.hypot(c.x-px, c.y-py);
             const crossZ = vx*(c.y-a.y) - vy*(c.x-a.x);
-            const ESigned = (crossZ >= 0 ? +perp : -perp);
+            const ESigned = (crossZ >= 0 ? -perp : +perp);
             const NSigned = t * abLen;
 
             setTempLine({ x1:c.x, y1:c.y, x2:px, y2:py });
@@ -385,7 +390,6 @@ export default function Drawing2D() {
     return Array.from(map.values()).sort((a,b)=>a.h-b.h);
   })();
 
-  /* expose to UI */
   return {
     wrapRef, canvasRef,
     E,N,H,setE,setN,setH, addPoint, nextLabel,
@@ -399,14 +403,20 @@ export default function Drawing2D() {
     refLine,setRefLine, tempLine, setTempLine, measure, setMeasure,
     levelSummary,
   };
-  }
+}
+
+export { useDrawing2D };
 // src/pages/Drawing2D.jsx (Part 3/3)
+import React from "react";
+import { UNIT_LABEL } from "./Drawing2D.jsx";
+import { useDrawing2D } from "./Drawing2D.jsx";
+
 export function PageShell({ children }) {
   return <div className="grid">{children}</div>;
 }
 
 export default function Drawing2DPage() {
-  const st = Drawing2D();
+  const st = useDrawing2D();
 
   const th = { textAlign:"left", padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:12, color:"#64748b" };
   const td = { padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:13 };
@@ -546,7 +556,7 @@ export default function Drawing2DPage() {
         </div>
       </div>
 
-      {/* Lines list (use labels like AB) */}
+      {/* Lines list → AB style */}
       <div className="card">
         <div className="page-title">Lines</div>
         {st.lines.length===0 && <div className="small">No lines yet.</div>}
@@ -607,4 +617,4 @@ export default function Drawing2DPage() {
       </div>
     </div>
   );
-            }
+          }
