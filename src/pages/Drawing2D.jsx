@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
 
-/** Coordinates in millimetres (mm). zoom = px per mm */
+/** Units: coordinates are in millimetres (mm). zoom = px per mm */
 const UNIT_LABEL = "mm";
 
 /* ---------------- helpers ---------------- */
@@ -22,14 +22,14 @@ const angleDeg = (a, b, c) => {
   return +(Math.acos(cos) * 180 / Math.PI).toFixed(2);
 };
 
-// auto labels: A, B, … Z, AA, AB …
+// auto labels: A,B,…,Z,AA,AB…
 const labelFromIndex = (i) => {
   let s = ""; i += 1;
   while (i > 0) { i--; s = String.fromCharCode(65 + (i % 26)) + s; i = Math.floor(i / 26); }
   return s;
 };
 
-// angle label pill
+// for overlay pill
 function drawLabelPill(ctx, x, y, text) {
   ctx.font = "bold 14px system-ui";
   const padX = 6, padY = 4;
@@ -59,111 +59,94 @@ function drawLabelPill(ctx, x, y, text) {
 }
 
 /* --------------- renderer --------------- */
-function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLine, circles) {
+function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLine, tieTemp) {
   ctx.clearRect(0, 0, wCss, hCss);
 
   // grid
   const step = Math.max(zoom * 1, 24);
-  const originX = wCss / 2 + tx;
-  const originY = hCss / 2 + ty;
+  const originX = wCss/2 + tx, originY = hCss/2 + ty;
 
-  ctx.strokeStyle = "#e5e7eb";
-  ctx.lineWidth = 1;
-  for (let gx = originX % step; gx < wCss; gx += step) {
-    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, hCss); ctx.stroke();
-  }
-  for (let gy = originY % step; gy < hCss; gy += step) {
-    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(wCss, gy); ctx.stroke();
-  }
+  ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 1;
+  for (let gx = originX % step; gx < wCss; gx += step) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,hCss); ctx.stroke(); }
+  for (let gy = originY % step; gy < hCss; gy += step){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(wCss,gy); ctx.stroke(); }
 
   // axes
   ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(0, hCss / 2 + ty); ctx.lineTo(wCss, hCss / 2 + ty); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(wCss / 2 + tx, 0); ctx.lineTo(wCss / 2 + tx, hCss); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,hCss/2+ty); ctx.lineTo(wCss,hCss/2+ty); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(wCss/2+tx,0); ctx.lineTo(wCss/2+tx,hCss); ctx.stroke();
 
   const W2S = (p) => ({ x: wCss/2 + p.x*zoom + tx, y: hCss/2 - p.y*zoom + ty });
 
-  // lines + length
-  ctx.strokeStyle = "#0ea5e9";
-  ctx.lineWidth = 2;
-  ctx.font = "13px system-ui";
-  ctx.fillStyle = "#0f172a";
-  lines.forEach((l) => {
-    const a = points.find((p) => p.id === l.p1), b = points.find((p) => p.id === l.p2);
-    if (!a || !b) return;
-    const s1 = W2S(a), s2 = W2S(b);
-    ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
-    ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, (s1.x+s2.x)/2 + 6, (s1.y+s2.y)/2 - 6);
+  // normal lines + length
+  ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2; ctx.font="13px system-ui"; ctx.fillStyle="#0f172a";
+  lines.forEach(l=>{
+    const a=points.find(p=>p.id===l.p1), b=points.find(p=>p.id===l.p2); if(!a||!b) return;
+    const s1=W2S(a), s2=W2S(b);
+    ctx.beginPath(); ctx.moveTo(s1.x,s1.y); ctx.lineTo(s2.x,s2.y); ctx.stroke();
+    ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, (s1.x+s2.x)/2+6,(s1.y+s2.y)/2-6);
   });
 
-  // circles
-  circles.forEach((c) => {
-    const cs = W2S({ x: c.cx, y: c.cy });
-    ctx.strokeStyle = "#16a34a"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cs.x, cs.y, c.r * zoom, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = "#0f172a";
-    ctx.fillText(`R=${c.r} ${UNIT_LABEL}`, cs.x + 6, cs.y - 6);
-  });
-
-  // temp perpendicular red line
+  // temp red line (perp from ref measure)
   if (tempLine) {
-    const s1 = W2S({ x: tempLine.x1, y: tempLine.y1 });
-    const s2 = W2S({ x: tempLine.x2, y: tempLine.y2 });
-    ctx.strokeStyle = "#ef4444"; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
-    ctx.beginPath(); ctx.moveTo(s1.x, s1.y); ctx.lineTo(s2.x, s2.y); ctx.stroke();
+    const s1=W2S({x:tempLine.x1,y:tempLine.y1});
+    const s2=W2S({x:tempLine.x2,y:tempLine.y2});
+    ctx.strokeStyle="#ef4444"; ctx.lineWidth=2; ctx.setLineDash([6,6]);
+    ctx.beginPath(); ctx.moveTo(s1.x,s1.y); ctx.lineTo(s2.x,s2.y); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // temp green line (tie line)
+  if (tieTemp) {
+    const s1=W2S({x:tieTemp.x1,y:tieTemp.y1});
+    const s2=W2S({x:tieTemp.x2,y:tieTemp.y2});
+    ctx.strokeStyle="#10b981"; ctx.lineWidth=2; ctx.setLineDash([8,6]);
+    ctx.beginPath(); ctx.moveTo(s1.x,s1.y); ctx.lineTo(s2.x,s2.y); ctx.stroke();
     ctx.setLineDash([]);
   }
 
   // angle pills
-  angles.forEach((t) => {
-    const a = points.find((p) => p.id === t.a),
-          b = points.find((p) => p.id === t.b),
-          c = points.find((p) => p.id === t.c);
-    if (!a || !b || !c) return;
-    const sb = W2S(b);
-    drawLabelPill(ctx, sb.x + 10, sb.y - 10, `${t.deg}`);
+  angles.forEach(t=>{
+    const a=points.find(p=>p.id===t.a), b=points.find(p=>p.id===t.b), c=points.find(p=>p.id===t.c);
+    if(!a||!b||!c) return;
+    const sb=W2S(b); drawLabelPill(ctx,sb.x+10,sb.y-10,`${t.deg}`);
   });
 
   // points
-  points.forEach((p) => {
-    const s = W2S(p), r = 6;
-    ctx.lineWidth = 2; ctx.strokeStyle = "#fff";
-    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = "#ef4444"; ctx.beginPath(); ctx.arc(s.x, s.y, r - 1, 0, Math.PI * 2); ctx.fill();
-
-    ctx.font = "13px system-ui";
-    ctx.lineWidth = 3; ctx.strokeStyle = "#fff"; ctx.strokeText(p.label, s.x + 8, s.y - 8);
-    ctx.fillStyle = "#0f172a"; ctx.fillText(p.label, s.x + 8, s.y - 8);
+  points.forEach(p=>{
+    const s=W2S(p); const r=6;
+    ctx.lineWidth=2; ctx.strokeStyle="#fff";
+    ctx.beginPath(); ctx.arc(s.x,s.y,r,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle="#ef4444"; ctx.beginPath(); ctx.arc(s.x,s.y,r-1,0,Math.PI*2); ctx.fill();
+    ctx.font="13px system-ui"; ctx.lineWidth=3; ctx.strokeStyle="#fff";
+    ctx.strokeText(p.label,s.x+8,s.y-8);
+    ctx.fillStyle="#0f172a"; ctx.fillText(p.label,s.x+8,s.y-8);
   });
-}
+  }
 // src/pages/Drawing2D.jsx (Part 2/3)
-function useDrawing2D() {
+export default function Drawing2D() {
   // data
-  const [points, setPoints]   = useState([]);     // {id,label,x,y,h}
-  const [lines, setLines]     = useState([]);     // {id,p1,p2,lenMm}
-  const [angles, setAngles]   = useState([]);     // {id,a,b,c,deg}
-  const [circles, setCircles] = useState([]);     // {id,cx,cy,r}
+  const [points, setPoints] = useState([]);
+  const [lines, setLines]   = useState([]);
+  const [angles, setAngles] = useState([]);
 
   // inputs
-  const [E, setE]   = useState("");
-  const [N, setN]   = useState("");
-  const [H, setH]   = useState("");
+  const [E, setE] = useState("");
+  const [N, setN] = useState("");
   const [title, setTitle] = useState("");
 
-  // circle inputs
-  const [cE, setCE] = useState("");
-  const [cN, setCN] = useState("");
-  const [cR, setCR] = useState("");
-
-  // modes / selection
-  const [mode, setMode] = useState("line"); // 'line' | 'angle' | 'eraseLine' | 'refLine'
+  // modes
+  const [mode, setMode] = useState("line"); // 'line' | 'angle' | 'eraseLine' | 'refLine' | 'tieLine'
   const [selected, setSelected] = useState([]);
 
   // ref-line measure
-  const [refLine, setRefLine] = useState(null);   // {aId,bId}
-  const [tempLine, setTempLine] = useState(null); // {x1,y1,x2,y2}
-  const [measure, setMeasure] = useState({ open:false, value:null });
+  const [refLine, setRefLine] = useState(null); // {aId,bId}
+  const [tempLine, setTempLine] = useState(null); // red temp
+  const [measure, setMeasure] = useState({ open:false, value:null }); // {E,N,fromLabel}
   const tempTimerRef = useRef(null);
+
+  // tie-line measure
+  const [tieTemp, setTieTemp] = useState(null);
+  const [tieOverlay, setTieOverlay] = useState({ open:false, value:null });
 
   // view
   const BASE_ZOOM = 60, MIN_Z = 0.0005, MAX_Z = 2400;
@@ -185,38 +168,40 @@ function useDrawing2D() {
   const pointers=useRef(new Map());
 
   const nextLabel=()=>labelFromIndex(points.length);
-  const getLabel=(id)=>points.find(p=>p.id===id)?.label || id;
 
-  /* size / draw */
+  /* ---------- size / draw ---------- */
   useEffect(()=>{
     const cvs=canvasRef.current, wrap=wrapRef.current; if(!cvs||!wrap) return;
     const apply=()=>{
       const dpr=window.devicePixelRatio||1;
       const w=Math.max(320,Math.floor(wrap.clientWidth||360));
-      const h=Math.min(Math.max(Math.floor(w*1.0),360),640);
+      // show controls below: around 55% screen, or 75% of width
+      const maxH = Math.round(window.innerHeight * 0.55);
+      const h = Math.min(Math.max(Math.floor(w * 0.75), 260), Math.max(320, maxH));
       sizeRef.current={wCss:w,hCss:h};
-      cvs.style.width=w+"px"; cvs.style.height=h+"px";
+      cvs.style.width = w + "px";
+      cvs.style.height = h + "px";
       cvs.width=Math.floor(w*dpr); cvs.height=Math.floor(h*dpr);
       const ctx=cvs.getContext("2d");
       ctx.setTransform(dpr,0,0,dpr,0,0);
       ctxRef.current=ctx;
-      drawScene(ctx,w,h,zoom,tx,ty,points,lines,angles,tempLine,circles);
+      drawScene(ctx,w,h,zoom,tx,ty,points,lines,angles,tempLine,tieTemp);
     };
     apply();
     let t; const onR=()=>{ clearTimeout(t); t=setTimeout(()=>{ apply(); if(autoFit) fitView(points); },60); };
     window.addEventListener("resize",onR); window.addEventListener("orientationchange",onR);
     return ()=>{ clearTimeout(t); window.removeEventListener("resize",onR); window.removeEventListener("orientationchange",onR); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[autoFit,points,zoom,tx,ty,tempLine,circles]);
+  },[autoFit,points,zoom,tx,ty,tempLine,tieTemp]);
 
   useEffect(()=>{
     const ctx=ctxRef.current; if(!ctx) return;
-    drawScene(ctx,sizeRef.current.wCss,sizeRef.current.hCss,zoom,tx,ty,points,lines,angles,tempLine,circles);
-  },[points,lines,angles,zoom,tx,ty,tempLine,circles]);
+    drawScene(ctx,sizeRef.current.wCss,sizeRef.current.hCss,zoom,tx,ty,points,lines,angles,tempLine,tieTemp);
+  },[points,lines,angles,zoom,tx,ty,tempLine,tieTemp]);
 
   useEffect(()=>()=>{ if(tempTimerRef.current) clearTimeout(tempTimerRef.current); },[]);
 
-  /* view helpers */
+  /* ---------- view helpers ---------- */
   const fitView=(pts=points)=>{
     if(!pts.length) return;
     const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
@@ -226,20 +211,25 @@ function useDrawing2D() {
     const {wCss,hCss}=sizeRef.current;
 
     if (w===0 && h===0) {
-      const nz=Math.min(MAX_Z,Math.max(MIN_Z,Math.min(wCss,hCss)*0.5));
+      const targetZ=Math.min(wCss,hCss)*0.5;
+      const nz=Math.min(MAX_Z,Math.max(MIN_Z,targetZ));
       setZoom(nz); const p=pts[0]; setTx(-p.x*nz); setTy(+p.y*nz); return;
     }
+
     const pad=0.1*Math.max(w,h);
-    const nz=Math.min(MAX_Z,Math.max(MIN_Z, Math.min((wCss*0.9)/(w+pad*2),(hCss*0.9)/(h+pad*2))));
+    const zX=(wCss*0.9)/(w+pad*2); const zY=(hCss*0.9)/(h+pad*2);
+    const nz=Math.min(MAX_Z,Math.max(MIN_Z,Math.min(zX,zY)));
     setZoom(nz); setSval(zoomToSlider(nz));
-    const cx=(minX+maxX)/2, cy=(minY+maxY)/2; setTx(-cx*nz); setTy(+cy*nz);
+    const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+    setTx(-cx*nz); setTy(+cy*nz);
   };
   const resetView=()=>{ setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
   const clearLines=()=>setLines([]);
   const removeLastLine=()=>setLines(ls=>ls.slice(0,-1));
   const clearAll=()=>{
     setPoints([]); setLines([]); setAngles([]); setSelected([]);
-    setRefLine(null); setTempLine(null); setMeasure({open:false,value:null}); setCircles([]);
+    setRefLine(null); setTempLine(null); setMeasure({open:false,value:null});
+    setTieTemp(null); setTieOverlay({open:false,value:null});
   };
   const centerOnA=()=>{
     if(!points.length) return;
@@ -247,41 +237,23 @@ function useDrawing2D() {
   };
   useEffect(()=>{ if(autoFit) fitView(points); },[points]); // eslint-disable-line
 
-  /* add point (with optional H) */
+  /* ---------- add point ---------- */
   const addPoint=()=>{
     if(E===""||N==="") return;
-    const x=Number(E), y=Number(N);
-    if(!isFinite(x)||!isFinite(y)) return;
-    const h = H==="" ? 0 : Number(H);
-    if(!isFinite(h)) return;
-
-    const pt={ id:safeId(), label:nextLabel(), x, y, h };
+    const x=Number(E), y=Number(N); if(!isFinite(x)||!isFinite(y)) return;
+    const id=safeId(); const pt={id,label:nextLabel(),x,y};
     const next=[...points,pt]; setPoints(next);
-    setE(""); setN(""); setH("");
-    if(autoFit) setTimeout(()=>fitView(next),0);
+    setE(""); setN(""); if(autoFit) setTimeout(()=>fitView(next),0);
   };
 
-  /* add circle (center + radius) */
-  const addCircle = ()=>{
-    if (cE===""||cN===""||cR==="") return;
-    const cx=Number(cE), cy=Number(cN), r=Math.abs(Number(cR));
-    if(!isFinite(cx)||!isFinite(cy)||!isFinite(r)||r<=0) return;
-    setCircles(cs=>[...cs, { id:safeId(), cx, cy, r }]);
-    setCE(""); setCN(""); setCR("");
-  };
-
-  /* gestures */
-  const onPointerDown=(e)=>{ e.currentTarget.setPointerCapture?.(e.pointerId); pointers.current.set(e.pointerId,{ x: e.clientX, y: e.clientY, t: Date.now() }); };
+  /* ---------- gestures ---------- */
+  const onPointerDown=(e)=>{ e.currentTarget.setPointerCapture?.(e.pointerId); pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now()}); };
   const onPointerMove=(e)=>{
     const prev=pointers.current.get(e.pointerId); if(!prev) return;
-    // ✅ build-error fixed: use colon after x
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY, t: prev.t });
-
+    pointers.current.set(e.pointerId,{ x: e.clientX, y: e.clientY, t: prev.t });
     const pts=[...pointers.current.values()];
-    if(pts.length===1){
-      setTx(v=>v+(e.clientX-prev.x));
-      setTy(v=>v+(e.clientY-prev.y));
-    } else if(pts.length>=2){
+    if(pts.length===1){ setTx(v=>v+(e.clientX-prev.x)); setTy(v=>v+(e.clientY-prev.y)); }
+    else if(pts.length>=2){
       const [p1,p2]=pts;
       const distPrev=Math.hypot(p1.x-prev.x,p1.y-prev.y)||1;
       const distNow=Math.hypot(p1.x-p2.x,p1.y-p2.y)||1;
@@ -289,7 +261,7 @@ function useDrawing2D() {
       const mid={x:(p1.x+p2.x)/2-rect.left, y:(p1.y+p2.y)/2-rect.top};
       const {wCss:w,hCss:h}=sizeRef.current;
       setZoom(z=>{
-        const nz=Math.min(MAX_Z,Math.max(MIN_Z, z*(distNow/distPrev)));
+        const nz=Math.min(MAX_Z,Math.max(MIN_Z,z*(distNow/distPrev)));
         const wx=((mid.x-(w/2)-tx))/z, wy=((h/2)-(mid.y-ty))/z;
         const sx=w/2 + wx*nz + tx, sy=h/2 - wy*nz + ty;
         setTx(v=>v+(mid.x-sx)); setTy(v=>v+(mid.y-sy));
@@ -315,7 +287,7 @@ function useDrawing2D() {
         const t=Math.max(0,Math.min(1,((world.x-a.x)*vx+(world.y-a.y)*vy)/(vx*vx+vy*vy||1)));
         const cx=a.x+t*vx, cy=a.y+t*vy;
         const d=Math.hypot(world.x-cx,world.y-cy);
-        if(d<bestD){ bestD=d; bestIdx=idx; }
+        if(d<best){ bestD=d; bestIdx=idx; }
       });
       if(bestIdx!==-1 && bestD<=mmTol) setLines(ls=>ls.filter((_,i)=>i!==bestIdx));
       return;
@@ -329,6 +301,7 @@ function useDrawing2D() {
     setSelected(sel=>{
       const next=[...sel,pick.id];
 
+      // LINE
       if(mode==="line" && next.length===2){
         const [aId,bId]=next; if(aId!==bId){
           const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
@@ -337,6 +310,7 @@ function useDrawing2D() {
         return [];
       }
 
+      // ANGLE
       if(mode==="angle" && next.length===3){
         const [aId,bId,cId]=next;
         if(new Set(next).size===3){
@@ -346,11 +320,9 @@ function useDrawing2D() {
         return [];
       }
 
+      // REF LINE
       if(mode==="refLine"){
-        // Step-1 choose 2 points as reference (order matters: FIRST -> SECOND)
         if(!refLine && next.length===2){ setRefLine({aId:next[0], bId:next[1]}); return []; }
-
-        // Step-2 pick third point to measure from FIRST
         if(refLine){
           if(pick.id===refLine.aId || pick.id===refLine.bId) return [];
           const a=points.find(p=>p.id===refLine.aId);
@@ -359,133 +331,71 @@ function useDrawing2D() {
           if(a&&b&&c){
             const vx=b.x-a.x, vy=b.y-a.y;
             const abLen=Math.hypot(vx,vy)||1;
-
             const t=((c.x-a.x)*vx + (c.y-a.y)*vy)/(abLen*abLen);
             const px=a.x + t*vx, py=a.y + t*vy;
-
             const perp=Math.hypot(c.x-px, c.y-py);
-            // cross product sign: left of A->B = positive
+            // left of A->B = +E ; right = -E  (clockwise = negative)
             const crossZ = vx*(c.y-a.y) - vy*(c.x-a.x);
-            const ESigned = (crossZ >= 0 ? -perp : +perp);
+            const ESigned = (crossZ >= 0 ? -1 : 1) * perp;   // (flip per your previous UI)
             const NSigned = t * abLen;
 
+            setTempLine(null);
             setTempLine({ x1:c.x, y1:c.y, x2:px, y2:py });
-            setMeasure({
-              open:true,
-              value:{
-                E: `${ESigned.toFixed(2)} ${UNIT_LABEL}`,
-                N: `${NSigned.toFixed(2)} ${UNIT_LABEL}`,
-                fromLabel: a.label || "first pick"
-              }
-            });
+            const aLabel=a.label || "first pick";
+            setMeasure({ open:true, value:{ E:`${ESigned.toFixed(2)} ${UNIT_LABEL}`, N:`${NSigned.toFixed(2)} ${UNIT_LABEL}`, fromLabel:aLabel } });
           }
           return [];
         }
+      }
+
+      // TIE LINE
+      if(mode==="tieLine" && next.length===2){
+        const [aId,bId]=next; if(aId!==bId){
+          const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
+          const dE = +(b.x - a.x).toFixed(2);
+          const dN = +(b.y - a.y).toFixed(2);
+          const L  = +distMm(a,b).toFixed(2);
+          setTieTemp({ x1:a.x, y1:a.y, x2:b.x, y2:b.y });
+          setTieOverlay({
+            open:true,
+            value:{ from:a.label, to:b.label, dE, dN, L }
+          });
+          // auto hide green line after 3s
+          if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
+          tempTimerRef.current = setTimeout(()=>{ setTieTemp(null); setTieOverlay({open:false,value:null}); }, 3000);
+        }
+        return [];
       }
 
       return next;
     });
   };
 
-  /* save (DB only) */
+  /* ---------- save (DB only) ---------- */
   const saveToFirebase = async () => {
     const now = Date.now();
     await set(push(dbRef(db, "drawings")), {
       createdAt: now,
       title: title || "Untitled",
       unitLabel: UNIT_LABEL,
-      state: { points, lines, angles, circles, view: { zoom, tx, ty } },
-      meta: { points: points.length, lines: lines.length, angles: angles.length, circles: circles.length },
+      state: { points, lines, angles, view: { zoom, tx, ty } },
+      meta: { points: points.length, lines: lines.length, triples: angles.length },
     });
     alert("Saved");
   };
-
-  /* H level summary */
-  const levelSummary = (() => {
-    const map = new Map();
-    points.forEach(p=>{
-      const key=String(p.h ?? 0);
-      if(!map.has(key)) map.set(key,{ h:p.h ?? 0, count:0, labels:[] });
-      const o=map.get(key); o.count++; o.labels.push(p.label);
-    });
-    return Array.from(map.values()).sort((a,b)=>a.h-b.h);
-  })();
-
-  return {
-    // refs
-    wrapRef, canvasRef,
-
-    // inputs
-    E,N,H,setE,setN,setH, addPoint, nextLabel,
-
-    // modes + selections
-    mode,setMode, selected, setSelected,
-
-    // view & actions
-    fitView, resetView, clearAll, centerOnA, removeLastLine, clearLines,
-    autoFit,setAutoFit, MIN_S, MAX_S, sval, onSliderChange, zoom,
-
-    // title & save
-    title,setTitle, saveToFirebase,
-
-    // circle inputs + action
-    cE,cN,cR,setCE,setCN,setCR, addCircle,
-
-    // data
-    points,lines,angles,circles, getLabel,
-
-    // gestures
-    onPointerDown,onPointerMove,onPointerUp,
-
-    // ref/measure
-    refLine,setRefLine, tempLine, setTempLine, measure, setMeasure,
-
-    // level table
-    levelSummary,
-  };
-      }
-// src/pages/Drawing2D.jsx (Part 3/3)
-export default function Drawing2DPage() {
-  const st = useDrawing2D();
-  const [full, setFull] = useState(false); // full view overlay
-
-  const th = { textAlign:"left", padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:12, color:"#64748b" };
-  const td = { padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:13 };
-
-  // toolbar button style
-  const tb = (active) => ({
-    display: "inline-block",
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "none",
-    background: active ? "#0ea5e9" : "#64748b",
-    color: "#fff",
-    fontWeight: 700,
-    fontSize: 13,
-    marginRight: 8,
-    flex: "0 0 auto",
-  });
-
-  // Ref line ↺ Change
-  const onRefChange = () => {
-    st.setMeasure({ open:false, value:null });
-    st.setTempLine(null);
-    st.setSelected([]);
-    st.setRefLine(null);
-    st.setMode("refLine");
-  };
-
+  // src/pages/Drawing2D.jsx (Part 3/3)
+  /* -------------------- UI -------------------- */
   return (
-    <div className="grid" style={{ position: "relative" }}>
+    <div className="grid">
       {/* Canvas */}
       <div className="card" style={{ padding: 8, position: "relative" }}>
-        <div ref={st.wrapRef} style={{ width: "100%" }}>
+        <div ref={wrapRef} style={{ width: "100%" }}>
           <canvas
-            ref={st.canvasRef}
-            onPointerDown={st.onPointerDown}
-            onPointerMove={st.onPointerMove}
-            onPointerUp={st.onPointerUp}
-            onPointerCancel={st.onPointerUp}
+            ref={canvasRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
             style={{
               display:"block", width:"100%", background:"#fff",
               borderRadius:12, border:"1px solid #e5e7eb",
@@ -494,35 +404,41 @@ export default function Drawing2DPage() {
           />
         </div>
 
-        {/* Measure Overlay */}
-        {st.measure.open && (
+        {/* Ref measure Overlay (E + N) */}
+        {measure.open && (
           <div
             style={{
-              position:"absolute", right:12, bottom:12,
-              background:"rgba(15,23,42,0.96)", color:"#fff",
-              border:"1px solid #334155", borderRadius:12, padding:"10px 12px",
-              boxShadow:"0 8px 24px rgba(0,0,0,0.18)", display:"flex", alignItems:"center", gap:12, zIndex: 12
+              position:"absolute",
+              right:12, bottom:12,
+              background:"rgba(15,23,42,0.96)",
+              color:"#fff",
+              border:"1px solid #334155",
+              borderRadius:12,
+              padding:"10px 12px",
+              boxShadow:"0 8px 24px rgba(0,0,0,0.18)",
+              display:"flex", alignItems:"center", gap:12, zIndex:2
             }}
           >
             <div style={{ display:"grid", gap:4 }}>
               <div style={{ fontSize:12, opacity:0.8 }}>Perpendicular (E)</div>
               <div style={{ fontSize:18, fontWeight:800, color:"#fca5a5" }}>
-                {typeof st.measure.value==="object" ? st.measure.value.E : st.measure.value}
+                {typeof measure.value==="object" ? measure.value.E : measure.value}
               </div>
 
               <div style={{ fontSize:12, opacity:0.8, marginTop:6 }}>
-                Along Ref from <b>{typeof st.measure.value==="object" ? (st.measure.value.fromLabel || "first pick") : "first pick"}</b> (N)
+                Along Ref from <b>{typeof measure.value==="object" ? (measure.value.fromLabel || "first pick") : "first pick"}</b> (N)
               </div>
               <div style={{ fontSize:18, fontWeight:800, color:"#67e8f9" }}>
-                {typeof st.measure.value==="object" && st.measure.value.N}
+                {typeof measure.value==="object" && measure.value.N}
               </div>
             </div>
 
             <button
               className="btn"
               onClick={()=>{
-                st.setMeasure({ open:false, value:null });
-                if (st.tempLine) setTimeout(()=>st.setTempLine(null), 3000); // OK နှိပ်ပြီး 3s နောက် ပျောက်
+                setMeasure({ open:false, value:null });
+                if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
+                tempTimerRef.current=setTimeout(()=>setTempLine(null),3000);
               }}
               style={{ background:"#0ea5e9" }}
             >
@@ -531,253 +447,162 @@ export default function Drawing2DPage() {
           </div>
         )}
 
-        {/* Scale slider */}
+        {/* Tie line overlay */}
+        {tieOverlay.open && tieOverlay.value && (
+          <div
+            style={{
+              position:"absolute",
+              left:12, bottom:12,
+              background:"rgba(6,95,70,0.95)",
+              color:"#ecfdf5",
+              border:"1px solid #10b981",
+              borderRadius:12,
+              padding:"10px 12px",
+              boxShadow:"0 8px 24px rgba(0,0,0,0.18)",
+              zIndex:2
+            }}
+          >
+            <div style={{ fontSize:12, opacity:0.9 }}>
+              Tie: {tieOverlay.value.from} → {tieOverlay.value.to}
+            </div>
+            <div style={{ marginTop:4, fontWeight:800 }}>
+              ΔE: {tieOverlay.value.dE} {UNIT_LABEL}
+            </div>
+            <div style={{ fontWeight:800 }}>
+              ΔN: {tieOverlay.value.dN} {UNIT_LABEL}
+            </div>
+            <div style={{ fontWeight:800 }}>
+              L: {tieOverlay.value.L} {UNIT_LABEL}
+            </div>
+          </div>
+        )}
+
+        {/* Scale slider + horizontal action bar under canvas */}
         <div style={{ marginTop: 10 }}>
           <div className="row" style={{ justifyContent:"space-between", marginBottom:6 }}>
             <span className="small">Scale (px/{UNIT_LABEL})</span>
-            <span className="small">{Math.max(0.0001, Math.round(st.zoom*1000)/1000)} px/{UNIT_LABEL}</span>
+            <span className="small">
+              {Math.max(0.0001, Math.round(zoom*1000)/1000)} px/{UNIT_LABEL}
+            </span>
           </div>
           <input
             type="range"
-            min={st.MIN_S}
-            max={st.MAX_S}
+            min={MIN_S}
+            max={MAX_S}
             step={0.01}
-            value={st.sval}
-            onChange={(e)=>st.onSliderChange(e.target.value)}
+            value={sval}
+            onChange={(e)=>onSliderChange(e.target.value)}
             style={{ width:"100%" }}
           />
-          <div className="row" style={{ justifyContent:"space-between", marginTop:4 }}>
-            <span className="small">{st.MIN_S}</span>
-            <span className="small">0</span>
-            <span className="small">{st.MAX_S}</span>
-          </div>
-        </div>
 
-        {/* === Action Bar (Horizontal scroll under zoom) === */}
-        <div
-          style={{
-            marginTop: 10,
-            padding: "8px",
-            background: "#f1f5f9",
-            border: "1px solid #e5e7eb",
-            borderRadius: 12,
-          }}
-        >
+          {/* Horizontal scrollable toolbar */}
           <div
             style={{
-              display: "flex",
-              gap: 8,
-              overflowX: "auto",
-              whiteSpace: "nowrap",
-              WebkitOverflowScrolling: "touch",
-              paddingBottom: 2
+              marginTop:10, display:"flex", gap:8, overflowX:"auto",
+              paddingBottom:6, WebkitOverflowScrolling:"touch"
             }}
           >
-            <button style={tb(st.mode==="line")}     onClick={()=>{ st.setMode("line"); st.setSelected([]); }}>Line</button>
-            <button style={tb(st.mode==="refLine")}  onClick={()=>{ st.setMode("refLine"); st.setSelected([]); }}>📐 Ref line</button>
-            <button style={tb(false)}                onClick={onRefChange}>↺ Change</button>
-            <button style={tb(st.mode==="angle")}    onClick={()=>{ st.setMode("angle"); st.setSelected([]); }}>Angle</button>
-            <button style={tb(st.mode==="eraseLine")}onClick={()=>{ st.setMode("eraseLine"); st.setSelected([]); }}>Erase (tap)</button>
+            <button className="btn"
+              onClick={()=>{ setMode("line"); setSelected([]); }}
+              style={{ background: mode==="line" ? "#0ea5e9" : "#64748b" }}>Line</button>
 
-            <button style={tb(false)} onClick={st.centerOnA}>Find A</button>
-            <button style={tb(false)} onClick={st.removeLastLine}>Remove last</button>
-            <button style={tb(false)} onClick={st.clearLines}>Clear lines</button>
-            <button style={tb(false)} onClick={st.clearAll}>Clear All</button>
-            <button style={tb(false)} onClick={st.fitView}>Fit</button>
-            <button style={tb(false)} onClick={st.resetView}>Reset</button>
+            <button className="btn"
+              onClick={()=>{ setMode("tieLine"); setSelected([]); setTieOverlay({open:false,value:null}); setTieTemp(null); }}
+              style={{ background: mode==="tieLine" ? "#10b981" : "#64748b" }}>Tie line</button>
 
-            {st.refLine && (
-              <span
-                style={{
-                  display:"inline-block",
-                  padding:"10px 12px",
-                  background:"#e2e8f0",
-                  color:"#0f172a",
-                  borderRadius:10,
-                  fontSize:12,
-                  fontWeight:700
-                }}
-              >
-                Ref: {st.getLabel(st.refLine.aId)}–{st.getLabel(st.refLine.bId)}
-              </span>
+            <button className="btn"
+              onClick={()=>{ setMode("angle"); setSelected([]); }}
+              style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b" }}>Angle</button>
+
+            <button className="btn"
+              onClick={()=>{ setMode("eraseLine"); setSelected([]); }}
+              style={{ background: mode==="eraseLine" ? "#0ea5e9" : "#64748b" }}>Erase line (tap)</button>
+
+            <button className="btn"
+              onClick={()=>{ setMode("refLine"); setSelected([]); }}
+              style={{ background: mode==="refLine" ? "#0ea5e9" : "#64748b" }}>📐 Ref line</button>
+
+            {refLine && (
+              <div style={{ display:"inline-flex", alignItems:"center", gap:8 }}>
+                <span className="small" style={{ background:"#e2e8f0", color:"#0f172a", borderRadius:12, padding:"4px 8px" }}>
+                  Ref: {points.find(p=>p.id===refLine.aId)?.label}–{points.find(p=>p.id===refLine.bId)?.label}
+                </span>
+                <button className="btn"
+                  onClick={()=>{ setRefLine(null); setSelected([]); setMode("refLine"); }}
+                  style={{ background:"#94a3b8" }}>Change</button>
+                <button className="btn"
+                  onClick={()=>{ setRefLine(null); setTempLine(null); setSelected([]); setMeasure({open:false,value:null}); }}
+                  style={{ background:"#ef4444" }}>Clear</button>
+              </div>
             )}
 
-            <label
-              style={{
-                display:"inline-flex", alignItems:"center", gap:6,
-                padding:"8px 10px", background:"#fff", border:"1px solid #e5e7eb",
-                borderRadius:10
-              }}
-            >
-              <input type="checkbox" checked={st.autoFit} onChange={(e)=>st.setAutoFit(e.target.checked)} />
-              <span className="small">Auto fit</span>
-            </label>
+            <button className="btn" onClick={centerOnA}>Find A</button>
+            <button className="btn" onClick={fitView}>Fit</button>
+            <button className="btn" onClick={resetView}>Reset</button>
+            <button className="btn" onClick={clearAll} style={{ background:"#ef4444" }}>Clear All</button>
+            <button className="btn" onClick={removeLastLine}>Remove last line</button>
+            <button className="btn" onClick={clearLines}>Clear lines</button>
           </div>
         </div>
       </div>
 
-      {/* Controls: Title + ENH + Circle */}
+      {/* Controls under toolbar */}
       <div className="card">
         <div className="row" style={{ marginBottom: 8 }}>
           <input
             className="input"
             placeholder="Title (e.g. P83 pipe)"
-            value={st.title}
-            onChange={(e)=>st.setTitle(e.target.value)}
+            value={title}
+            onChange={(e)=>setTitle(e.target.value)}
             style={{ flex:"1 1 260px" }}
           />
-          <button className="btn" onClick={st.saveToFirebase}>Save</button>
+          <button className="btn" onClick={saveToFirebase}>Save</button>
         </div>
 
-        <div className="row" style={{ marginBottom: 8, gap:8, flexWrap:"wrap" }}>
-          <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder={`E (${UNIT_LABEL})`} value={st.E} onChange={(e)=>st.setE(e.target.value)} style={{ width:110 }}/>
-          <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder={`N (${UNIT_LABEL})`} value={st.N} onChange={(e)=>st.setN(e.target.value)} style={{ width:110 }}/>
-          <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder="H (level)" value={st.H} onChange={(e)=>st.setH(e.target.value)} style={{ width:110 }}/>
-          <button className="btn" onClick={st.addPoint}>Add (label {st.nextLabel()})</button>
-        </div>
-
-        {/* Circle tool */}
-        <div className="row" style={{ marginTop:8, gap:8, flexWrap:"wrap" }}>
-          <span className="small" style={{ minWidth:80, color:"#64748b" }}>Add Circle</span>
-          <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder="Center E" value={st.cE} onChange={(e)=>st.setCE(e.target.value)} style={{ width:110 }}/>
-          <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder="Center N" value={st.cN} onChange={(e)=>st.setCN(e.target.value)} style={{ width:110 }}/>
-          <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder="Radius (mm)" value={st.cR} onChange={(e)=>st.setCR(e.target.value)} style={{ width:110 }}/>
-          <button className="btn" onClick={st.addCircle}>Add Circle</button>
-
-          {/* Full View toggle */}
-          <button className="btn" onClick={()=>setFull(true)} style={{ marginLeft: "auto", background:"#0ea5e9" }}>
-            Full View
-          </button>
+        <div className="row" style={{ marginBottom: 8, gap:8 }}>
+          <input
+            className="input" type="number" inputMode="decimal" step="any"
+            placeholder={`E (${UNIT_LABEL})`} value={E} onChange={(e)=>setE(e.target.value)}
+            style={{ width:110 }}
+          />
+          <input
+            className="input" type="number" inputMode="decimal" step="any"
+            placeholder={`N (${UNIT_LABEL})`} value={N} onChange={(e)=>setN(e.target.value)}
+            style={{ width:110 }}
+          />
+          <button className="btn" onClick={addPoint}>Add (label {nextLabel()})</button>
         </div>
       </div>
 
       {/* Lists */}
       <div className="card">
         <div className="page-title">Lines</div>
-        {st.lines.length===0 && <div className="small">No lines yet.</div>}
-        {st.lines.map(l=>(
-          <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
-            <div>
-              <b>{st.getLabel(l.p1)}–{st.getLabel(l.p2)}</b> &nbsp;
-              <b>{Math.round(l.lenMm)} {UNIT_LABEL}</b>
+        {lines.length===0 && <div className="small">No lines yet.</div>}
+        {lines.map(l=>{
+          const a=points.find(p=>p.id===l.p1), b=points.find(p=>p.id===l.p2);
+          const ab = a && b ? `${a.label}–${b.label}` : `${l.p1}–${l.p2}`;
+          return (
+            <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
+              <div>{ab} &nbsp;<b>{Math.round(l.lenMm)} {UNIT_LABEL}</b></div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="card">
         <div className="page-title">Angles</div>
-        {st.angles.length===0 && <div className="small">No angles yet.</div>}
-        {st.angles.map(t=>(
-          <div key={t.id} className="small">
-            at <b>{st.getLabel(t.b)}</b> from <b>{st.getLabel(t.a)}</b>-<b>{st.getLabel(t.b)}</b>-<b>{st.getLabel(t.c)}</b> = <b>{t.deg}°</b>
-          </div>
-        ))}
+        {angles.length===0 && <div className="small">No angles yet.</div>}
+        {angles.map(t=>{
+          const a=points.find(p=>p.id===t.a)?.label||t.a;
+          const b=points.find(p=>p.id===t.b)?.label||t.b;
+          const c=points.find(p=>p.id===t.c)?.label||t.c;
+          return (
+            <div key={t.id} className="small">
+              at <b>{b}</b> from <b>{a},{b},{c}</b> = <b>{t.deg}°</b>
+            </div>
+          );
+        })}
       </div>
-
-      {/* H Levels */}
-      <div className="card">
-        <div className="page-title">Levels (H)</div>
-        {st.points.length===0 && <div className="small">No points.</div>}
-        {st.points.length>0 && (
-          <>
-            <div style={{ overflowX:"auto", border:"1px solid #e5e7eb", borderRadius:10 }}>
-              <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                <thead>
-                  <tr style={{ background:"#f8fafc" }}>
-                    <th style={th}>Label</th><th style={th}>E</th><th style={th}>N</th><th style={th}>H</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {st.points.map(p=>(
-                    <tr key={p.id}>
-                      <td style={td}><b>{p.label}</b></td>
-                      <td style={td}>{p.x}</td>
-                      <td style={td}>{p.y}</td>
-                      <td style={td}>{p.h ?? 0}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ marginTop:10 }}>
-              <div className="small" style={{ color:"#64748b", marginBottom:6 }}>Same level summary</div>
-              {st.levelSummary.map((g,i)=>(
-                <div key={i} className="small">H = <b>{g.h}</b> → <b>{g.count}</b> pt(s) • {g.labels.join(", ")}</div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ===== Full View Overlay (phone fullscreen pan/zoom + actions) ===== */}
-      {full && (
-        <div
-          style={{
-            position:"fixed", inset:0, background:"#0b1020",
-            zIndex: 9999, display:"flex", flexDirection:"column"
-          }}
-        >
-          {/* top bar */}
-          <div style={{
-            height:48, display:"flex", alignItems:"center", gap:8,
-            padding:"0 8px", borderBottom:"1px solid #1f2937",
-            background:"rgba(15,23,42,0.95)", color:"#fff"
-          }}>
-            <button
-              onClick={()=>setFull(false)}
-              style={{
-                height:34, padding:"0 12px", borderRadius:10, border:"none",
-                background:"#0ea5e9", color:"#fff", fontWeight:800
-              }}
-            >
-              Back
-            </button>
-
-            {/* quick modes in full view */}
-            <div style={{ display:"flex", gap:8, marginLeft:8, overflowX:"auto" }}>
-              <button style={tb(st.mode==="line")}     onClick={()=>{ st.setMode("line"); st.setSelected([]); }}>Line</button>
-              <button style={tb(st.mode==="refLine")}  onClick={()=>{ st.setMode("refLine"); st.setSelected([]); }}>📐 Ref</button>
-              <button style={{...tb(false), background:"#94a3b8"}} onClick={()=>{
-                st.setMeasure({ open:false, value:null });
-                st.setTempLine(null);
-                st.setSelected([]);
-                st.setRefLine(null);
-                st.setMode("refLine");
-              }}>↺ Change</button>
-              <button style={tb(st.mode==="angle")}    onClick={()=>{ st.setMode("angle"); st.setSelected([]); }}>Angle</button>
-              <button style={tb(st.mode==="eraseLine")}onClick={()=>{ st.setMode("eraseLine"); st.setSelected([]); }}>Erase</button>
-            </div>
-
-            <div style={{ marginLeft:"auto", fontSize:12, color:"#cbd5e1" }}>
-              {st.refLine ? <>Ref: <b>{st.getLabel(st.refLine.aId)}–{st.getLabel(st.refLine.bId)}</b></> : "No ref"}
-            </div>
-          </div>
-
-          {/* full canvas area */}
-          <div style={{ flex:1, padding:8 }}>
-            <div ref={st.wrapRef} style={{ width:"100%", height:"100%" }}>
-              <canvas
-                ref={st.canvasRef}
-                onPointerDown={st.onPointerDown}
-                onPointerMove={st.onPointerMove}
-                onPointerUp={st.onPointerUp}
-                onPointerCancel={st.onPointerUp}
-                style={{
-                  display:"block", width:"100%", height:"100%",
-                  background:"#fff", borderRadius:12, touchAction:"none", cursor:"crosshair"
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
-  );
-              }
+  ); // return
+} // component
