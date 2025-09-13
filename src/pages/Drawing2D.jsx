@@ -18,13 +18,7 @@ const angleDeg = (a, b, c) => {
   const cos = Math.min(1, Math.max(-1, dot / (m1 * m2)));
   return +(Math.acos(cos) * 180 / Math.PI).toFixed(2);
 };
-const labelFromIndex = (i) => {
-  let s = ""; i += 1;
-  while (i > 0) { i--; s = String.fromCharCode(65 + (i % 26)) + s; i = Math.floor(i / 26); }
-  return s;
-};
-
-// AB, AC … label (id→label)
+const labelFromIndex = (i) => { let s=""; i+=1; while(i>0){ i--; s=String.fromCharCode(65+(i%26))+s; i=Math.floor(i/26);} return s; };
 const lineName = (l, pts) => {
   const la = pts.find(p => p.id === l.p1)?.label || "?";
   const lb = pts.find(p => p.id === l.p2)?.label || "?";
@@ -34,42 +28,37 @@ const lineName = (l, pts) => {
 // angle pill
 function drawLabelPill(ctx, x, y, text) {
   ctx.font = "bold 14px system-ui";
-  const padX = 6, padY = 4;
-  const w = Math.ceil(ctx.measureText(text).width) + padX * 2;
-  const h = 22, r = 8;
+  const padX=6, padY=4, h=22, r=8;
+  const w = Math.ceil(ctx.measureText(text).width) + padX*2;
   const bx = Math.round(x), by = Math.round(y - h);
   ctx.beginPath();
-  ctx.moveTo(bx + r, by); ctx.lineTo(bx + w - r, by);
-  ctx.quadraticCurveTo(bx + w, by, bx + w, by + r);
-  ctx.lineTo(bx + w, by + h - r);
-  ctx.quadraticCurveTo(bx + w, by + h, bx + w - r, by + h);
-  ctx.lineTo(bx + r, by + h); ctx.quadraticCurveTo(bx, by + h, bx, by + h - r);
-  ctx.lineTo(bx, by + r); ctx.quadraticCurveTo(bx, by, bx + r, by);
-  ctx.closePath();
-  ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2;
-  ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#0f172a"; ctx.fillText(text, bx + padX, by + h - padY - 2);
+  ctx.moveTo(bx+r,by); ctx.lineTo(bx+w-r,by); ctx.quadraticCurveTo(bx+w,by,bx+w,by+r);
+  ctx.lineTo(bx+w,by+h-r); ctx.quadraticCurveTo(bx+w,by+h,bx+w-r,by+h);
+  ctx.lineTo(bx+r,by+h); ctx.quadraticCurveTo(bx,by+h,bx,by+h-r);
+  ctx.lineTo(bx,by+r); ctx.quadraticCurveTo(bx,by,bx+r,by); ctx.closePath();
+  ctx.fillStyle="rgba(255,255,255,0.9)"; ctx.strokeStyle="#0ea5e9"; ctx.lineWidth=2; ctx.fill(); ctx.stroke();
+  ctx.fillStyle="#0f172a"; ctx.fillText(text, bx+padX, by+h-padY-2);
 }
 
-// renderer (circles + temp line support)
+// renderer (lines/angles/circles + tempLine)
 function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, circles, tempLine) {
-  ctx.clearRect(0, 0, wCss, hCss);
+  ctx.clearRect(0,0,wCss,hCss);
 
-  const step = Math.max(zoom * 1, 24);
-  const originX = wCss/2 + tx, originY = hCss/2 + ty;
+  const step=Math.max(zoom*1,24);
+  const originX=wCss/2+tx, originY=hCss/2+ty;
 
-  ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 1;
-  for (let gx = originX % step; gx < wCss; gx += step) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,hCss); ctx.stroke(); }
-  for (let gy = originY % step; gy < hCss; gy += step){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(wCss,gy); ctx.stroke(); }
+  ctx.strokeStyle="#e5e7eb"; ctx.lineWidth=1;
+  for(let gx=originX%step; gx<wCss; gx+=step){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,hCss); ctx.stroke(); }
+  for(let gy=originY%step; gy<hCss; gy+=step){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(wCss,gy); ctx.stroke(); }
 
-  ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5;
+  ctx.strokeStyle="#94a3b8"; ctx.lineWidth=1.5;
   ctx.beginPath(); ctx.moveTo(0,hCss/2+ty); ctx.lineTo(wCss,hCss/2+ty); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(wCss/2+tx,0); ctx.lineTo(wCss/2+tx,hCss); ctx.stroke();
 
-  const W2S = (p) => ({ x: wCss/2 + p.x*zoom + tx, y: hCss/2 - p.y*zoom + ty });
+  const W2S = (p)=>({ x:wCss/2 + p.x*zoom + tx, y:hCss/2 - p.y*zoom + ty });
 
-  // lines
-  ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2; ctx.font="13px system-ui"; ctx.fillStyle="#0f172a";
+  // lines + length
+  ctx.strokeStyle="#0ea5e9"; ctx.lineWidth=2; ctx.font="13px system-ui"; ctx.fillStyle="#0f172a";
   lines.forEach(l=>{
     const a=points.find(p=>p.id===l.p1), b=points.find(p=>p.id===l.p2); if(!a||!b) return;
     const s1=W2S(a), s2=W2S(b);
@@ -77,7 +66,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, circles
     ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, (s1.x+s2.x)/2+6,(s1.y+s2.y)/2-6);
   });
 
-  // temp red dashed (ref perpendicular / tie)
+  // temp red dashed
   if (tempLine) {
     const s1=W2S({x:tempLine.x1,y:tempLine.y1});
     const s2=W2S({x:tempLine.x2,y:tempLine.y2});
@@ -87,20 +76,20 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, circles
   }
 
   // circles
-  circles.forEach((c, idx)=>{
-    const center = points.find(p=>p.id===c.centerId); if(!center) return;
-    const s = W2S(center);
-    ctx.strokeStyle = "#22d3ee"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(1, c.r * zoom), 0, Math.PI*2); ctx.stroke();
-    ctx.fillStyle = "#0f172a"; ctx.font="bold 13px system-ui";
-    ctx.fillText(`C${idx+1}`, s.x + 8, s.y - 8);
+  circles.forEach((c,idx)=>{
+    const center=points.find(p=>p.id===c.centerId); if(!center) return;
+    const s=W2S(center);
+    ctx.strokeStyle="#22d3ee"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(1,c.r*zoom), 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle="#0f172a"; ctx.font="bold 13px system-ui";
+    ctx.fillText(`C${idx+1}`, s.x+8, s.y-8);
   });
 
   // angles
   angles.forEach(t=>{
     const a=points.find(p=>p.id===t.a), b=points.find(p=>p.id===t.b), c=points.find(p=>p.id===t.c);
     if(!a||!b||!c) return;
-    const sb=W2S(b); drawLabelPill(ctx,sb.x+10,sb.y-10,`${t.deg}`);
+    const sb=W2S(b); drawLabelPill(ctx, sb.x+10, sb.y-10, `${t.deg}`);
   });
 
   // points
@@ -113,54 +102,48 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, circles
     ctx.strokeText(p.label,s.x+8,s.y-8);
     ctx.fillStyle="#0f172a"; ctx.fillText(p.label,s.x+8,s.y-8);
   });
-}
-
-export { UNIT_LABEL, safeId, distMm, angleDeg, labelFromIndex, lineName, drawScene };
+              }
 // src/pages/Drawing2D.jsx (Part 2/3)
-import { UNIT_LABEL, safeId, distMm, angleDeg, labelFromIndex, lineName, drawScene } from "./Drawing2D.jsx";
-
 function useDrawing2D() {
   // data
-  const [points, setPoints] = useState([]);        // {id,label,x,y}
-  const [lines, setLines]   = useState([]);        // {id,p1,p2,lenMm}
-  const [angles, setAngles] = useState([]);        // {id,a,b,c,deg}
-  const [hRows, setHRows]   = useState([]);        // {id,label,h}
-  const [ties, setTies]     = useState([]);        // {id,aId,bId,E,N}
-  const [circles, setCircles] = useState([]);      // {id,centerId,r}
+  const [points, setPoints] = useState([]);
+  const [lines, setLines]   = useState([]);
+  const [angles, setAngles] = useState([]);
+  const [hRows, setHRows]   = useState([]);
+  const [ties, setTies]     = useState([]);
+  const [circles, setCircles] = useState([]);
 
   // inputs
-  const [E, setE] = useState("");  // mm
-  const [N, setN] = useState("");  // mm
-  const [H, setH] = useState("");  // level
+  const [E, setE] = useState("");
+  const [N, setN] = useState("");
+  const [H, setH] = useState("");
   const [title, setTitle] = useState("");
 
-  // modes / selects
-  const [mode, setMode] = useState("line");  // 'line'|'angle'|'eraseLine'|'refLine'|'tie'|'circle'
+  // mode/select
+  const [mode, setMode] = useState("line"); // line | angle | eraseLine | refLine | tie | circle
   const [selected, setSelected] = useState([]);
   const [refLine, setRefLine] = useState(null); // {aId,bId}
   const [tempLine, setTempLine] = useState(null);
   const [measure, setMeasure]   = useState({ open:false, value:null });
-
-  // circle input
-  const [circleR, setCircleR] = useState("");
+  const [circleR, setCircleR]   = useState("");
 
   // view
-  const BASE_ZOOM = 60, MIN_Z = 0.0005, MAX_Z = 2400;
-  const [zoom, setZoom] = useState(BASE_ZOOM);
-  const [tx, setTx] = useState(0), [ty, setTy] = useState(0);
-  const [autoFit, setAutoFit] = useState(true);
+  const BASE_ZOOM=60, MIN_Z=0.0005, MAX_Z=2400;
+  const [zoom,setZoom]=useState(BASE_ZOOM);
+  const [tx,setTx]=useState(0), [ty,setTy]=useState(0);
+  const [autoFit,setAutoFit]=useState(true);
   const MIN_S=-200, MAX_S=80;
   const [sval,setSval]=useState(0);
-  const sliderToZoom = (s)=>Math.min(MAX_Z,Math.max(MIN_Z,BASE_ZOOM*Math.pow(2,s/10)));
-  const zoomToSlider = (z)=>Math.max(MIN_S,Math.min(MAX_S,Math.round(10*Math.log2((z||BASE_ZOOM)/BASE_ZOOM)*100)/100));
+  const sliderToZoom=(s)=>Math.min(MAX_Z,Math.max(MIN_Z,BASE_ZOOM*Math.pow(2,s/10)));
+  const zoomToSlider=(z)=>Math.max(MIN_S,Math.min(MAX_S,Math.round(10*Math.log2((z||BASE_ZOOM)/BASE_ZOOM)*100)/100));
   useEffect(()=>{ setSval(zoomToSlider(zoom)); },[zoom]);
-  const onSliderChange = (v)=>{ const s=Number(v); setSval(s); setZoom(sliderToZoom(s)); };
+  const onSliderChange=(v)=>{ const s=Number(v); setSval(s); setZoom(sliderToZoom(s)); };
 
   // canvas
   const wrapRef=useRef(null), canvasRef=useRef(null), ctxRef=useRef(null);
   const sizeRef=useRef({wCss:360,hCss:420});
   const pointers=useRef(new Map());
-  const tempTimerRef = useRef(null);
+  const tempTimerRef=useRef(null);
 
   const nextLabel=()=>labelFromIndex(points.length);
 
@@ -201,16 +184,11 @@ function useDrawing2D() {
     const minY=Math.min(...ys), maxY=Math.max(...ys);
     const w=maxX-minX, h=maxY-minY;
     const {wCss,hCss}=sizeRef.current;
-    if (w===0 && h===0) {
-      const nz=Math.min(MAX_Z,Math.max(MIN_Z,Math.min(wCss,hCss)*0.5));
-      setZoom(nz); const p=pts[0]; setTx(-p.x*nz); setTy(+p.y*nz); return;
-    }
+    if(w===0 && h===0){ const nz=Math.min(MAX_Z,Math.max(MIN_Z,Math.min(wCss,hCss)*0.5)); setZoom(nz); const p=pts[0]; setTx(-p.x*nz); setTy(+p.y*nz); return; }
     const pad=0.1*Math.max(w,h);
-    const zX=(wCss*0.9)/(w+pad*2); const zY=(hCss*0.9)/(h+pad*2);
+    const zX=(wCss*0.9)/(w+pad*2), zY=(hCss*0.9)/(h+pad*2);
     const nz=Math.min(MAX_Z,Math.max(MIN_Z,Math.min(zX,zY)));
-    setZoom(nz); setSval(zoomToSlider(nz));
-    const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
-    setTx(-cx*nz); setTy(+cy*nz);
+    setZoom(nz); setSval(zoomToSlider(nz)); const cx=(minX+maxX)/2, cy=(minY+maxY)/2; setTx(-cx*nz); setTy(+cy*nz);
   };
   const resetView=()=>{ setZoom(BASE_ZOOM); setSval(0); setTx(0); setTy(0); };
   const clearLines=()=>setLines([]);
@@ -223,11 +201,11 @@ function useDrawing2D() {
   const centerOnA=()=>{ if(!points.length) return; const A=points[0]; const z=zoom; setTx(-A.x*z); setTy(+A.y*z); };
   useEffect(()=>{ if(autoFit) fitView(points); },[points]); // eslint-disable-line
 
-  // add point (+H row)
+  // add point (+ optional H)
   const addPoint=()=>{
     if(E===""||N==="") return;
     const x=Number(E), y=Number(N); if(!isFinite(x)||!isFinite(y)) return;
-    const id=safeId(); const label=nextLabel();
+    const id=safeId(), label=nextLabel();
     const pt={id,label,x,y};
     const next=[...points,pt]; setPoints(next);
     if(H!=="" && isFinite(Number(H))) setHRows(rows=>[...rows,{id:safeId(), label, h:Number(H)}]);
@@ -266,7 +244,7 @@ function useDrawing2D() {
     const mx=e.clientX-rect.left, my=e.clientY-rect.top;
     const world={ x:(mx-sizeRef.current.wCss/2 - tx)/zoom, y:(sizeRef.current.hCss/2 - my + ty)/zoom };
 
-    // erase
+    // erase line by tap
     if(mode==="eraseLine"){
       const mmTol=12/zoom; let bestIdx=-1, bestD=Infinity;
       lines.forEach((ln,idx)=>{
@@ -307,26 +285,19 @@ function useDrawing2D() {
       }
 
       if(mode==="refLine"){
-        // choose A→B
         if(!refLine && next.length===2){ setRefLine({aId:next[0], bId:next[1]}); return []; }
-
-        // third point → show signed E/N from FIRST (a)
         if(refLine){
           if(pick.id===refLine.aId || pick.id===refLine.bId) return [];
-          const a=points.find(p=>p.id===refLine.aId);
-          const b=points.find(p=>p.id===refLine.bId);
-          const c=pick;
-          const vx=b.x-a.x, vy=b.y-a.y;
-          const abLen=Math.hypot(vx,vy)||1;
+          const a=points.find(p=>p.id===refLine.aId), b=points.find(p=>p.id===refLine.bId), c=pick;
+          const vx=b.x-a.x, vy=b.y-a.y, abLen=Math.hypot(vx,vy)||1;
           const t=((c.x-a.x)*vx + (c.y-a.y)*vy)/(abLen*abLen);
-          const px=a.x + t*vx, py=a.y + t*vy;
+          const px=a.x+t*vx, py=a.y+t*vy;
           const perp=Math.hypot(c.x-px,c.y-py);
-          const crossZ = vx*(c.y-a.y) - vy*(c.x-a.x);
-          const ESigned = (crossZ >= 0 ? -1 : 1) * perp;  // (+/-) မတည့်မှုကို မင်းလိုဖက်အတိုင်း
-          const NSigned = t * abLen;
-
-          setTempLine({ x1:c.x, y1:c.y, x2:px, y2:py });
-          setMeasure({ open:true, value:{ E:`${ESigned.toFixed(2)} ${UNIT_LABEL}`, N:`${NSigned.toFixed(2)} ${UNIT_LABEL}`, fromLabel: points.find(p=>p.id===refLine.aId)?.label || "A" } });
+          const crossZ=vx*(c.y-a.y) - vy*(c.x-a.x);
+          const ESigned=(crossZ>=0?-1:1)*perp; // sign per your preference
+          const NSigned=t*abLen;
+          setTempLine({x1:c.x,y1:c.y,x2:px,y2:py});
+          setMeasure({open:true,value:{E:`${ESigned.toFixed(2)} ${UNIT_LABEL}`,N:`${NSigned.toFixed(2)} ${UNIT_LABEL}`,fromLabel:a.label}});
           return [];
         }
       }
@@ -334,24 +305,18 @@ function useDrawing2D() {
       if(mode==="tie" && next.length===2){
         const [aId,bId]=next; if(aId!==bId){
           const a=points.find(x=>x.id===aId), b=points.find(x=>x.id===bId);
-          // ENH full (vector from a→b)
           const E=b.x-a.x, N=b.y-a.y;
           setTies(ts=>[...ts,{id:safeId(),aId,bId,E,N}]);
-          // green guide
-          setTempLine({ x1:a.x, y1:a.y, x2:b.x, y2:b.y });
-          if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
+          setTempLine({x1:a.x,y1:a.y,x2:b.x,y2:b.y});
+          if(tempTimerRef.current) clearTimeout(tempTimerRef.current);
           tempTimerRef.current=setTimeout(()=>setTempLine(null),3000);
         }
         return [];
       }
 
       if(mode==="circle" && next.length===1){
-        // pick center, need R
-        const r = Number(circleR);
-        if(isFinite(r) && r>0){
-          setCircles(cs=>[...cs,{id:safeId(), centerId:next[0], r}]);
-          setCircleR("");
-        }
+        const r=Number(circleR);
+        if(isFinite(r) && r>0){ setCircles(cs=>[...cs,{id:safeId(),centerId:next[0],r}]); setCircleR(""); }
         return [];
       }
 
@@ -359,21 +324,21 @@ function useDrawing2D() {
     });
   };
 
-  // save to Firebase (review)
-  const saveToFirebase = async () => {
-    const now = Date.now();
-    await set(push(dbRef(db, "drawings")), {
-      createdAt: now,
-      title: title || "Untitled",
-      unitLabel: UNIT_LABEL,
-      state: { points, lines, angles, circles, view: { zoom, tx, ty } },
-      meta: { points: points.length, lines: lines.length, triples: angles.length, circles: circles.length },
+  // save
+  const saveToFirebase = async ()=>{
+    const now=Date.now();
+    await set(push(dbRef(db,"drawings")),{
+      createdAt:now,
+      title:title||"Untitled",
+      unitLabel:UNIT_LABEL,
+      state:{ points, lines, angles, circles, view:{zoom,tx,ty} },
+      meta:{ points:points.length, lines:lines.length, triples:angles.length, circles:circles.length },
     });
     alert("Saved");
   };
 
-  // delete helpers
-  const delPoint = (id) => {
+  // delete
+  const delPoint=(id)=>{
     setPoints(ps=>ps.filter(p=>p.id!==id));
     setLines(ls=>ls.filter(l=>l.p1!==id && l.p2!==id));
     setAngles(ag=>ag.filter(a=>a.a!==id && a.b!==id && a.c!==id));
@@ -382,34 +347,31 @@ function useDrawing2D() {
     setCircles(cs=>cs.filter(c=>c.centerId!==id));
   };
 
-  const groupedH = hRows.reduce((acc,row)=>{
-    acc[row.h] = (acc[row.h]||0) + 1;
-    return acc;
-  }, {});
+  const groupedH = hRows.reduce((acc,row)=>{ acc[row.h]=(acc[row.h]||0)+1; return acc; },{});
 
   return {
-    // state
-    points, lines, angles, ties, circles, hRows, groupedH,
-    E,N,H,title,setE,setN,setH,setTitle, addPoint,
-    mode,setMode, selected,setSelected, lineName,
+    // canvas
     wrapRef, canvasRef, onPointerDown,onPointerMove,onPointerUp,
+    // inputs
+    E,N,H,title,setE,setN,setH,setTitle, addPoint,
+    // view
     zoom,sval,onSliderChange,MIN_S,MAX_S, autoFit,setAutoFit,
     fitView, resetView, centerOnA, clearAll, clearLines, removeLastLine,
-    saveToFirebase, delPoint,
-    // ref line overlay controls
-    refLine, setRefLine, measure, setMeasure, tempLine, setTempLine, tempTimerRef,
+    // data
+    points, lines, angles, ties, circles, hRows, groupedH,
+    lineName, delPoint,
+    // modes
+    mode,setMode, selected,setSelected,
+    // ref
+    refLine,setRefLine, measure,setMeasure, tempLine,setTempLine, tempTimerRef,
     // circle
-    circleR,setCircleR
+    circleR,setCircleR,
+    // save
+    saveToFirebase
   };
-}
-
-export { useDrawing2D };
+                             }
 // src/pages/Drawing2D.jsx (Part 3/3)
-import React from "react";
-import { UNIT_LABEL } from "./Drawing2D.jsx";
-import { useDrawing2D } from "./Drawing2D.jsx";
-
-export default function Drawing2DPage() {
+export default function Drawing2DPage(){
   const st = useDrawing2D();
   const {
     // canvas
@@ -421,19 +383,17 @@ export default function Drawing2DPage() {
     // data
     points, lines, angles, ties, circles, hRows, groupedH,
     lineName, delPoint,
-    // modes/actions
+    // actions
     mode,setMode, fitView, resetView, centerOnA, clearAll, clearLines, removeLastLine,
-    // ref overlay
-    refLine,setRefLine, measure, setMeasure, tempLine, setTempLine, tempTimerRef,
-    // save
-    saveToFirebase,
+    // ref
+    refLine,setRefLine, measure,setMeasure, tempLine,setTempLine, tempTimerRef,
     // circle
-    circleR,setCircleR
+    circleR,setCircleR,
+    // save
+    saveToFirebase
   } = st;
 
   const btn = (active)=>({ background: active ? "#0ea5e9" : "#64748b" });
-
-  // small cell styles
   const th = { textAlign:"left", padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:12, color:"#64748b" };
   const td = { padding:"8px 10px", borderBottom:"1px solid #eef2f7", fontSize:14 };
 
@@ -448,46 +408,24 @@ export default function Drawing2DPage() {
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
-            style={{
-              display:"block", width:"100%", background:"#fff",
-              borderRadius:12, border:"1px solid #e5e7eb",
-              touchAction:"none", cursor:"crosshair"
-            }}
+            style={{ display:"block", width:"100%", background:"#fff", borderRadius:12, border:"1px solid #e5e7eb", touchAction:"none", cursor:"crosshair" }}
           />
         </div>
 
-        {/* Ref measure overlay */}
+        {/* Ref overlay */}
         {measure.open && (
-          <div
-            style={{
-              position:"absolute", right:12, bottom:12, background:"rgba(15,23,42,0.96)",
-              color:"#fff", border:"1px solid #334155", borderRadius:12, padding:"10px 12px",
-              boxShadow:"0 8px 24px rgba(0,0,0,0.18)", display:"flex", alignItems:"center", gap:12
-            }}
-          >
+          <div style={{ position:"absolute", right:12, bottom:12, background:"rgba(15,23,42,0.96)", color:"#fff", border:"1px solid #334155", borderRadius:12, padding:"10px 12px", boxShadow:"0 8px 24px rgba(0,0,0,0.18)", display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ display:"grid", gap:4 }}>
               <div style={{ fontSize:12, opacity:0.8 }}>Perpendicular (E)</div>
-              <div style={{ fontSize:18, fontWeight:800, color:"#fca5a5" }}>
-                {measure.value?.E}
-              </div>
-              <div style={{ fontSize:12, opacity:0.8, marginTop:6 }}>
-                Along Ref from <b>{measure.value?.fromLabel}</b> (N)
-              </div>
-              <div style={{ fontSize:18, fontWeight:800, color:"#67e8f9" }}>
-                {measure.value?.N}
-              </div>
+              <div style={{ fontSize:18, fontWeight:800, color:"#fca5a5" }}>{measure.value?.E}</div>
+              <div style={{ fontSize:12, opacity:0.8, marginTop:6 }}>Along Ref from <b>{measure.value?.fromLabel}</b> (N)</div>
+              <div style={{ fontSize:18, fontWeight:800, color:"#67e8f9" }}>{measure.value?.N}</div>
             </div>
-            <button
-              className="btn"
-              onClick={()=>{
-                setMeasure({ open:false, value:null });
-                if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
-                tempTimerRef.current=setTimeout(()=>setTempLine(null),3000);
-              }}
-              style={{ background:"#0ea5e9" }}
-            >
-              OK
-            </button>
+            <button className="btn" onClick={()=>{
+              setMeasure({open:false,value:null});
+              if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
+              tempTimerRef.current=setTimeout(()=>setTempLine(null),3000);
+            }} style={{ background:"#0ea5e9" }}>OK</button>
           </div>
         )}
 
@@ -504,17 +442,20 @@ export default function Drawing2DPage() {
         </div>
       </div>
 
-      {/* Toolbar — ၂ တန်း */}
+      {/* Toolbar rows */}
       <div className="card">
         <div className="row" style={{ gap:8, flexWrap:"wrap" }}>
-          <button className="btn" style={btn(mode==="line")} onClick={()=>{ setMode("line"); }}>Line</button>
-          <button className="btn" style={btn(mode==="tie")} onClick={()=>{ setMode("tie"); }}>Tie line</button>
-          <button className="btn" style={btn(mode==="angle")} onClick={()=>{ setMode("angle"); }}>Angle</button>
-          <button className="btn" style={btn(mode==="eraseLine")} onClick={()=>{ setMode("eraseLine"); }}>Erase</button>
-          <button className="btn" style={btn(mode==="refLine")} onClick={()=>{ setMode("refLine"); }}>Ref line</button>
+          <button className="btn" style={btn(mode==="line")}     onClick={()=>setMode("line")}>Line</button>
+          <button className="btn" style={btn(mode==="tie")}      onClick={()=>setMode("tie")}>Tie line</button>
+          <button className="btn" style={btn(mode==="angle")}    onClick={()=>setMode("angle")}>Angle</button>
+          <button className="btn" style={btn(mode==="eraseLine")}onClick={()=>setMode("eraseLine")}>Erase</button>
+          <button className="btn" style={btn(mode==="refLine")}  onClick={()=>setMode("refLine")}>Ref line</button>
           {refLine && (
             <span className="small" style={{ background:"#e2e8f0", color:"#0f172a", borderRadius:12, padding:"4px 8px" }}>
-              Ref: {points.find(p=>p.id===refLine.aId)?.label}–{points.find(p=>p.id===refLine.bId)?.label}
+              Ref: {
+                (()=>{const a=points.find(p=>p.id===refLine.aId)?.label||"?";
+                      const b=points.find(p=>p.id===refLine.bId)?.label||"?"; return `${a}–${b}`;})()
+              }
             </span>
           )}
         </div>
@@ -527,7 +468,7 @@ export default function Drawing2DPage() {
           <button className="btn" onClick={removeLastLine}>Remove last</button>
           <button className="btn" onClick={clearLines}>Clear lines</button>
           <label className="row" style={{ gap:8, marginLeft:8 }}>
-            <input type="checkbox" checked={autoFit} onChange={(e)=>setAutoFit(e.target.checked)} />
+            <input type="checkbox" checked={autoFit} onChange={(e)=>setAutoFit(e.target.checked)}/>
             <span className="small">Auto fit</span>
           </label>
         </div>
@@ -554,7 +495,7 @@ export default function Drawing2DPage() {
         </div>
       </div>
 
-      {/* ENH Table (points) */}
+      {/* Points ENH */}
       <div className="card">
         <div className="page-title">Points (E,N,H)</div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
@@ -563,14 +504,14 @@ export default function Drawing2DPage() {
           </tr></thead>
           <tbody>
             {points.map(p=>{
-              const hr = hRows.find(r=>r.label===p.label)?.h ?? "";
+              const hr = (st.hRows.find(r=>r.label===p.label)?.h) ?? "";
               return (
                 <tr key={p.id}>
                   <td style={td}><b>{p.label}</b></td>
                   <td style={td}>{p.x}</td>
                   <td style={td}>{p.y}</td>
                   <td style={td}>{hr}</td>
-                  <td style={td}><button className="btn" style={{background:"#ef4444"}} onClick={()=>delPoint(p.id)}>Delete</button></td>
+                  <td style={td}><button className="btn" style={{background:"#ef4444"}} onClick={()=>st.delPoint(p.id)}>Delete</button></td>
                 </tr>
               );
             })}
@@ -579,19 +520,17 @@ export default function Drawing2DPage() {
         </table>
       </div>
 
-      {/* Lines table (AB name + delete) */}
+      {/* Lines */}
       <div className="card">
         <div className="page-title">Lines</div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead><tr>
-            <th style={th}>Name</th><th style={th}>Length ({UNIT_LABEL})</th><th style={th}></th>
-          </tr></thead>
+          <thead><tr><th style={th}>Name</th><th style={th}>Length ({UNIT_LABEL})</th><th style={th}></th></tr></thead>
           <tbody>
             {lines.map(l=>(
               <tr key={l.id}>
                 <td style={td}><b>{lineName(l, points)}</b></td>
                 <td style={td}>{Math.round(l.lenMm)}</td>
-                <td style={td}><button className="btn" style={{background:"#ef4444"}} onClick={()=>setLines(ls=>ls.filter(x=>x.id!==l.id))}>Delete</button></td>
+                <td style={td}><button className="btn" style={{background:"#ef4444"}} onClick={()=>st.setLines(ls=>ls.filter(x=>x.id!==l.id))}>Delete</button></td>
               </tr>
             ))}
             {lines.length===0 && <tr><td style={td} colSpan={3} className="small">No lines yet.</td></tr>}
@@ -599,23 +538,21 @@ export default function Drawing2DPage() {
         </table>
       </div>
 
-      {/* Tie distances (EN from a→b) */}
+      {/* Tie distances */}
       <div className="card">
         <div className="page-title">Tie distances (E,N)</div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead><tr>
-            <th style={th}>From→To</th><th style={th}>E</th><th style={th}>N</th><th style={th}></th>
-          </tr></thead>
+          <thead><tr><th style={th}>From→To</th><th style={th}>E</th><th style={th}>N</th><th style={th}></th></tr></thead>
           <tbody>
             {ties.map(t=>{
-              const a = points.find(p=>p.id===t.aId)?.label || "?";
-              const b = points.find(p=>p.id===t.bId)?.label || "?";
+              const a=points.find(p=>p.id===t.aId)?.label||"?";
+              const b=points.find(p=>p.id===t.bId)?.label||"?";
               return (
                 <tr key={t.id}>
                   <td style={td}><b>{a}→{b}</b></td>
                   <td style={td}>{t.E.toFixed(2)}</td>
                   <td style={td}>{t.N.toFixed(2)}</td>
-                  <td style={td}><button className="btn" style={{background:"#ef4444"}} onClick={()=>setTies(ts=>ts.filter(x=>x.id!==t.id))}>Delete</button></td>
+                  <td style={td}><button className="btn" style={{background:"#ef4444"}} onClick={()=>st.setTies(ts=>ts.filter(x=>x.id!==t.id))}>Delete</button></td>
                 </tr>
               );
             })}
@@ -624,40 +561,38 @@ export default function Drawing2DPage() {
         </table>
       </div>
 
-      {/* H level summary (same level count) */}
+      {/* H summary */}
       <div className="card">
         <div className="page-title">H summary</div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
           <thead><tr><th style={th}>Level</th><th style={th}>Count</th></tr></thead>
           <tbody>
-            {Object.keys(groupedH).length===0 && <tr><td style={td} colSpan={2} className="small">No H entries.</td></tr>}
-            {Object.entries(groupedH).map(([lvl,cnt])=>(
+            {Object.keys(st.groupedH).length===0 && <tr><td style={td} colSpan={2} className="small">No H entries.</td></tr>}
+            {Object.entries(st.groupedH).map(([lvl,cnt])=>(
               <tr key={lvl}><td style={td}>{lvl}</td><td style={td}>{cnt}</td></tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Circles table */}
+      {/* Circles */}
       <div className="card">
         <div className="page-title">Circles</div>
         <table style={{ width:"100%", borderCollapse:"collapse" }}>
-          <thead><tr>
-            <th style={th}>Name</th><th style={th}>Center</th><th style={th}>R (mm)</th><th style={th}></th>
-          </tr></thead>
-          <tbody>
-            {circles.map((c,i)=>(
-              <tr key={c.id}>
-                <td style={td}><b>C{i+1}</b></td>
-                <td style={td}>{points.find(p=>p.id===c.centerId)?.label || "?"}</td>
-                <td style={td}>{c.r}</td>
-                <td style={td}><button className="btn" style={{background:"#ef4444"}} onClick={()=>setCircles(cs=>cs.filter(x=>x.id!==c.id))}>Delete</button></td>
-              </tr>
-            ))}
-            {circles.length===0 && <tr><td style={td} colSpan={4} className="small">No circles.</td></tr>}
-          </tbody>
+          <thead><tr><th style={th}>Name</th><th style={th}>Center</th><th style={th}>R (mm)</th><th style={th}></th></tr></thead>
+        <tbody>
+          {circles.map((c,i)=>(
+            <tr key={c.id}>
+              <td style={td}><b>C{i+1}</b></td>
+              <td style={td}>{points.find(p=>p.id===c.centerId)?.label||"?"}</td>
+              <td style={td}>{c.r}</td>
+              <td style={td}><button className="btn" style={{background:"#ef4444"}} onClick={()=>st.setCircles(cs=>cs.filter(x=>x.id!==c.id))}>Delete</button></td>
+            </tr>
+          ))}
+          {circles.length===0 && <tr><td style={td} colSpan={4} className="small">No circles.</td></tr>}
+        </tbody>
         </table>
       </div>
     </div>
   );
-      }
+    }
