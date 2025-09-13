@@ -90,7 +90,9 @@ function drawScene(
     const a=points.find(p=>p.id===l.p1), b=points.find(p=>p.id===l.p2); if(!a||!b) return;
     const s1=W2S(a), s2=W2S(b);
     ctx.beginPath(); ctx.moveTo(s1.x,s1.y); ctx.lineTo(s2.x,s2.y); ctx.stroke();
-    ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, (s1.x+s2.x)/2+6,(s1.y+s2.y)/2-6);
+    // label AB / AC …
+    const ab = a && b ? `${a.label}–${b.label}` : `${l.p1}–${l.p2}`;
+    ctx.fillText(`${ab}  |  ${Math.round(l.lenMm)} ${UNIT_LABEL}`, (s1.x+s2.x)/2+6,(s1.y+s2.y)/2-6);
   });
 
   // temp red line (perp)
@@ -128,7 +130,7 @@ function drawScene(
     ctx.strokeText(p.label,s.x+8,s.y-8);
     ctx.fillStyle="#0f172a"; ctx.fillText(p.label,s.x+8,s.y-8);
   });
-    }
+  }
 // src/pages/Drawing2D.jsx (Part 2/3)
 export default function Drawing2D() {
   // data
@@ -308,11 +310,8 @@ export default function Drawing2D() {
   };
 
   /* ---------- gestures ---------- */
-  // ❗ Canvas pointer capture ဖျက်ထားသည် (toolbar scroll ကို မထိစေချင်လို့)
-  const onPointerDown=(e)=>{ 
-    // e.currentTarget.setPointerCapture?.(e.pointerId); // removed
-    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now()}); 
-  };
+  // canvas ကို အပြင် toolbar scroll မထိစေဖို့ capture မသုံး
+  const onPointerDown=(e)=>{ pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now()}); };
   const onPointerMove=(e)=>{
     const prev=pointers.current.get(e.pointerId); if(!prev) return;
     pointers.current.set(e.pointerId,{ x: e.clientX, y: e.clientY, t: prev.t });
@@ -426,7 +425,6 @@ export default function Drawing2D() {
             open:true,
             value:{ from:a.label, to:b.label, dE, dN, dH, L: L3 }
           });
-          // auto hide after 3s
           if (tempTimerRef.current) clearTimeout(tempTimerRef.current);
           tempTimerRef.current = setTimeout(()=>{ setTieTemp(null); setTieOverlay({open:false,value:null}); }, 3000);
         }
@@ -452,7 +450,15 @@ export default function Drawing2D() {
   // src/pages/Drawing2D.jsx (Part 3/3)
   /* -------------------- UI -------------------- */
   return (
-    <div className="grid">
+    <div
+      className="grid"
+      style={{
+        maxWidth: "100vw",
+        overflowX: "hidden",
+        boxSizing: "border-box",
+        paddingInline: 0
+      }}
+    >
       {/* Canvas */}
       <div className="card" style={{ padding: 8, position: "relative" }}>
         <div ref={wrapRef} style={{ width: "100%" }}>
@@ -570,65 +576,75 @@ export default function Drawing2D() {
             onTouchStart={(e)=>{ e.stopPropagation(); }}
             onWheel={(e)=>{ e.stopPropagation(); }}
             style={{
-              marginTop:10, display:"flex", gap:8, overflowX:"auto",
-              paddingBottom:6, WebkitOverflowScrolling:"touch",
-              touchAction:"pan-x", overscrollBehavior:"contain"
+              marginTop:10,
+              width: "100%",
+              maxWidth: "100%",
+              display:"flex",
+              gap:8,
+              flexWrap:"nowrap",
+              whiteSpace:"nowrap",
+              overflowX:"auto",
+              overflowY:"hidden",
+              paddingBottom:6,
+              WebkitOverflowScrolling:"touch",
+              touchAction:"pan-x",
+              overscrollBehaviorX:"contain"
             }}
           >
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("line"); setSelected([]); }}
-              style={{ background: mode==="line" ? "#0ea5e9" : "#64748b" }}
+              style={{ background: mode==="line" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
             >Line</button>
 
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("tieLine"); setSelected([]); setTieOverlay({open:false,value:null}); setTieTemp(null); }}
-              style={{ background: mode==="tieLine" ? "#10b981" : "#64748b" }}
+              style={{ background: mode==="tieLine" ? "#10b981" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
             >Tie line</button>
 
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("angle"); setSelected([]); }}
-              style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b" }}
+              style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
             >Angle</button>
 
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("eraseLine"); setSelected([]); }}
-              style={{ background: mode==="eraseLine" ? "#0ea5e9" : "#64748b" }}
+              style={{ background: mode==="eraseLine" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
             >Erase line (tap)</button>
 
             <button className="btn"
               onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("refLine"); setSelected([]); }}
-              style={{ background: mode==="refLine" ? "#0ea5e9" : "#64748b" }}
+              style={{ background: mode==="refLine" ? "#0ea5e9" : "#64748b", flex:"0 0 auto", minWidth:"auto" }}
             >📐 Ref line</button>
 
             {refLine && (
-              <div style={{ display:"inline-flex", alignItems:"center", gap:8 }}>
+              <div style={{ display:"inline-flex", alignItems:"center", gap:8, flex:"0 0 auto" }}>
                 <span className="small" style={{ background:"#e2e8f0", color:"#0f172a", borderRadius:12, padding:"4px 8px" }}>
                   Ref: {points.find(p=>p.id===refLine.aId)?.label}–{points.find(p=>p.id===refLine.bId)?.label}
                 </span>
                 <button className="btn"
                   onPointerDown={(e)=>e.stopPropagation()}
                   onClick={()=>{ setRefLine(null); setSelected([]); setMode("refLine"); }}
-                  style={{ background:"#94a3b8" }}
+                  style={{ background:"#94a3b8", flex:"0 0 auto" }}
                 >Change</button>
                 <button className="btn"
                   onPointerDown={(e)=>e.stopPropagation()}
                   onClick={()=>{ setRefLine(null); setTempLine(null); setSelected([]); setMeasure({open:false,value:null}); }}
-                  style={{ background:"#ef4444" }}
+                  style={{ background:"#ef4444", flex:"0 0 auto" }}
                 >Clear</button>
               </div>
             )}
 
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={centerOnA}>Find A</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={fitView}>Fit</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={resetView}>Reset</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearAll} style={{ background:"#ef4444" }}>Clear All</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={removeLastLine}>Remove last line</button>
-            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearLines}>Clear lines</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={centerOnA} style={{ flex:"0 0 auto", minWidth:"auto" }}>Find A</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={fitView} style={{ flex:"0 0 auto", minWidth:"auto" }}>Fit</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={resetView} style={{ flex:"0 0 auto", minWidth:"auto" }}>Reset</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearAll} style={{ background:"#ef4444", flex:"0 0 auto", minWidth:"auto" }}>Clear All</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={removeLastLine} style={{ flex:"0 0 auto", minWidth:"auto" }}>Remove last line</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearLines} style={{ flex:"0 0 auto", minWidth:"auto" }}>Clear lines</button>
           </div>
         </div>
       </div>
