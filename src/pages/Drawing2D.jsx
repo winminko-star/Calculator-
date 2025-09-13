@@ -134,7 +134,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
   });
 }
 // src/pages/Drawing2D.jsx (Part 2/3)
-export default function Drawing2D() {
+ function useDrawing2D() {
   // data
   const [points, setPoints] = useState([]);
   const [lines,  setLines ] = useState([]);     // {id,p1,p2,lenMm}
@@ -466,7 +466,7 @@ export function PageShell({ children }) {
 }
 
 export default function Drawing2DPage() {
-  const st = Drawing2D();
+  const st = useDrawing2D();
   const {
     points, lines, angles, tieLines, circles,
     E,N,H, setE,setN,setH, addPoint,
