@@ -33,7 +33,7 @@ const labelFromIndex = (i) => {
   return s;
 };
 
-// for overlay pill
+// overlay pill
 function drawLabelPill(ctx, x, y, text) {
   ctx.font = "bold 14px system-ui";
   const padX = 6, padY = 4;
@@ -63,7 +63,10 @@ function drawLabelPill(ctx, x, y, text) {
 }
 
 /* --------------- renderer --------------- */
-function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLine, tieTemp) {
+function drawScene(
+  ctx, wCss, hCss, zoom, tx, ty,
+  points, lines, angles, tempLine, tieTemp
+) {
   ctx.clearRect(0, 0, wCss, hCss);
 
   // grid
@@ -90,7 +93,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, (s1.x+s2.x)/2+6,(s1.y+s2.y)/2-6);
   });
 
-  // temp red line (perp from ref measure)
+  // temp red line (perp)
   if (tempLine) {
     const s1=W2S({x:tempLine.x1,y:tempLine.y1});
     const s2=W2S({x:tempLine.x2,y:tempLine.y2});
@@ -136,7 +139,7 @@ export default function Drawing2D() {
   // inputs
   const [E, setE] = useState("");
   const [N, setN] = useState("");
-  const [H, setH] = useState("");    // NEW
+  const [H, setH] = useState("");
   const [title, setTitle] = useState("");
 
   // modes
@@ -305,7 +308,11 @@ export default function Drawing2D() {
   };
 
   /* ---------- gestures ---------- */
-  const onPointerDown=(e)=>{ e.currentTarget.setPointerCapture?.(e.pointerId); pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now()}); };
+  // ❗ Canvas pointer capture ဖျက်ထားသည် (toolbar scroll ကို မထိစေချင်လို့)
+  const onPointerDown=(e)=>{ 
+    // e.currentTarget.setPointerCapture?.(e.pointerId); // removed
+    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now()}); 
+  };
   const onPointerMove=(e)=>{
     const prev=pointers.current.get(e.pointerId); if(!prev) return;
     pointers.current.set(e.pointerId,{ x: e.clientX, y: e.clientY, t: prev.t });
@@ -392,7 +399,7 @@ export default function Drawing2D() {
             const t=((c.x-a.x)*vx + (c.y-a.y)*vy)/(abLen*abLen);
             const px=a.x + t*vx, py=a.y + t*vy;
             const perp=Math.hypot(c.x-px, c.y-py);
-            // left of A->B = +E ; right = -E  (keep your preferred sign)
+            // left of A->B = +E ; right = -E
             const crossZ = vx*(c.y-a.y) - vy*(c.x-a.x);
             const ESigned = (crossZ >= 0 ? -1 : 1) * perp;
             const NSigned = t * abLen;
@@ -539,7 +546,7 @@ export default function Drawing2D() {
           </div>
         )}
 
-        {/* Scale slider + horizontal action bar under canvas */}
+        {/* Scale slider */}
         <div style={{ marginTop: 10 }}>
           <div className="row" style={{ justifyContent:"space-between", marginBottom:6 }}>
             <span className="small">Scale (px/{UNIT_LABEL})</span>
@@ -557,32 +564,46 @@ export default function Drawing2D() {
             style={{ width:"100%" }}
           />
 
-          {/* Horizontal scrollable toolbar */}
+          {/* Horizontal scrollable toolbar (NavBar-like) */}
           <div
+            onPointerDown={(e)=>{ e.stopPropagation(); }}
+            onTouchStart={(e)=>{ e.stopPropagation(); }}
+            onWheel={(e)=>{ e.stopPropagation(); }}
             style={{
               marginTop:10, display:"flex", gap:8, overflowX:"auto",
-              paddingBottom:6, WebkitOverflowScrolling:"touch"
+              paddingBottom:6, WebkitOverflowScrolling:"touch",
+              touchAction:"pan-x", overscrollBehavior:"contain"
             }}
           >
             <button className="btn"
+              onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("line"); setSelected([]); }}
-              style={{ background: mode==="line" ? "#0ea5e9" : "#64748b" }}>Line</button>
+              style={{ background: mode==="line" ? "#0ea5e9" : "#64748b" }}
+            >Line</button>
 
             <button className="btn"
+              onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("tieLine"); setSelected([]); setTieOverlay({open:false,value:null}); setTieTemp(null); }}
-              style={{ background: mode==="tieLine" ? "#10b981" : "#64748b" }}>Tie line</button>
+              style={{ background: mode==="tieLine" ? "#10b981" : "#64748b" }}
+            >Tie line</button>
 
             <button className="btn"
+              onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("angle"); setSelected([]); }}
-              style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b" }}>Angle</button>
+              style={{ background: mode==="angle" ? "#0ea5e9" : "#64748b" }}
+            >Angle</button>
 
             <button className="btn"
+              onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("eraseLine"); setSelected([]); }}
-              style={{ background: mode==="eraseLine" ? "#0ea5e9" : "#64748b" }}>Erase line (tap)</button>
+              style={{ background: mode==="eraseLine" ? "#0ea5e9" : "#64748b" }}
+            >Erase line (tap)</button>
 
             <button className="btn"
+              onPointerDown={(e)=>e.stopPropagation()}
               onClick={()=>{ setMode("refLine"); setSelected([]); }}
-              style={{ background: mode==="refLine" ? "#0ea5e9" : "#64748b" }}>📐 Ref line</button>
+              style={{ background: mode==="refLine" ? "#0ea5e9" : "#64748b" }}
+            >📐 Ref line</button>
 
             {refLine && (
               <div style={{ display:"inline-flex", alignItems:"center", gap:8 }}>
@@ -590,20 +611,24 @@ export default function Drawing2D() {
                   Ref: {points.find(p=>p.id===refLine.aId)?.label}–{points.find(p=>p.id===refLine.bId)?.label}
                 </span>
                 <button className="btn"
+                  onPointerDown={(e)=>e.stopPropagation()}
                   onClick={()=>{ setRefLine(null); setSelected([]); setMode("refLine"); }}
-                  style={{ background:"#94a3b8" }}>Change</button>
+                  style={{ background:"#94a3b8" }}
+                >Change</button>
                 <button className="btn"
+                  onPointerDown={(e)=>e.stopPropagation()}
                   onClick={()=>{ setRefLine(null); setTempLine(null); setSelected([]); setMeasure({open:false,value:null}); }}
-                  style={{ background:"#ef4444" }}>Clear</button>
+                  style={{ background:"#ef4444" }}
+                >Clear</button>
               </div>
             )}
 
-            <button className="btn" onClick={centerOnA}>Find A</button>
-            <button className="btn" onClick={fitView}>Fit</button>
-            <button className="btn" onClick={resetView}>Reset</button>
-            <button className="btn" onClick={clearAll} style={{ background:"#ef4444" }}>Clear All</button>
-            <button className="btn" onClick={removeLastLine}>Remove last line</button>
-            <button className="btn" onClick={clearLines}>Clear lines</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={centerOnA}>Find A</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={fitView}>Fit</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={resetView}>Reset</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearAll} style={{ background:"#ef4444" }}>Clear All</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={removeLastLine}>Remove last line</button>
+            <button className="btn" onPointerDown={(e)=>e.stopPropagation()} onClick={clearLines}>Clear lines</button>
           </div>
         </div>
       </div>
