@@ -185,7 +185,7 @@ function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLin
     ctx.fillStyle = "#0f172a";
     ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
-    }
+              }
 // src/pages/Drawing2D.jsx  (Part 2/3)
 function useDrawing2D() {
   // data
@@ -324,7 +324,7 @@ function useDrawing2D() {
   const onPointerDown=(e)=>{ e.currentTarget.setPointerCapture?.(e.pointerId); pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:Date.now()}); };
   const onPointerMove=(e)=>{
     const prev=pointers.current.get(e.pointerId); if(!prev) return;
-    pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY,t:prev.t});
+    pointers.current.set(e.pointerId,{x	e.clientX,y:e.clientY,t:prev.t});
     const pts=[...pointers.current.values()];
     if(pts.length===1){ setTx(v=>v+(e.clientX-prev.x)); setTy(v=>v+(e.clientY-prev.y)); }
     else if(pts.length>=2){
@@ -492,13 +492,38 @@ function PageShell({ children }) {
 
 export default function Drawing2DPage() {
   const st = useDrawing2D();
+  const [full, setFull] = useState(false); // full view overlay
 
   const th = { textAlign:"left", padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:12, color:"#64748b" };
   const td = { padding:"8px 10px", borderBottom:"1px solid #e5e7eb", fontSize:13 };
 
+  // ——— actions ———
+  const onRefChange = () => {
+    // Fix: change works reliably
+    st.setMeasure({ open:false, value:null });
+    st.setTempLine(null);
+    st.setSelected([]);
+    st.setRefLine(null);
+    st.setMode("refLine");
+  };
+
+  // toolbar button style
+  const tb = (active) => ({
+    display: "block",
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "none",
+    marginBottom: 8,
+    background: active ? "#0ea5e9" : "#64748b",
+    color: "#fff",
+    fontWeight: 700,
+    fontSize: 13,
+  });
+
   return (
-    <div className="grid">
-      {/* Canvas */}
+    <div className="grid" style={{ position: "relative" }}>
+      {/* Canvas Card */}
       <div className="card" style={{ padding: 8, position: "relative" }}>
         <div ref={st.wrapRef} style={{ width: "100%" }}>
           <canvas
@@ -522,7 +547,7 @@ export default function Drawing2DPage() {
               position:"absolute", right:12, bottom:12,
               background:"rgba(15,23,42,0.96)", color:"#fff",
               border:"1px solid #334155", borderRadius:12, padding:"10px 12px",
-              boxShadow:"0 8px 24px rgba(0,0,0,0.18)", display:"flex", alignItems:"center", gap:12
+              boxShadow:"0 8px 24px rgba(0,0,0,0.18)", display:"flex", alignItems:"center", gap:12, zIndex: 12
             }}
           >
             <div style={{ display:"grid", gap:4 }}>
@@ -552,11 +577,11 @@ export default function Drawing2DPage() {
           </div>
         )}
 
-        {/* Scale slider */}
+        {/* Scale slider (keep under canvas) */}
         <div style={{ marginTop: 10 }}>
           <div className="row" style={{ justifyContent:"space-between", marginBottom:6 }}>
             <span className="small">Scale (px/mm)</span>
-            <span className="small">{Math.max(0.0001, Math.round(st.zoom*1000)/1000)} px/{UNIT_LABEL}</span>
+            <span className="small">{Math.max(0.0001, Math.round(st.zoom*1000)/1000)} px/mm</span>
           </div>
           <input type="range" min={st.MIN_S} max={st.MAX_S} step={0.01}
                  value={st.sval} onChange={(e)=>st.onSliderChange(e.target.value)} style={{ width:"100%" }}/>
@@ -566,7 +591,7 @@ export default function Drawing2DPage() {
         </div>
       </div>
 
-      {/* Controls */}
+      {/* Title + ENH + Circle row (same as before) */}
       <div className="card">
         <div className="row" style={{ marginBottom: 8 }}>
           <input className="input" placeholder="Title (e.g. P83 pipe)" value={st.title}
@@ -574,48 +599,14 @@ export default function Drawing2DPage() {
           <button className="btn" onClick={st.saveToFirebase}>Save</button>
         </div>
 
-        {/* ENH inputs */}
         <div className="row" style={{ marginBottom: 8, gap:8, flexWrap:"wrap" }}>
           <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder={`E (${UNIT_LABEL})`} value={st.E} onChange={(e)=>st.setE(e.target.value)} style={{ width:110 }}/>
+                 placeholder="E (mm)" value={st.E} onChange={(e)=>st.setE(e.target.value)} style={{ width:110 }}/>
           <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder={`N (${UNIT_LABEL})`} value={st.N} onChange={(e)=>st.setN(e.target.value)} style={{ width:110 }}/>
+                 placeholder="N (mm)" value={st.N} onChange={(e)=>st.setN(e.target.value)} style={{ width:110 }}/>
           <input className="input" type="number" inputMode="decimal" step="any"
                  placeholder="H (level)" value={st.H} onChange={(e)=>st.setH(e.target.value)} style={{ width:110 }}/>
           <button className="btn" onClick={st.addPoint}>Add (label {st.nextLabel()})</button>
-        </div>
-
-        {/* Toolbar (ordered + horizontal scroll) */}
-        <div className="row" style={{ overflowX:"auto", paddingBottom:4, gap:8, whiteSpace:"nowrap" }}>
-          <button className="btn" onClick={()=>{ st.setMode("line"); st.setSelected([]); }}
-            style={{ background: st.mode==="line" ? "#0ea5e9" : "#64748b" }}>Line</button>
-
-          <button className="btn" onClick={()=>{ st.setMode("refLine"); st.setSelected([]); }}
-            style={{ background: st.mode==="refLine" ? "#0ea5e9" : "#64748b" }}>📐 Ref line</button>
-
-          <button className="btn" onClick={()=>{ st.setMode("angle"); st.setSelected([]); }}
-            style={{ background: st.mode==="angle" ? "#0ea5e9" : "#64748b" }}>Angle</button>
-
-          <button className="btn" onClick={()=>{ st.setMode("eraseLine"); st.setSelected([]); }}
-            style={{ background: st.mode==="eraseLine" ? "#0ea5e9" : "#64748b" }}>Erase Line (tap)</button>
-
-          <button className="btn" onClick={st.centerOnA}>Find A</button>
-          <button className="btn" onClick={st.removeLastLine}>Remove last line</button>
-          <button className="btn" onClick={st.clearLines}>Clear lines</button>
-          <button className="btn" onClick={st.clearAll} style={{ background:"#ef4444" }}>Clear All</button>
-          <button className="btn" onClick={st.fitView}>Fit</button>
-          <button className="btn" onClick={st.resetView}>Reset</button>
-
-          {st.refLine && (
-            <span className="small" style={{ background:"#e2e8f0", color:"#0f172a", borderRadius:12, padding:"4px 8px" }}>
-              Ref: {st.getLabel(st.refLine.aId)}–{st.getLabel(st.refLine.bId)}
-            </span>
-          )}
-
-          <label className="row" style={{ gap:8, marginLeft:8 }}>
-            <input type="checkbox" checked={st.autoFit} onChange={(e)=>st.setAutoFit(e.target.checked)} />
-            <span className="small">Auto fit</span>
-          </label>
         </div>
 
         {/* Circle tool */}
@@ -626,9 +617,57 @@ export default function Drawing2DPage() {
           <input className="input" type="number" inputMode="decimal" step="any"
                  placeholder="Center N" value={st.cN} onChange={(e)=>st.setCN(e.target.value)} style={{ width:110 }}/>
           <input className="input" type="number" inputMode="decimal" step="any"
-                 placeholder={`Radius (${UNIT_LABEL})`} value={st.cR} onChange={(e)=>st.setCR(e.target.value)} style={{ width:110 }}/>
+                 placeholder="Radius (mm)" value={st.cR} onChange={(e)=>st.setCR(e.target.value)} style={{ width:110 }}/>
           <button className="btn" onClick={st.addCircle}>Add Circle</button>
+
+          {/* Full View toggle */}
+          <button className="btn" onClick={()=>setFull(true)} style={{ marginLeft: "auto", background:"#0ea5e9" }}>
+            Full View
+          </button>
         </div>
+      </div>
+
+      {/* Right-side vertical toolbar (scrollable) */}
+      <div
+        style={{
+          position: "fixed",
+          right: 8,
+          top: 64,           // header height အထက်မှာဆို relative ပြင်ဆင်ပါ
+          bottom: 8,
+          width: 124,
+          overflowY: "auto",
+          padding: 8,
+          background: "rgba(241,245,249,0.9)",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
+          zIndex: 11,
+        }}
+      >
+        <button style={tb(st.mode==="line")}     onClick={()=>{ st.setMode("line"); st.setSelected([]); }}>Line</button>
+        <button style={tb(st.mode==="refLine")}  onClick={()=>{ st.setMode("refLine"); st.setSelected([]); }}>📐 Ref line</button>
+        <button style={{...tb(false), background:"#94a3b8"}} onClick={onRefChange}>↺ Change Ref</button>
+        <button style={tb(st.mode==="angle")}    onClick={()=>{ st.setMode("angle"); st.setSelected([]); }}>Angle</button>
+        <button style={tb(st.mode==="eraseLine")}onClick={()=>{ st.setMode("eraseLine"); st.setSelected([]); }}>Erase (tap)</button>
+
+        <hr style={{ margin:"8px 0", borderColor:"#e5e7eb" }}/>
+        <button style={{...tb(false), background:"#475569"}} onClick={st.centerOnA}>Find A</button>
+        <button style={{...tb(false), background:"#475569"}} onClick={st.removeLastLine}>Remove last</button>
+        <button style={{...tb(false), background:"#475569"}} onClick={st.clearLines}>Clear lines</button>
+        <button style={{...tb(false), background:"#ef4444"}} onClick={st.clearAll}>Clear All</button>
+        <button style={{...tb(false), background:"#0ea5e9"}} onClick={st.fitView}>Fit</button>
+        <button style={{...tb(false), background:"#0ea5e9"}} onClick={st.resetView}>Reset</button>
+
+        {st.refLine && (
+          <div style={{ marginTop:8, fontSize:12, color:"#0f172a" }}>
+            Ref: <b>{st.getLabel(st.refLine.aId)}–{st.getLabel(st.refLine.bId)}</b>
+          </div>
+        )}
+
+        <label className="row" style={{ gap:6, marginTop:8, fontSize:12 }}>
+          <input type="checkbox" checked={st.autoFit} onChange={(e)=>st.setAutoFit(e.target.checked)} />
+          Auto fit
+        </label>
       </div>
 
       {/* Lines list → AB style */}
@@ -639,7 +678,7 @@ export default function Drawing2DPage() {
           <div key={l.id} className="row" style={{ justifyContent:"space-between" }}>
             <div>
               <b>{st.getLabel(l.p1)}–{st.getLabel(l.p2)}</b> &nbsp;
-              <b>{Math.round(l.lenMm)} {UNIT_LABEL}</b>
+              <b>{Math.round(l.lenMm)} mm</b>
             </div>
           </div>
         ))}
@@ -690,6 +729,63 @@ export default function Drawing2DPage() {
           </>
         )}
       </div>
+
+      {/* ===== Full View Overlay ===== */}
+      {full && (
+        <div
+          style={{
+            position:"fixed", inset:0, background:"#0b1020",
+            zIndex: 9999, display:"flex", flexDirection:"column"
+          }}
+        >
+          {/* top bar */}
+          <div style={{
+            height:48, display:"flex", alignItems:"center", gap:8,
+            padding:"0 8px", borderBottom:"1px solid #1f2937",
+            background:"rgba(15,23,42,0.95)", color:"#fff"
+          }}>
+            <button
+              onClick={()=>setFull(false)}
+              style={{
+                height:34, padding:"0 12px", borderRadius:10, border:"none",
+                background:"#0ea5e9", color:"#fff", fontWeight:800
+              }}
+            >
+              Back
+            </button>
+
+            {/* quick modes in full view */}
+            <div style={{ display:"flex", gap:8, marginLeft:8, overflowX:"auto" }}>
+              <button style={tb(st.mode==="line")}     onClick={()=>{ st.setMode("line"); st.setSelected([]); }}>Line</button>
+              <button style={tb(st.mode==="refLine")}  onClick={()=>{ st.setMode("refLine"); st.setSelected([]); }}>📐 Ref</button>
+              <button style={{...tb(false), background:"#94a3b8"}} onClick={onRefChange}>↺ Change</button>
+              <button style={tb(st.mode==="angle")}    onClick={()=>{ st.setMode("angle"); st.setSelected([]); }}>Angle</button>
+              <button style={tb(st.mode==="eraseLine")}onClick={()=>{ st.setMode("eraseLine"); st.setSelected([]); }}>Erase</button>
+            </div>
+
+            <div style={{ marginLeft:"auto", fontSize:12, color:"#cbd5e1" }}>
+              {st.refLine ? <>Ref: <b>{st.getLabel(st.refLine.aId)}–{st.getLabel(st.refLine.bId)}</b></> : "No ref"}
+            </div>
+          </div>
+
+          {/* full canvas area */}
+          <div style={{ flex:1, padding:8 }}>
+            <div ref={st.wrapRef} style={{ width:"100%", height:"100%" }}>
+              <canvas
+                ref={st.canvasRef}
+                onPointerDown={st.onPointerDown}
+                onPointerMove={st.onPointerMove}
+                onPointerUp={st.onPointerUp}
+                onPointerCancel={st.onPointerUp}
+                style={{
+                  display:"block", width:"100%", height:"100%",
+                  background:"#fff", borderRadius:12, touchAction:"none", cursor:"crosshair"
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-          }
+                               }
