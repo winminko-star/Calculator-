@@ -1,15 +1,16 @@
-// src/pages/Drawing2D.jsx (Part 1/3)
+// src/pages/Drawing2D.jsx  (Part 1/3)
 import React, { useEffect, useRef, useState } from "react";
 import { db } from "../firebase";
 import { ref as dbRef, push, set } from "firebase/database";
 
+/** Units: coordinates are in millimetres (mm). zoom = px per mm */
 const UNIT_LABEL = "mm";
 
-/* helpers */
+/* ---------------- helpers ---------------- */
 const safeId = () =>
   (crypto?.randomUUID?.() || Math.random().toString(36)).slice(0, 8);
 
-const distMm = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+const distMm = (a, b) => Math.hypot(b.x - a.x, b.y - a.y); // mm
 
 const angleDeg = (a, b, c) => {
   const v1 = { x: a.x - b.x, y: a.y - b.y };
@@ -18,16 +19,23 @@ const angleDeg = (a, b, c) => {
   const m1 = Math.hypot(v1.x, v1.y) || 1;
   const m2 = Math.hypot(v2.x, v2.y) || 1;
   const cos = Math.min(1, Math.max(-1, dot / (m1 * m2)));
+  // smaller angle 0..180
   return +(Math.acos(cos) * 180 / Math.PI).toFixed(2);
 };
 
-// A,B,…,AA,AB
+// auto labels: A, B, ..., Z, AA, AB, ...
 const labelFromIndex = (i) => {
-  let s = ""; i += 1;
-  while (i > 0) { i--; s = String.fromCharCode(65 + (i % 26)) + s; i = Math.floor(i / 26); }
+  let s = "";
+  i += 1;
+  while (i > 0) {
+    i--;
+    s = String.fromCharCode(65 + (i % 26)) + s;
+    i = Math.floor(i / 26);
+  }
   return s;
 };
 
+// rounded label pill for angles
 function drawLabelPill(ctx, x, y, text) {
   ctx.font = "bold 14px system-ui";
   const padX = 6, padY = 4;
@@ -50,84 +58,135 @@ function drawLabelPill(ctx, x, y, text) {
   ctx.fillStyle = "rgba(255,255,255,0.9)";
   ctx.strokeStyle = "#0ea5e9";
   ctx.lineWidth = 2;
-  ctx.fill(); ctx.stroke();
+  ctx.fill();
+  ctx.stroke();
 
   ctx.fillStyle = "#0f172a";
   ctx.fillText(text, bx + padX, by + h - padY - 2);
 }
 
-/* renderer */
+/* --------------- renderer --------------- */
 function drawScene(ctx, wCss, hCss, zoom, tx, ty, points, lines, angles, tempLine, circles) {
   ctx.clearRect(0, 0, wCss, hCss);
 
   // grid
   const step = Math.max(zoom * 1, 24);
-  const originX = wCss/2 + tx, originY = hCss/2 + ty;
+  const originX = wCss / 2 + tx;
+  const originY = hCss / 2 + ty;
 
-  ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 1;
-  for (let gx = originX % step; gx < wCss; gx += step) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,hCss); ctx.stroke(); }
-  for (let gy = originY % step; gy < hCss; gy += step){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(wCss,gy); ctx.stroke(); }
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  for (let gx = originX % step; gx < wCss; gx += step) {
+    ctx.beginPath();
+    ctx.moveTo(gx, 0);
+    ctx.lineTo(gx, hCss);
+    ctx.stroke();
+  }
+  for (let gy = originY % step; gy < hCss; gy += step) {
+    ctx.beginPath();
+    ctx.moveTo(0, gy);
+    ctx.lineTo(wCss, gy);
+    ctx.stroke();
+  }
 
   // axes
-  ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(0,hCss/2+ty); ctx.lineTo(wCss,hCss/2+ty); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(wCss/2+tx,0); ctx.lineTo(wCss/2+tx,hCss); ctx.stroke();
+  ctx.strokeStyle = "#94a3b8";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, hCss / 2 + ty);
+  ctx.lineTo(wCss, hCss / 2 + ty);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(wCss / 2 + tx, 0);
+  ctx.lineTo(wCss / 2 + tx, hCss);
+  ctx.stroke();
 
-  const W2S = (p) => ({ x: wCss/2 + p.x*zoom + tx, y: hCss/2 - p.y*zoom + ty });
+  const W2S = (p) => ({
+    x: wCss / 2 + p.x * zoom + tx,
+    y: hCss / 2 - p.y * zoom + ty,
+  });
 
   // lines
-  ctx.strokeStyle = "#0ea5e9"; ctx.lineWidth = 2; ctx.font="13px system-ui"; ctx.fillStyle="#0f172a";
-  lines.forEach(l=>{
-    const a=points.find(p=>p.id===l.p1), b=points.find(p=>p.id===l.p2); if(!a||!b) return;
-    const s1=W2S(a), s2=W2S(b);
-    ctx.beginPath(); ctx.moveTo(s1.x,s1.y); ctx.lineTo(s2.x,s2.y); ctx.stroke();
-    ctx.fillText(`${Math.round(l.lenMm)} ${UNIT_LABEL}`, (s1.x+s2.x)/2+6,(s1.y+s2.y)/2-6);
+  ctx.strokeStyle = "#0ea5e9";
+  ctx.lineWidth = 2;
+  ctx.font = "13px system-ui";
+  ctx.fillStyle = "#0f172a";
+  lines.forEach((l) => {
+    const a = points.find((p) => p.id === l.p1),
+      b = points.find((p) => p.id === l.p2);
+    if (!a || !b) return;
+    const s1 = W2S(a),
+      s2 = W2S(b);
+    ctx.beginPath();
+    ctx.moveTo(s1.x, s1.y);
+    ctx.lineTo(s2.x, s2.y);
+    ctx.stroke();
+    ctx.fillText(
+      `${Math.round(l.lenMm)} ${UNIT_LABEL}`,
+      (s1.x + s2.x) / 2 + 6,
+      (s1.y + s2.y) / 2 - 6
+    );
   });
 
   // circles
-  circles.forEach(c=>{
-    const cs = W2S({x:c.cx, y:c.cy});
-    ctx.strokeStyle = "#16a34a"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cs.x, cs.y, c.r * zoom, 0, Math.PI*2); ctx.stroke();
-    ctx.fillStyle="#0f172a";
+  circles.forEach((c) => {
+    const cs = W2S({ x: c.cx, y: c.cy });
+    ctx.strokeStyle = "#16a34a";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cs.x, cs.y, c.r * zoom, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#0f172a";
     ctx.fillText(`R=${c.r} ${UNIT_LABEL}`, cs.x + 6, cs.y - 6);
   });
 
-  // temp red line
+  // temp red line (perp)
   if (tempLine) {
-    const s1=W2S({x:tempLine.x1,y:tempLine.y1});
-    const s2=W2S({x:tempLine.x2,y:tempLine.y2});
-    ctx.strokeStyle="#ef4444"; ctx.lineWidth=2; ctx.setLineDash([6,6]);
-    ctx.beginPath(); ctx.moveTo(s1.x,s1.y); ctx.lineTo(s2.x,s2.y); ctx.stroke();
+    const s1 = W2S({ x: tempLine.x1, y: tempLine.y1 });
+    const s2 = W2S({ x: tempLine.x2, y: tempLine.y2 });
+    ctx.strokeStyle = "#ef4444";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(s1.x, s1.y);
+    ctx.lineTo(s2.x, s2.y);
+    ctx.stroke();
     ctx.setLineDash([]);
   }
 
   // angle pills
-  angles.forEach(t=>{
-    const a=points.find(p=>p.id===t.a), b=points.find(p=>p.id===t.b), c=points.find(p=>p.id===t.c);
-    if(!a||!b||!c) return;
-    const sb=W2S(b); drawLabelPill(ctx,sb.x+10,sb.y-10,`${t.deg}`);
+  angles.forEach((t) => {
+    const a = points.find((p) => p.id === t.a),
+      b = points.find((p) => p.id === t.b),
+      c = points.find((p) => p.id === t.c);
+    if (!a || !b || !c) return;
+    const sb = W2S(b);
+    drawLabelPill(ctx, sb.x + 10, sb.y - 10, `${t.deg}`);
   });
 
   // points
-  points.forEach(p=>{
-    const s=W2S(p); const r=6;
-    ctx.lineWidth=2; ctx.strokeStyle="#fff";
-    ctx.beginPath(); ctx.arc(s.x,s.y,r,0,Math.PI*2); ctx.stroke();
-    ctx.fillStyle="#ef4444"; ctx.beginPath(); ctx.arc(s.x,s.y,r-1,0,Math.PI*2); ctx.fill();
-    ctx.font="13px system-ui"; ctx.lineWidth=3; ctx.strokeStyle="#fff";
-    ctx.strokeText(p.label,s.x+8,s.y-8);
-    ctx.fillStyle="#0f172a"; ctx.fillText(p.label,s.x+8,s.y-8);
+  points.forEach((p) => {
+    const s = W2S(p);
+    const r = 6;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r - 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = "13px system-ui";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#fff";
+    ctx.strokeText(p.label, s.x + 8, s.y - 8);
+    ctx.fillStyle = "#0f172a";
+    ctx.fillText(p.label, s.x + 8, s.y - 8);
   });
-}
-
-export { UNIT_LABEL, safeId, distMm, angleDeg, labelFromIndex, drawScene };
-// src/pages/Drawing2D.jsx (Part 2/3)
-import { ref as dbRef, push, set } from "firebase/database";
-import { UNIT_LABEL, safeId, distMm, angleDeg, labelFromIndex, drawScene } from "./Drawing2D.jsx";
-import { db } from "../firebase";
-import React, { useEffect, useRef, useState } from "react";
-
+    }
+// src/pages/Drawing2D.jsx  (Part 2/3)
 function useDrawing2D() {
   // data
   const [points, setPoints]   = useState([]);     // {id,label,x,y,h}
@@ -146,7 +205,7 @@ function useDrawing2D() {
   const [cN, setCN] = useState("");
   const [cR, setCR] = useState("");
 
-  // modes
+  // modes / selection
   const [mode, setMode] = useState("line"); // 'line' | 'angle' | 'eraseLine' | 'refLine'
   const [selected, setSelected] = useState([]);
 
@@ -334,7 +393,9 @@ function useDrawing2D() {
       }
 
       if(mode==="refLine"){
+        // choose ref line
         if(!refLine && next.length===2){ setRefLine({aId:next[0], bId:next[1]}); return []; }
+        // measure to 3rd pick
         if(refLine){
           if(pick.id===refLine.aId || pick.id===refLine.bId) return [];
           const a=points.find(p=>p.id===refLine.aId);
@@ -362,11 +423,12 @@ function useDrawing2D() {
           return [];
         }
       }
+
       return next;
     });
   };
 
-  /* save to firebase */
+  /* save (DB only, no image) */
   const saveToFirebase = async () => {
     const now = Date.now();
     await set(push(dbRef(db, "drawings")), {
@@ -391,27 +453,40 @@ function useDrawing2D() {
   })();
 
   return {
+    // refs
     wrapRef, canvasRef,
+
+    // inputs
     E,N,H,setE,setN,setH, addPoint, nextLabel,
+
+    // modes + selections
     mode,setMode, selected, setSelected,
+
+    // view & actions
     fitView, resetView, clearAll, centerOnA, removeLastLine, clearLines,
     autoFit,setAutoFit, MIN_S, MAX_S, sval, onSliderChange, zoom,
+
+    // title & save
     title,setTitle, saveToFirebase,
+
+    // circle inputs + action
     cE,cN,cR,setCE,setCN,setCR, addCircle,
+
+    // data
     points,lines,angles,circles, getLabel,
+
+    // gestures
     onPointerDown,onPointerMove,onPointerUp,
+
+    // ref/measure
     refLine,setRefLine, tempLine, setTempLine, measure, setMeasure,
+
+    // level table
     levelSummary,
   };
-}
-
-export { useDrawing2D };
-// src/pages/Drawing2D.jsx (Part 3/3)
-import React from "react";
-import { UNIT_LABEL } from "./Drawing2D.jsx";
-import { useDrawing2D } from "./Drawing2D.jsx";
-
-export function PageShell({ children }) {
+    }
+// src/pages/Drawing2D.jsx  (Part 3/3)
+function PageShell({ children }) {
   return <div className="grid">{children}</div>;
 }
 
@@ -480,7 +555,7 @@ export default function Drawing2DPage() {
         {/* Scale slider */}
         <div style={{ marginTop: 10 }}>
           <div className="row" style={{ justifyContent:"space-between", marginBottom:6 }}>
-            <span className="small">Scale (px/{UNIT_LABEL})</span>
+            <span className="small">Scale (px/mm)</span>
             <span className="small">{Math.max(0.0001, Math.round(st.zoom*1000)/1000)} px/{UNIT_LABEL}</span>
           </div>
           <input type="range" min={st.MIN_S} max={st.MAX_S} step={0.01}
