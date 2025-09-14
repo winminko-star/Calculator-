@@ -2,31 +2,42 @@
 import React, { useMemo, useState } from "react";
 import { getDatabase, ref as dbRef, push, set } from "firebase/database";
 
-// ---------- helpers ----------
+// ---------- helper ----------
 const num = (v) =>
   v === "" || v === null || v === undefined ? null : Number(v);
 
 function RowInput({ index, row, onChange, onRef }) {
   const { name, value, diff, isRef } = row;
   return (
-    <div className="row" style={{ alignItems: "center", gap: 8 }}>
+    <div
+      className="row"
+      style={{
+        alignItems: "center",
+        gap: 8,
+        flexWrap: "nowrap",
+        overflowX: "auto",
+      }}
+    >
+      {/* Ref radio */}
       <input
         type="radio"
         name="refRow"
         checked={!!isRef}
         onChange={() => onRef(index)}
-        style={{ width: 18, height: 18 }}
+        style={{ width: 18, height: 18, flex: "0 0 auto" }}
       />
+      {/* Name */}
       <input
         className="input"
-        style={{ flex: 0.5, minWidth: 60 }}
+        style={{ flex: 1, minWidth: 80 }}
         placeholder={`Name (${index + 1})`}
         value={name}
         onChange={(e) => onChange(index, { name: e.target.value })}
       />
+      {/* Value */}
       <input
         className="input"
-        style={{ width: 120 }}
+        style={{ flex: 1, minWidth: 100 }}
         type="number"
         inputMode="decimal"
         step="any"
@@ -34,9 +45,10 @@ function RowInput({ index, row, onChange, onRef }) {
         value={value}
         onChange={(e) => onChange(index, { value: e.target.value })}
       />
+      {/* Different */}
       <input
         className="input"
-        style={{ width: 120 }}
+        style={{ flex: 1, minWidth: 100 }}
         type="number"
         inputMode="decimal"
         step="any"
@@ -59,6 +71,8 @@ export default function Levelling() {
     }))
   );
   const [cols, setCols] = useState(6);
+
+  const MAX_COLS = 50; // ကိုယ်ကြိုက်သလောက် မြှင့်နိုင်မယ်
 
   const refIdx = rows.findIndex((r) => r.isRef);
   const refVal = num(rows[refIdx]?.value);
@@ -92,7 +106,8 @@ export default function Levelling() {
 
   // compute results
   const results = useMemo(() => {
-    const noRef = !(refIdx >= 0) || refVal === null || Number.isNaN(refVal);
+    const noRef =
+      !(refIdx >= 0) || refVal === null || Number.isNaN(refVal);
 
     return rows.map((r, i) => {
       const nm = r.name?.trim() ? r.name.trim() : String(i + 1);
@@ -110,7 +125,7 @@ export default function Levelling() {
 
   // break into grid
   const gridRows = useMemo(() => {
-    const c = Math.max(1, Math.min(12, Number(cols) || 1));
+    const c = Math.max(1, Math.min(MAX_COLS, Number(cols) || 1));
     const chunks = [];
     for (let i = 0; i < results.length; i += c) {
       chunks.push(results.slice(i, i + c));
@@ -158,24 +173,36 @@ export default function Levelling() {
       {/* inputs */}
       <div className="card grid" style={{ gap: 12 }}>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          <button className="btn" onClick={addInput}>+ Add input</button>
-          <button className="btn" style={{ background: "#334155" }} onClick={clearAll}>
+          <button className="btn" onClick={addInput}>
+            + Add input
+          </button>
+          <button
+            className="btn"
+            style={{ background: "#334155" }}
+            onClick={clearAll}
+          >
             🧹 Clear
           </button>
-          <button className="btn" style={{ background: "#0ea5e9" }} onClick={saveResults}>
+          <button
+            className="btn"
+            style={{ background: "#0ea5e9" }}
+            onClick={saveResults}
+          >
             💾 Save
           </button>
           <label
             className="row"
             style={{ gap: 8, alignItems: "center", marginLeft: "auto" }}
           >
-            <span className="small" style={{ fontWeight: 600 }}>Columns</span>
+            <span className="small" style={{ fontWeight: 600 }}>
+              Columns
+            </span>
             <input
               className="input"
               style={{ width: 90 }}
               type="number"
               min={1}
-              max={12}
+              max={MAX_COLS}
               value={cols}
               onChange={(e) => setCols(e.target.value)}
             />
@@ -187,7 +214,7 @@ export default function Levelling() {
           style={{
             fontWeight: 700,
             display: "grid",
-            gridTemplateColumns: "24px 0.5fr 120px 120px",
+            gridTemplateColumns: "24px 1fr 1fr 1fr",
             gap: 8,
           }}
         >
@@ -211,17 +238,26 @@ export default function Levelling() {
       {/* results */}
       <div className="card grid" style={{ gap: 12 }}>
         <div className="page-title">✅ Results</div>
-        <div className="results-scroll">
+        <div className="grid" style={{ gap: 8 }}>
           {gridRows.chunks.map((chunk, rIdx) => (
-            <div key={rIdx} className="row results-row">
+            <div
+              key={rIdx}
+              className="row"
+              style={{
+                gap: 8,
+                flexWrap: "nowrap",
+                overflowX: "auto",
+              }}
+            >
               {chunk.map((cell, cIdx) => (
                 <div
                   key={cIdx}
-                  className="card results-cell"
+                  className="card"
                   style={{
                     padding: 8,
                     borderRadius: 10,
                     border: "1px solid #e5e7eb",
+                    minWidth: 90,
                     textAlign: "center",
                     background: cell.isRef ? "#fff7ed" : "#fff",
                   }}
@@ -240,4 +276,4 @@ export default function Levelling() {
       </div>
     </div>
   );
-                }
+}
