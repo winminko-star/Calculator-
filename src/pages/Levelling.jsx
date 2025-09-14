@@ -6,59 +6,43 @@ import { getDatabase, ref as dbRef, push, set } from "firebase/database";
 const num = (v) =>
   v === "" || v === null || v === undefined ? null : Number(v);
 
-/* RowInput
-   - CSS မပြင်ရအောင် inline grid သုံးထားတယ်
-   - gridTemplateColumns: "radio  name  value  diff"
-   - minmax() သုံးထားလို့ နေရာကျုံ့ရင် လိုသလိုချုံ့, ကျော်မသွား
-*/
 function RowInput({ index, row, onChange, onRef }) {
   const { name, value, diff, isRef } = row;
   return (
-    <div
-      className="row"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "24px minmax(90px,1fr) minmax(80px,0.9fr) minmax(80px,0.9fr)",
-        gap: 8,
-        alignItems: "center",
-      }}
-    >
+    <div className="row" style={{ alignItems: "center", gap: 8 }}>
       <input
         type="radio"
         name="refRow"
         checked={!!isRef}
         onChange={() => onRef(index)}
-        style={{ width: 18, height: 18, justifySelf: "center" }}
+        style={{ width: 18, height: 18 }}
       />
-
       <input
         className="input"
+        style={{ flex: 0.5, minWidth: 60 }}
         placeholder={`Name (${index + 1})`}
         value={name}
         onChange={(e) => onChange(index, { name: e.target.value })}
-        style={{ width: "100%" }}
       />
-
       <input
         className="input"
+        style={{ width: 120 }}
         type="number"
         inputMode="decimal"
         step="any"
         placeholder="Value"
         value={value}
         onChange={(e) => onChange(index, { value: e.target.value })}
-        style={{ width: "100%" }}
       />
-
       <input
         className="input"
+        style={{ width: 120 }}
         type="number"
         inputMode="decimal"
         step="any"
         placeholder="Different"
         value={diff}
         onChange={(e) => onChange(index, { diff: e.target.value })}
-        style={{ width: "100%" }}
       />
     </div>
   );
@@ -108,13 +92,17 @@ export default function Levelling() {
 
   // compute results
   const results = useMemo(() => {
-    const noRef = !(refIdx >= 0) || refVal === null || Number.isNaN(refVal);
+    const noRef =
+      !(refIdx >= 0) || refVal === null || Number.isNaN(refVal);
+
     return rows.map((r, i) => {
       const nm = r.name?.trim() ? r.name.trim() : String(i + 1);
       const v = num(r.value);
       const d = num(r.diff) ?? 0;
+
       if (v === null || Number.isNaN(v) || noRef)
         return { name: nm, value: null, isRef: r.isRef };
+
       const base = v - refVal;
       const final = base - (Number.isNaN(d) ? 0 : d);
       return { name: nm, value: final, isRef: r.isRef };
@@ -167,18 +155,36 @@ export default function Levelling() {
         </div>
       </div>
 
-      {/* actions */}
+      {/* inputs */}
       <div className="card grid" style={{ gap: 12 }}>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          <button className="btn" onClick={addInput}>+ Add input</button>
-          <button className="btn" style={{ background: "#334155" }} onClick={clearAll}>🧹 Clear</button>
-          <button className="btn" style={{ background: "#0ea5e9" }} onClick={saveResults}>💾 Save</button>
-
-        <label className="row" style={{ gap: 8, marginLeft: "auto", alignItems: "center" }}>
-            <span className="small" style={{ fontWeight: 600 }}>Columns</span>
+          <button className="btn" onClick={addInput}>
+            + Add input
+          </button>
+          <button
+            className="btn"
+            style={{ background: "#334155" }}
+            onClick={clearAll}
+          >
+            🧹 Clear
+          </button>
+          <button
+            className="btn"
+            style={{ background: "#0ea5e9" }}
+            onClick={saveResults}
+          >
+            💾 Save
+          </button>
+          <label
+            className="row"
+            style={{ gap: 8, alignItems: "center", marginLeft: "auto" }}
+          >
+            <span className="small" style={{ fontWeight: 600 }}>
+              Columns
+            </span>
             <input
               className="input"
-              style={{ width: 86 }}
+              style={{ width: 90 }}
               type="number"
               min={1}
               max={12}
@@ -188,14 +194,12 @@ export default function Levelling() {
           </label>
         </div>
 
-        {/* header – grid widths တူအောင် */}
         <div
           className="small"
           style={{
             fontWeight: 700,
             display: "grid",
-            gridTemplateColumns:
-              "24px minmax(90px,1fr) minmax(80px,0.9fr) minmax(80px,0.9fr)",
+            gridTemplateColumns: "24px 0.5fr 120px 120px",
             gap: 8,
           }}
         >
@@ -205,7 +209,6 @@ export default function Levelling() {
           <div>Different</div>
         </div>
 
-        {/* rows */}
         {rows.map((row, i) => (
           <RowInput
             key={row.id}
@@ -220,10 +223,16 @@ export default function Levelling() {
       {/* results */}
       <div className="card grid" style={{ gap: 12 }}>
         <div className="page-title">✅ Results</div>
-
         <div className="grid" style={{ gap: 8 }}>
           {gridRows.chunks.map((chunk, rIdx) => (
-            <div key={rIdx} className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <div
+              key={rIdx}
+              className="grid"
+              style={{
+                gap: 8,
+                gridTemplateColumns: `repeat(${gridRows.c}, minmax(80px, 1fr))`
+              }}
+            >
               {chunk.map((cell, cIdx) => (
                 <div
                   key={cIdx}
@@ -232,8 +241,6 @@ export default function Levelling() {
                     padding: 8,
                     borderRadius: 10,
                     border: "1px solid #e5e7eb",
-                    minWidth: 72,          // အနည်းဆုံးပဲထားပြီး wrap လုပ်မယ်
-                    flex: "0 1 90px",      // ရှည်လာရင် ချုံ့/တိုး အလိုလျောက်
                     textAlign: "center",
                     background: cell.isRef ? "#fff7ed" : "#fff",
                   }}
@@ -252,4 +259,4 @@ export default function Levelling() {
       </div>
     </div>
   );
-              }
+                              }
