@@ -19,7 +19,7 @@ function RowInput({ index, row, onChange, onRef }) {
       />
       <input
         className="input"
-        style={{ flex: 0.5, minWidth: 60 }}   // 👈 Name input တဝက်
+        style={{ flex: 0.5, minWidth: 60 }}
         placeholder={`Name (${index + 1})`}
         value={name}
         onChange={(e) => onChange(index, { name: e.target.value })}
@@ -92,8 +92,7 @@ export default function Levelling() {
 
   // compute results
   const results = useMemo(() => {
-    const noRef =
-      !(refIdx >= 0) || refVal === null || Number.isNaN(refVal);
+    const noRef = !(refIdx >= 0) || refVal === null || Number.isNaN(refVal);
 
     return rows.map((r, i) => {
       const nm = r.name?.trim() ? r.name.trim() : String(i + 1);
@@ -108,6 +107,16 @@ export default function Levelling() {
       return { name: nm, value: final, isRef: r.isRef };
     });
   }, [rows, refIdx, refVal]);
+
+  // break into grid
+  const gridRows = useMemo(() => {
+    const c = Math.max(1, Math.min(12, Number(cols) || 1));
+    const chunks = [];
+    for (let i = 0; i < results.length; i += c) {
+      chunks.push(results.slice(i, i + c));
+    }
+    return { chunks, c };
+  }, [results, cols]);
 
   // save
   const saveResults = async () => {
@@ -141,37 +150,26 @@ export default function Levelling() {
         <div className="page-title">📏 Levelling</div>
         <div className="small">
           Reference ကိုရွေးပြီး{" "}
-          <b>Value(row) − Value(ref) − Different(row)</b> ဖြင့်တွက်ထားပါတယ်။ Value မရှိလျှင် “B”.
+          <b>Value(row) − Value(ref) − Different(row)</b> ဖြင့်တွက်ထားပါတယ်။ 
+          Value မရှိလျှင် “B”.
         </div>
       </div>
 
       {/* inputs */}
       <div className="card grid" style={{ gap: 12 }}>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          <button className="btn" onClick={addInput}>
-            + Add input
-          </button>
-          <button
-            className="btn"
-            style={{ background: "#334155" }}
-            onClick={clearAll}
-          >
+          <button className="btn" onClick={addInput}>+ Add input</button>
+          <button className="btn" style={{ background: "#334155" }} onClick={clearAll}>
             🧹 Clear
           </button>
-          <button
-            className="btn"
-            style={{ background: "#0ea5e9" }}
-            onClick={saveResults}
-          >
+          <button className="btn" style={{ background: "#0ea5e9" }} onClick={saveResults}>
             💾 Save
           </button>
           <label
             className="row"
             style={{ gap: 8, alignItems: "center", marginLeft: "auto" }}
           >
-            <span className="small" style={{ fontWeight: 600 }}>
-              Columns
-            </span>
+            <span className="small" style={{ fontWeight: 600 }}>Columns</span>
             <input
               className="input"
               style={{ width: 90 }}
@@ -213,44 +211,33 @@ export default function Levelling() {
       {/* results */}
       <div className="card grid" style={{ gap: 12 }}>
         <div className="page-title">✅ Results</div>
-        <div style={{ width: "100%", overflowX: "hidden" }}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${Math.max(
-                1,
-                Math.min(12, Number(cols) || 1)
-              )}, minmax(0, 1fr))`,
-              gap: 8,
-              width: "100%",
-              boxSizing: "border-box",
-            }}
-          >
-            {results.map((cell, idx) => (
-              <div
-                key={idx}
-                className="card"
-                style={{
-                  padding: 8,
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
-                  textAlign: "center",
-                  background: cell.isRef ? "#fff7ed" : "#fff",
-                  width: "100%",
-                  boxSizing: "border-box",
-                }}
-              >
-                <div className="small" style={{ fontWeight: 700 }}>
-                  {cell.name}
+        <div className="results-scroll">
+          {gridRows.chunks.map((chunk, rIdx) => (
+            <div key={rIdx} className="row results-row">
+              {chunk.map((cell, cIdx) => (
+                <div
+                  key={cIdx}
+                  className="card results-cell"
+                  style={{
+                    padding: 8,
+                    borderRadius: 10,
+                    border: "1px solid #e5e7eb",
+                    textAlign: "center",
+                    background: cell.isRef ? "#fff7ed" : "#fff",
+                  }}
+                >
+                  <div className="small" style={{ fontWeight: 700 }}>
+                    {cell.name}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>
+                    {cell.value === null ? "B" : cell.value.toString()}
+                  </div>
                 </div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>
-                  {cell.value === null ? "B" : cell.value.toString()}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
-        }
+                }
