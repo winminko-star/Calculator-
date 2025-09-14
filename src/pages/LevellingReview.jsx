@@ -3,13 +3,10 @@ import React, { useEffect, useState } from "react";
 import { getDatabase, ref as dbRef, onValue, remove } from "firebase/database";
 
 const fmtTime = (t) => new Date(t).toLocaleString();
-
-// "B" logic: null/undefined/NaN => "B", otherwise user's natural string
 const pretty = (v) => {
   if (v === null || v === undefined) return "B";
   const n = Number(v);
   if (!Number.isFinite(n)) return "B";
-  // avoid fp-noise like 1.2000000003
   const rounded = Math.round(n * 1e9) / 1e9;
   return String(rounded);
 };
@@ -36,43 +33,39 @@ export default function LevellingReview() {
   };
 
   return (
-    <div className="container" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="container review-stack">
       <div className="card">
         <div className="page-title">📁 Levelling – All Saved</div>
-        <div className="small">
-          Column/Row layout ကို result grid အဖြစ်ပြထားပါတယ်။
-        </div>
+        <div className="small">Result grid ကို အလျား scroll စနိုင်ပါတယ်။</div>
       </div>
 
       {items.map((it) => {
+        const safeKey = it.id ?? `${it.createdAt}-${Math.random()}`;
         const cols = Math.max(1, Math.min(99, Number(it.cols) || 6));
         return (
-          <div key={it.id || it.createdAt} className="card" style={{ display: "block" }}>
-            {/* header row */}
-            <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <div key={safeKey} className="card" style={{ display: "block" }}>
+            <div className="row" style={{ justifyContent: "space-between" }}>
               <div className="page-title">📌 {it.title || "(untitled)"}</div>
               <div className="small">{fmtTime(it.createdAt || Date.now())}</div>
             </div>
 
-            {/* reference info */}
             <div className="small" style={{ marginTop: 6 }}>
               Reference: #{(it.referenceIndex ?? 0) + 1}
             </div>
 
-            {/* results grid (h-scrollable) */}
-            <div style={{ overflowX: "auto", marginTop: 10, paddingBottom: 4 }}>
+            <div className="h-scroll" style={{ marginTop: 10, paddingBottom: 4 }}>
               <div
                 style={{
                   display: "grid",
-                  gridAutoRows: "minmax(64px, auto)",
                   gridTemplateColumns: `repeat(${cols}, minmax(84px, 1fr))`,
+                  gridAutoRows: "minmax(64px, auto)",
                   gap: 10,
-                  minWidth: cols * 90, // force grid width so horizontal scroll works
+                  minWidth: cols * 90, // force scroll width
                 }}
               >
                 {(it.results || []).map((r, idx) => (
                   <div
-                    key={idx}
+                    key={`${safeKey}-${idx}`}
                     className="card"
                     style={{
                       padding: 8,
@@ -85,13 +78,14 @@ export default function LevellingReview() {
                     <div className="small" style={{ fontWeight: 700 }}>
                       {r?.name ?? idx + 1}
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 800 }}>{pretty(r?.value)}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800 }}>
+                      {pretty(r?.value)}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* actions */}
             <div className="row" style={{ gap: 8, marginTop: 10 }}>
               <button className="btn" style={{ background: "#e11d48" }} onClick={() => delItem(it.id)}>
                 🗑 Delete
@@ -104,4 +98,4 @@ export default function LevellingReview() {
       {!items.length && <div className="card small">No saved levelling yet.</div>}
     </div>
   );
-    }
+        }
