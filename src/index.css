@@ -38,3 +38,24 @@ body { margin: 0; font-family: var(--font); background: #f8fafc; color: #0f172a;
 .header { position: sticky; top: 0; z-index: 20; background: #fff; border-bottom: 1px solid #e5e7eb; }
 .nav a { padding: 8px 10px; text-decoration: none; color: #0f172a; }
 .nav a.active { color: #0ea5e9; font-weight: 700; }
+html, body, #root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;     /* ဘေးတန်း scroll ထွက်စေမယ့် overflow ပိတ် */
+  margin: 0;
+  padding: 0;
+}
+
+.page-narrow {
+  max-width: 430px;       /* ဖုန်း UI သဘောကို ချောချောမောမောထားမယ် */
+  margin: 0 auto;
+  padding: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* tables ကနေ အလွန်ရှည်တာရှိရင် ဘေး scroll ကို **table အတွင်း** ထဲပဲထားမယ် */
+.card > div[style*="overflow-x"], 
+.card table {
+  max-width: 100%;
+        }
