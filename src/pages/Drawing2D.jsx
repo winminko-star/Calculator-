@@ -170,6 +170,24 @@ export default function Drawing2D() {
   const [angles, setAngles]   = useState([]);  // {id,a,b,c,deg}
   const [ties, setTies]       = useState([]);  // {id,p1,p2,e,n,h,total}
   const [circles, setCircles] = useState([]);  // {id,centerId,r}
+  useEffect(() => {
+  const raw = localStorage.getItem("wmk_restore");
+  if (!raw) return;
+  try {
+    const s = JSON.parse(raw);
+    setPoints(Array.isArray(s.points) ? s.points : []);
+    setLines(Array.isArray(s.lines) ? s.lines : []);
+    setAngles(Array.isArray(s.angles) ? s.angles : []);
+    setTies(Array.isArray(s.ties) ? s.ties : []);
+    setCircles(Array.isArray(s.circles) ? s.circles : []);
+    if (s.view) {
+      setZoom(s.view.zoom ?? 60);
+      setTx(s.view.tx ?? 0);
+      setTy(s.view.ty ?? 0);
+    }
+  } catch {}
+  localStorage.removeItem("wmk_restore");
+}, []);
 
   /* inputs */
   const [E, setE] = useState("");  // mm
