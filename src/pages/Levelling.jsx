@@ -6,10 +6,12 @@ import { getDatabase, ref as dbRef, push, set } from "firebase/database";
 const num = (v) =>
   v === "" || v === null || v === undefined ? null : Number(v);
 
+// တစ်တန်းစီ row component
 function RowInput({ index, row, onChange, onRef }) {
   const { value, diff, isRef } = row;
   return (
     <div className="row" style={{ alignItems: "center", gap: 8 }}>
+      {/* Ref ရွေးချယ်ရန် */}
       <input
         type="radio"
         name="refRow"
@@ -17,9 +19,11 @@ function RowInput({ index, row, onChange, onRef }) {
         onChange={() => onRef(index)}
         style={{ width: 18, height: 18 }}
       />
-      <div style={{ width: 30, textAlign: "center", fontWeight: 600, color: "#000" }}>
+      {/* Auto number (1234...) */}
+      <div style={{ width: 40, fontWeight: 700, color: "#000" }}>
         {index + 1}
       </div>
+      {/* Value input */}
       <input
         className="input"
         style={{ width: 120 }}
@@ -30,6 +34,7 @@ function RowInput({ index, row, onChange, onRef }) {
         value={value}
         onChange={(e) => onChange(index, { value: e.target.value })}
       />
+      {/* Different input */}
       <input
         className="input"
         style={{ width: 120 }}
@@ -58,6 +63,7 @@ export default function Levelling() {
   const refIdx = rows.findIndex((r) => r.isRef);
   const refVal = num(rows[refIdx]?.value);
 
+  // row update
   const setRow = (i, patch) =>
     setRows((list) => {
       const copy = [...list];
@@ -86,11 +92,9 @@ export default function Levelling() {
 
   // compute results
   const results = useMemo(() => {
-    const noRef =
-      !(refIdx >= 0) || refVal === null || Number.isNaN(refVal);
-
+    const noRef = !(refIdx >= 0) || refVal === null || Number.isNaN(refVal);
     return rows.map((r, i) => {
-      const nm = String(i + 1);
+      const nm = String(i + 1); // auto numbering
       const v = num(r.value);
       const d = num(r.diff) ?? 0;
 
@@ -103,9 +107,9 @@ export default function Levelling() {
     });
   }, [rows, refIdx, refVal]);
 
-  // break into grid
+  // break into grid (no 12 limit!)
   const gridRows = useMemo(() => {
-    const c = Math.max(1, Math.min(12, Number(cols) || 1));
+    const c = Math.max(1, Number(cols) || 1);
     const chunks = [];
     for (let i = 0; i < results.length; i += c) {
       chunks.push(results.slice(i, i + c));
@@ -113,7 +117,7 @@ export default function Levelling() {
     return { chunks, c };
   }, [results, cols]);
 
-  // save
+  // save to Firebase
   const saveResults = async () => {
     const title = prompt("Title for this levelling result?");
     if (!title) return;
@@ -145,8 +149,7 @@ export default function Levelling() {
         <div className="page-title">📏 Levelling</div>
         <div className="small">
           Reference ကိုရွေးပြီး{" "}
-          <b>Value(row) − Value(ref) − Different(row)</b> ဖြင့်တွက်ထားပါတယ်။ 
-          Value မရှိလျှင် “B”.
+          <b>Value(row) − Value(ref) − Different(row)</b> ဖြင့်တွက်ထားပါတယ်။
         </div>
       </div>
 
@@ -182,19 +185,19 @@ export default function Levelling() {
               style={{ width: 90 }}
               type="number"
               min={1}
-              max={12}
               value={cols}
               onChange={(e) => setCols(e.target.value)}
             />
           </label>
         </div>
 
+        {/* header */}
         <div
           className="small"
           style={{
             fontWeight: 700,
             display: "grid",
-            gridTemplateColumns: "24px 30px 120px 120px",
+            gridTemplateColumns: "24px 40px 120px 120px",
             gap: 8,
           }}
         >
@@ -216,9 +219,16 @@ export default function Levelling() {
       </div>
 
       {/* results */}
-      <div className="card grid" style={{ gap: 12, overflowX: "auto" }}>
+      <div className="card grid" style={{ gap: 12 }}>
         <div className="page-title">✅ Results</div>
-        <div className="grid" style={{ gap: 8, minWidth: "600px" }}>
+        <div
+          className="grid"
+          style={{
+            gap: 8,
+            overflowX: "auto", // scrollable horizontally
+            paddingBottom: 8,
+          }}
+        >
           {gridRows.chunks.map((chunk, rIdx) => (
             <div
               key={rIdx}
@@ -238,7 +248,7 @@ export default function Levelling() {
                     background: cell.isRef ? "#fff7ed" : "#fff",
                   }}
                 >
-                  <div className="small" style={{ fontWeight: 700, color: "#000" }}>
+                  <div className="small" style={{ fontWeight: 700 }}>
                     {cell.name}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 700 }}>
@@ -252,4 +262,4 @@ export default function Levelling() {
       </div>
     </div>
   );
-                   }
+      }
