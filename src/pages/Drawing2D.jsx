@@ -453,7 +453,10 @@ export default function Drawing2D() {
   const td = { padding:"6px 10px", borderBottom:"1px solid #f1f5f9", fontSize:13, color:"#0f172a" };
 
   return (
-    <div className="grid" style={{ gap: 12 }}>
+  <div
+    className="grid page-narrow"
+    style={{ gap: 12, maxWidth: 430, margin: "0 auto", width: "100%" }}
+  >
       {/* Canvas */}
       <div className="card" style={{ padding: 8, position: "relative" }}>
         <div ref={wrapRef} style={{ width: "100%" }}>
