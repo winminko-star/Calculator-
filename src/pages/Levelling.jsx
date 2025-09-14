@@ -1,179 +1,238 @@
 // src/pages/Levelling.jsx
-import React, { useState, useEffect, useMemo } from "react";
-import "../index.css";
+import React, { useMemo, useState } from "react";
+import { getDatabase, ref as dbRef, push, set } from "firebase/database";
+
+const num = (v) =>
+  v === "" || v === null || v === undefined ? null : Number(v);
+
+// pretty print: no trailing .00000, keep user's natural look
+const pretty = (n) => {
+  if (n === null || !Number.isFinite(n)) return "B";
+  // limit FP noise then stringify without fixed decimals
+  const rounded = Math.round(n * 1e9) / 1e9;
+  return String(rounded);
+};
 
 export default function Levelling() {
-  const [rows, setRows] = useState(
-    Array.from({ length: 20 }, () => ({
+  const [rows, setRows] = useState(() =>
+    Array.from({ length: 20 }).map((_, i) => ({
+      id: i + 1,
       value: "",
       diff: "",
-      isRef: false,
+      isRef: i === 0,
     }))
   );
-  const [columns, setColumns] = useState(6);
+  const [cols, setCols] = useState(6);
 
-  // Restore
-  useEffect(() => {
-    const raw = localStorage.getItem("levelling_data");
-    if (!raw) return;
-    try {
-      const s = JSON.parse(raw);
-      if (Array.isArray(s.rows)) setRows(s.rows);
-      if (s.columns) setColumns(s.columns);
-    } catch {}
-  }, []);
+  const refIdx = rows.findIndex((r) => r.isRef);
+  const refVal = num(rows[refIdx]?.value);
 
-  // Save
-  const handleSave = () => {
-    localStorage.setItem("levelling_data", JSON.stringify({ rows, columns }));
-    alert("Saved!");
-  };
+  const setRow = (i, patch) =>
+    setRows((list) => {
+      const copy = [...list];
+      copy[i] = { ...copy[i], ...patch };
+      return copy;
+    });
 
-  const handleChange = (i, obj) => {
-    const copy = [...rows];
-    copy[i] = { ...copy[i], ...obj };
-    setRows(copy);
-  };
+  const setReference = (i) =>
+    setRows((list) => list.map((r, idx) => ({ ...r, isRef: idx === i })));
 
-  const handleRef = (i) => {
-    setRows(rows.map((r, idx) => ({ ...r, isRef: idx === i })));
-  };
+  const addInput = () =>
+    setRows((list) => [
+      ...list,
+      { id: list.length + 1, value: "", diff: "", isRef: false },
+    ]);
 
-  const handleClear = () => {
-    setRows(
-      Array.from({ length: 20 }, (_, i) => ({
+  const clearAll = () =>
+    setRows((list) =>
+      list.map((r, i) => ({
+        id: i + 1,
         value: "",
         diff: "",
         isRef: i === 0,
       }))
     );
+
+  // compute results (exact look: no forced decimals)
+  const results = useMemo(() => {
+    const noRef = !(refIdx >= 0) || refVal === null || Number.isNaN(refVal);
+    return rows.map((r) => {
+      const v = num(r.value);
+      if (v === null || Number.isNaN(v) || noRef) return null;
+      const d = num(r.diff) ?? 0;
+      return v - refVal - (Number.isNaN(d) ? 0 : d);
+    });
+  }, [rows, refIdx, refVal]);
+
+  // break results into rows of "cols" columns
+  const chunks = useMemo(() => {
+    const c = Math.max(1, Math.min(99, Number(cols) || 1));
+    const out = [];
+    for (let i = 0; i < results.length; i += c) {
+      out.push(results.slice(i, i + c));
+    }
+    return out;
+  }, [results, cols]);
+
+  // save to Firebase (schema compatible with your LevellingReview.jsx)
+  const saveResults = async () => {
+    const title = prompt("Title for this levelling result?");
+    if (title === null) return;
+    const db = getDatabase();
+    const now = Date.now();
+    const payload = {
+      title: (title || "").trim() || "(untitled)",
+      createdAt: now,
+      referenceIndex: refIdx >= 0 ? refIdx : 0,
+      rows: rows.map((r, i) => ({
+        name: String(i + 1),
+        value: r.value === "" ? null : Number(r.value),
+        diff: r.diff === "" ? null : Number(r.diff),
+        isRef: r.isRef,
+      })),
+      results: rows.map((r, i) => {
+        const v = r.value === "" ? null : Number(r.value);
+        const d = r.diff === "" ? 0 : Number(r.diff);
+        const hasRef = refIdx >= 0 && rows[refIdx].value !== "" && !isNaN(Number(rows[refIdx].value));
+        const ref = hasRef ? Number(rows[refIdx].value) : null;
+        const value =
+          v === null || ref === null || isNaN(v) || isNaN(ref)
+            ? null
+            : v - ref - (isNaN(d) ? 0 : d);
+        return { name: String(i + 1), value, isRef: r.isRef };
+      }),
+    };
+    await set(push(dbRef(db, "levellings")), payload);
+    alert("Saved ✅");
   };
 
-  // Calculation
-  const results = useMemo(() => {
-    const refRow = rows.find((r) => r.isRef);
-    if (!refRow || refRow.value === "") return [];
-    const refValue = parseFloat(refRow.value || "0");
-    return rows.map((r) => {
-      if (r.value === "") return null;
-      const v = parseFloat(r.value || "0");
-      const d = parseFloat(r.diff || "0");
-      return v - refValue - d;
-    });
-  }, [rows]);
-
-  // break into chunks
-  const chunks = useMemo(() => {
-    const c = Math.max(1, Number(columns) || 1);
-    const list = [];
-    for (let i = 0; i < results.length; i += c) {
-      list.push(results.slice(i, i + c));
-    }
-    return list;
-  }, [results, columns]);
-
   return (
-    <div style={{ padding: 16 }}>
-      <h2>📏 Levelling</h2>
-      <p>
-        Reference ကိုရွေးပါ။ <b>Value(row) − Value(ref) − Different(row)</b> ဖြုတ်ချက်။
-        Value မရှိလျှင် “B” အဖြစ်ပြမယ်။
-      </p>
-
-      {/* Controls */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <button onClick={() => setRows([...rows, { value: "", diff: "", isRef: false }])} className="btn">
-          + Add input
-        </button>
-        <button onClick={handleClear} className="btn" style={{ background: "#334155" }}>
-          🧹 Clear
-        </button>
-        <button onClick={handleSave} className="btn" style={{ background: "#0ea5e9" }}>
-          💾 Save
-        </button>
-        <div style={{ marginLeft: "auto" }}>
-          Columns{" "}
-          <input
-            type="number"
-            value={columns}
-            min={1}
-            max={50}
-            onChange={(e) => setColumns(Number(e.target.value))}
-            style={{ width: 60 }}
-          />
+    <div className="container grid" style={{ gap: 16 }}>
+      <div className="card">
+        <div className="page-title">📏 Levelling</div>
+        <div className="small">
+          Reference ကိုရွေးပြီး <b>Value(row) − Value(ref) − Different(row)</b> ဖြင့်တွက်ပါ။
+          Value မရှိတဲ့ row တွေကို <b>B</b> လို့ပြထားမယ်။
         </div>
       </div>
 
-      {/* Inputs */}
-      <table className="levelling-table">
-        <thead>
-          <tr>
-            <th>Ref</th>
-            <th>No.</th>
-            <th>Value</th>
-            <th>Different</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i}>
-              <td>
-                <input
-                  type="radio"
-                  name="refRow"
-                  checked={!!row.isRef}
-                  onChange={() => handleRef(i)}
-                />
-              </td>
-              <td style={{ fontWeight: 700 }}>{i + 1}</td>
-              <td>
-                <input
-                  className="input"
-                  type="number"
-                  placeholder="Value"
-                  value={row.value}
-                  onChange={(e) => handleChange(i, { value: e.target.value })}
-                />
-              </td>
-              <td>
-                <input
-                  className="input"
-                  type="number"
-                  placeholder="Different"
-                  value={row.diff}
-                  onChange={(e) => handleChange(i, { diff: e.target.value })}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* controls */}
+      <div className="card grid" style={{ gap: 12 }}>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <button className="btn" onClick={addInput}>
+            + Add input
+          </button>
+          <button className="btn" style={{ background: "#334155" }} onClick={clearAll}>
+            🧹 Clear
+          </button>
+          <button className="btn" style={{ background: "#0ea5e9" }} onClick={saveResults}>
+            💾 Save
+          </button>
+          <label className="row" style={{ gap: 8, marginLeft: "auto" }}>
+            <span className="small" style={{ fontWeight: 700 }}>
+              Columns
+            </span>
+            <input
+              className="input"
+              style={{ width: 70 }}
+              type="number"
+              min={1}
+              max={99}
+              value={cols}
+              onChange={(e) => setCols(e.target.value)}
+            />
+          </label>
+        </div>
 
-      {/* Results */}
-      <div style={{ marginTop: 20 }}>
-        <h3>✅ Results</h3>
-        {chunks.map((chunk, rIdx) => (
-          <div key={rIdx} style={{ display: "flex", gap: 12, marginBottom: 8 }}>
-            {chunk.map((val, cIdx) => (
-              <div
-                key={cIdx}
-                style={{
-                  border: "1px solid #ccc",
-                  borderRadius: 6,
-                  padding: "4px 8px",
-                  textAlign: "center",
-                  fontWeight: 600,
-                  minWidth: 60,
-                }}
-              >
-                {rIdx * columns + cIdx + 1}
-                <br />
-                {val === null ? "B" : val.toFixed(3)}
-              </div>
-            ))}
+        {/* header */}
+        <div
+          className="small"
+          style={{
+            fontWeight: 700,
+            display: "grid",
+            gridTemplateColumns: "32px 40px 1fr 1fr",
+            gap: 8,
+          }}
+        >
+          <div>Ref</div>
+          <div>No.</div>
+          <div>Value</div>
+          <div>Different</div>
+        </div>
+
+        {/* inputs (Value + Different on same row) */}
+        {rows.map((r, i) => (
+          <div
+            key={r.id}
+            className="row"
+            style={{ alignItems: "center", gap: 8, display: "grid", gridTemplateColumns: "32px 40px 1fr 1fr" }}
+          >
+            <input
+              type="radio"
+              name="refRow"
+              checked={!!r.isRef}
+              onChange={() => setReference(i)}
+              style={{ width: 18, height: 18 }}
+            />
+            <div style={{ fontWeight: 800, color: "#0f172a" }}>{i + 1}</div>
+            <input
+              className="input"
+              type="number"
+              inputMode="decimal"
+              step="any"
+              placeholder="Value"
+              value={r.value}
+              onChange={(e) => setRow(i, { value: e.target.value })}
+            />
+            <input
+              className="input"
+              type="number"
+              inputMode="decimal"
+              step="any"
+              placeholder="Different"
+              value={r.diff}
+              onChange={(e) => setRow(i, { diff: e.target.value })}
+            />
           </div>
         ))}
       </div>
+
+      {/* results – horizontally scrollable when many columns */}
+      <div className="card grid" style={{ gap: 12 }}>
+        <div className="page-title">✅ Results</div>
+
+        <div style={{ overflowX: "auto", paddingBottom: 4 }}>
+          <div
+            style={{
+              display: "grid",
+              gridAutoRows: "minmax(64px, auto)",
+              gridTemplateColumns: `repeat(${Math.max(1, Number(cols) || 1)}, minmax(84px, 1fr))`,
+              gap: 10,
+              minWidth: "min(100%, 100%)",
+            }}
+          >
+            {results.map((val, idx) => (
+              <div
+                key={idx}
+                className="card"
+                style={{
+                  padding: 8,
+                  textAlign: "center",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 10,
+                }}
+              >
+                <div className="small" style={{ fontWeight: 800 }}>
+                  {idx + 1}
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
+                  {pretty(val)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
-                           }
+                                   }
