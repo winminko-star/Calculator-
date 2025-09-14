@@ -28,12 +28,17 @@ export default function LevellingReview() {
     <div className="container grid" style={{ gap: 16 }}>
       <div className="card">
         <div className="page-title">📁 Levelling – All Saved</div>
-        <div className="small">Column/Row layout မပါ—calculated results + meta တင်ပြထားပါတယ်။</div>
+        <div className="small">
+          Column/Row layout မပါ — calculated results + meta တင်ပြထားပါတယ်။
+        </div>
       </div>
 
       {items.map((it) => (
         <div key={it.id} className="card grid" style={{ gap: 10 }}>
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <div
+            className="row"
+            style={{ justifyContent: "space-between", alignItems: "center" }}
+          >
             <div className="page-title">📌 {it.title || "(untitled)"}</div>
             <div className="small">{fmtTime(it.createdAt)}</div>
           </div>
@@ -47,24 +52,44 @@ export default function LevellingReview() {
           <div className="grid" style={{ gap: 6 }}>
             {it.results?.map((r, idx) => (
               <div key={idx} className="row" style={{ gap: 8 }}>
-                <div className="card" style={{ padding: 6, minWidth: 64, textAlign: "center",
-                                               background: r.isRef ? "#fff7ed" : "#fff" }}>
-                  <div className="small" style={{ fontWeight: 700 }}>{r.name}</div>
+                <div
+                  className="card"
+                  style={{
+                    padding: 6,
+                    minWidth: 64,
+                    textAlign: "center",
+                    background: r.isRef ? "#fff7ed" : "#fff",
+                  }}
+                >
+                  <div className="small" style={{ fontWeight: 700 }}>
+                    {r.name}
+                  </div>
                 </div>
-                <div className="small" style={{ alignSelf: "center", fontWeight: 700 }}>
-                  {r.value === null ? "B" : r.value.toFixed(3)}
+                <div
+                  className="small"
+                  style={{ alignSelf: "center", fontWeight: 700 }}
+                >
+                  {r.value === null || r.value === undefined ? "B" : String(r.value)}
                 </div>
               </div>
             ))}
           </div>
 
           <div className="row" style={{ gap: 8 }}>
-            <button className="btn" style={{ background: "#e11d48" }} onClick={() => delItem(it.id)}>🗑 Delete</button>
+            <button
+              className="btn"
+              style={{ background: "#e11d48" }}
+              onClick={() => delItem(it.id)}
+            >
+              🗑 Delete
+            </button>
           </div>
         </div>
       ))}
 
-      {!items.length && <div className="card small">No saved levelling yet.</div>}
+      {!items.length && (
+        <div className="card small">No saved levelling yet.</div>
+      )}
     </div>
   );
-        }
+}
