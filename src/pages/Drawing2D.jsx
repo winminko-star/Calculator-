@@ -421,18 +421,36 @@ export default function Drawing2D() {
     });
   };
 
-  /* save (Firebase) */
   const saveToFirebase = async () => {
-    const now = Date.now();
-    await set(push(dbRef(db, "drawings")), {
-      createdAt: now,
-      title: title || "Untitled",
-      unitLabel: UNIT_LABEL,
-      state: { points, lines, angles, ties, circles, view: { zoom, tx, ty } },
-      meta: { points: points.length, lines: lines.length, angles: angles.length, ties: ties.length, circles: circles.length },
-    });
-    alert("Saved");
+  const snapshot = {
+    points: [...points],
+    lines: [...lines],
+    angles: [...angles],
+    ties: [...ties],
+    circles: [...circles],
+    view: { zoom, tx, ty },
   };
+
+  if (snapshot.points.length === 0 && snapshot.lines.length === 0) {
+    alert("⚠️ Please add at least one point or line before saving.");
+    return;
+  }
+
+  await set(push(dbRef(db, "drawings")), {
+    createdAt: Date.now(),
+    title: title || "Untitled",
+    unitLabel: UNIT_LABEL,
+    state: snapshot,
+    meta: {
+      points: snapshot.points.length,
+      lines: snapshot.lines.length,
+      angles: snapshot.angles.length,
+      ties: snapshot.ties.length,
+      circles: snapshot.circles.length,
+    },
+  });
+  alert("Saved ✔");
+};
 
   /* derived */
   const linesView = lines.map((l) => {
