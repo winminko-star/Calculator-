@@ -59,3 +59,14 @@ html, body, #root {
 .card table {
   max-width: 100%;
         }
+/* --- SAFE overrides to avoid width conflicts --- */
+.grid { max-width: 100%; }
+.container { max-width: 100%; }
+
+/* Levelling results horizontal scroll */
+.results-scroll { overflow-x: auto; }
+.results-row { flex-wrap: nowrap; gap: 8px; }
+.results-cell { flex: 0 0 auto; min-width: 90px; }
+
+/* Tables/preview don’t overflow card */
+.card > div[style*="overflow-x"], .card table { max-width: 100%; }
