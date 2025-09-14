@@ -8,8 +8,7 @@ const num = (v) =>
 // pretty print: no trailing .00000, keep user's natural look
 const pretty = (n) => {
   if (n === null || !Number.isFinite(n)) return "B";
-  // limit FP noise then stringify without fixed decimals
-  const rounded = Math.round(n * 1e9) / 1e9;
+  const rounded = Math.round(n * 1e9) / 1e9; // trim FP noise
   return String(rounded);
 };
 
@@ -64,20 +63,19 @@ export default function Levelling() {
     });
   }, [rows, refIdx, refVal]);
 
-  // break results into rows of "cols" columns
+  // break results into rows of "cols" columns (container scrolls horizontally as needed)
   const chunks = useMemo(() => {
     const c = Math.max(1, Math.min(99, Number(cols) || 1));
     const out = [];
-    for (let i = 0; i < results.length; i += c) {
-      out.push(results.slice(i, i + c));
-    }
+    for (let i = 0; i < results.length; i += c) out.push(results.slice(i, i + c));
     return out;
   }, [results, cols]);
 
-  // save to Firebase (schema compatible with your LevellingReview.jsx)
+  // save to Firebase (each save = new record)
   const saveResults = async () => {
     const title = prompt("Title for this levelling result?");
     if (title === null) return;
+
     const db = getDatabase();
     const now = Date.now();
     const payload = {
@@ -85,15 +83,16 @@ export default function Levelling() {
       createdAt: now,
       referenceIndex: refIdx >= 0 ? refIdx : 0,
       rows: rows.map((r, i) => ({
-        name: String(i + 1),
+        name: String(i + 1),                       // auto 1..N
         value: r.value === "" ? null : Number(r.value),
-        diff: r.diff === "" ? null : Number(r.diff),
+        diff:  r.diff  === "" ? null : Number(r.diff),
         isRef: r.isRef,
       })),
       results: rows.map((r, i) => {
         const v = r.value === "" ? null : Number(r.value);
         const d = r.diff === "" ? 0 : Number(r.diff);
-        const hasRef = refIdx >= 0 && rows[refIdx].value !== "" && !isNaN(Number(rows[refIdx].value));
+        const hasRef =
+          refIdx >= 0 && rows[refIdx].value !== "" && !isNaN(Number(rows[refIdx].value));
         const ref = hasRef ? Number(rows[refIdx].value) : null;
         const value =
           v === null || ref === null || isNaN(v) || isNaN(ref)
@@ -102,7 +101,9 @@ export default function Levelling() {
         return { name: String(i + 1), value, isRef: r.isRef };
       }),
     };
-    await set(push(dbRef(db, "levellings")), payload);
+
+    const newRef = push(dbRef(db, "levellings"));
+    await set(newRef, payload);
     alert("Saved ✅");
   };
 
@@ -116,22 +117,14 @@ export default function Levelling() {
         </div>
       </div>
 
-      {/* controls */}
+      {/* controls + inputs */}
       <div className="card grid" style={{ gap: 12 }}>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          <button className="btn" onClick={addInput}>
-            + Add input
-          </button>
-          <button className="btn" style={{ background: "#334155" }} onClick={clearAll}>
-            🧹 Clear
-          </button>
-          <button className="btn" style={{ background: "#0ea5e9" }} onClick={saveResults}>
-            💾 Save
-          </button>
+          <button className="btn" onClick={addInput}>+ Add input</button>
+          <button className="btn" style={{ background: "#334155" }} onClick={clearAll}>🧹 Clear</button>
+          <button className="btn" style={{ background: "#0ea5e9" }} onClick={saveResults}>💾 Save</button>
           <label className="row" style={{ gap: 8, marginLeft: "auto" }}>
-            <span className="small" style={{ fontWeight: 700 }}>
-              Columns
-            </span>
+            <span className="small" style={{ fontWeight: 700 }}>Columns</span>
             <input
               className="input"
               style={{ width: 70 }}
@@ -164,8 +157,7 @@ export default function Levelling() {
         {rows.map((r, i) => (
           <div
             key={r.id}
-            className="row"
-            style={{ alignItems: "center", gap: 8, display: "grid", gridTemplateColumns: "32px 40px 1fr 1fr" }}
+            style={{ display: "grid", gridTemplateColumns: "32px 40px 1fr 1fr", gap: 8, alignItems: "center" }}
           >
             <input
               type="radio"
@@ -200,7 +192,6 @@ export default function Levelling() {
       {/* results – horizontally scrollable when many columns */}
       <div className="card grid" style={{ gap: 12 }}>
         <div className="page-title">✅ Results</div>
-
         <div style={{ overflowX: "auto", paddingBottom: 4 }}>
           <div
             style={{
@@ -215,16 +206,9 @@ export default function Levelling() {
               <div
                 key={idx}
                 className="card"
-                style={{
-                  padding: 8,
-                  textAlign: "center",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 10,
-                }}
+                style={{ padding: 8, textAlign: "center", border: "1px solid #e5e7eb", borderRadius: 10 }}
               >
-                <div className="small" style={{ fontWeight: 800 }}>
-                  {idx + 1}
-                </div>
+                <div className="small" style={{ fontWeight: 800 }}>{idx + 1}</div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
                   {pretty(val)}
                 </div>
@@ -235,4 +219,4 @@ export default function Levelling() {
       </div>
     </div>
   );
-                                   }
+        }
