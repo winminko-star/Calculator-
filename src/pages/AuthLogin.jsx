@@ -1,39 +1,31 @@
-// src/pages/AuthLogin.jsx
+// src/pages/OwnerLogin.jsx
 import React, { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
-import { useNavigate } from "react-router-dom";
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+import { app } from "../firebase";
 
-const ALLOWED = import.meta.env.VITE_ALLOWED_EMAIL;
-
-export default function AuthLogin() {
+export default function OwnerLogin() {
   const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [err, setErr] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
-  const onSubmit = async (e) => {
+  const inputStyle = {
+    height: 48,           // မပုလွင်—ပုံမှန်အမြင့်
+    fontSize: 16,
+    padding: "10px 12px",
+    width: "100%",        // 👈 အကျယ်ပြည့်
+    boxSizing: "border-box",
+    marginBottom: 12,
+  };
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (loading) return;
-    setErr("");
     setLoading(true);
-
     try {
-      if (
-        ALLOWED &&
-        email.trim().toLowerCase() !== ALLOWED.trim().toLowerCase()
-      ) {
-        throw new Error("This account is not allowed.");
-      }
-      await signInWithEmailAndPassword(auth, email, pw);
-      navigate("/", { replace: true });
-    } catch (e) {
-      setErr(
-        e?.message === "This account is not allowed."
-          ? e.message
-          : "Incorrect email or password."
-      );
+      const auth = getAuth(app);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+      alert("✅ Logged in");
+    } catch (err) {
+      alert("❌ " + (err?.message || "Login failed"));
     } finally {
       setLoading(false);
     }
@@ -41,79 +33,60 @@ export default function AuthLogin() {
 
   return (
     <div
+      className="container"
       style={{
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: "24px 12px",
-        background: "#f8fafc", // very light bg to make card stand out
+        padding: 16,
+        background: "#f8fafc",
       }}
     >
       <form
-        onSubmit={onSubmit}
+        onSubmit={handleLogin}
         className="card"
         style={{
-          width: "100%",
-          maxWidth: 380,
+          width: "100%",                // 👈 parent အကျယ်ပြည့်
+          maxWidth: "min(640px, 96vw)", // 👈 ဘေးကိုရှည်—ဖုန်းမှာ 96vw, ကြီးတဲ့မျက်နှာပြင် 640px
           padding: 20,
-          borderRadius: 12,
-          background: "#fff",
-          boxShadow: "0 8px 24px rgba(0,0,0,.07)",
-          display: "grid",
-          gap: 10,
+          borderRadius: 14,
         }}
       >
-        <div className="page-title" style={{ marginBottom: 4 }}>
+        <div className="page-title" style={{ marginBottom: 16 }}>
           🔐 Owner Login
         </div>
 
         <input
           className="input"
           type="email"
-          autoComplete="username"
           placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          style={{ height: 44 }}
+          autoCapitalize="none"
+          autoCorrect="off"
+          inputMode="email"
+          style={inputStyle}
         />
 
         <input
           className="input"
           type="password"
-          autoComplete="current-password"
           placeholder="Password"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          style={{ height: 44 }}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          style={inputStyle}
         />
 
-        {ALLOWED && (
-          <div className="small" style={{ color: "#64748b" }}>
-            Allowed: <b>{ALLOWED}</b>
-          </div>
-        )}
-
-        {err && (
-          <div className="small" style={{ color: "#b91c1c", fontWeight: 700 }}>
-            {err}
-          </div>
-        )}
-
         <button
-          className="btn"
           type="submit"
+          className="btn"
           disabled={loading}
-          style={{
-            width: "100%",
-            height: 44,
-            background: "#0ea5e9",
-            opacity: loading ? 0.7 : 1,
-          }}
+          style={{ width: "100%", height: 48, fontSize: 16 }} // 👈 အကျယ်ပြည့်
         >
           {loading ? "Logging in…" : "Login"}
         </button>
       </form>
     </div>
   );
-        }
+}
