@@ -7,6 +7,7 @@ const pretty = (v) => {
   if (v === null || v === undefined) return "B";
   const n = Number(v);
   if (!Number.isFinite(n)) return "B";
+  // မိမိထည့်သလိုပဲပြချင်လို့ fixed မမခေါ် — FP noise ပဲ trim လိုက်တယ်
   const rounded = Math.round(n * 1e9) / 1e9;
   return String(rounded);
 };
@@ -33,17 +34,16 @@ export default function LevellingReview() {
   };
 
   return (
-    <div className="container review-stack">
+    <div className="container grid" style={{ gap: 16 }}>
       <div className="card">
         <div className="page-title">📁 Levelling – All Saved</div>
         <div className="small">Result grid ကို အလျား scroll စနိုင်ပါတယ်။</div>
       </div>
 
       {items.map((it) => {
-        const safeKey = it.id ?? `${it.createdAt}-${Math.random()}`;
         const cols = Math.max(1, Math.min(99, Number(it.cols) || 6));
         return (
-          <div key={safeKey} className="card" style={{ display: "block" }}>
+          <div key={it.id} className="card" style={{ display: "block" }}>
             <div className="row" style={{ justifyContent: "space-between" }}>
               <div className="page-title">📌 {it.title || "(untitled)"}</div>
               <div className="small">{fmtTime(it.createdAt || Date.now())}</div>
@@ -53,7 +53,8 @@ export default function LevellingReview() {
               Reference: #{(it.referenceIndex ?? 0) + 1}
             </div>
 
-            <div className="h-scroll" style={{ marginTop: 10, paddingBottom: 4 }}>
+            {/* results */}
+            <div style={{ overflowX: "auto", marginTop: 10, paddingBottom: 4 }}>
               <div
                 style={{
                   display: "grid",
@@ -65,7 +66,7 @@ export default function LevellingReview() {
               >
                 {(it.results || []).map((r, idx) => (
                   <div
-                    key={`${safeKey}-${idx}`}
+                    key={`${it.id}-${idx}`}
                     className="card"
                     style={{
                       padding: 8,
@@ -98,4 +99,4 @@ export default function LevellingReview() {
       {!items.length && <div className="card small">No saved levelling yet.</div>}
     </div>
   );
-        }
+            }
