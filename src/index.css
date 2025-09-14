@@ -104,3 +104,11 @@ html, body, #root {
 .btn:hover {
   background: #1976d2;
 }
+/* LevellingReview list ကို column stack တစ်ခုချင်းစီဖြစ်စေ */
+.container.review-stack { display:flex; flex-direction:column; gap:16px; }
+
+/* ကဒ်အောက် မြင်သာအောင် margin */
+.card + .card { margin-top: 12px; }
+
+/* Horizontal scroll grid အတွက် parent က overflow-x: auto ရှိရမယ် */
+.h-scroll { overflow-x: auto; }
