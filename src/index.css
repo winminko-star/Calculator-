@@ -37,7 +37,13 @@ body{
 /* sticky header / nav */
 .header{ position:sticky; top:0; z-index:20; background:#fff; border-bottom:1px solid #e5e7eb; }
 .nav a{ padding:8px 10px; text-decoration:none; color:#0f172a; }
-.nav a.active, a.active-chip{ color:#0ea5e9 !important; font-weight:700; background:#0ea5e9 !important; }
+/* ✅ active chip = blue background + white text */
+.nav a.active,
+a.active-chip{
+  background:#0ea5e9 !important;
+  color:#fff !important;
+  font-weight:700;
+}
 
 /* ---------- Controls (single source of truth) ---------- */
 .input{
