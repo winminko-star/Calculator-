@@ -1,114 +1,98 @@
-/* Base layout */
-:root {
-  --gap: 12px;
-  --radius: 12px;
-  --pad: 12px;
-  --btn-h: 44px;  /* ใหญ่သလို tap လွယ် */
-  --font: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans, sans-serif;
-}
-* { box-sizing: border-box; }
-html, body, #root { height: 100%; }
-body { margin: 0; font-family: var(--font); background: #f8fafc; color: #0f172a; }
+/* src/App.css — Clean, conflict-free */
 
-.container { padding: var(--pad); }
-.grid { display: grid; gap: var(--gap); }
-.row { display: flex; gap: var(--gap); align-items: center; flex-wrap: wrap; }
-
-.card {
-  background: #fff; border: 1px solid #e5e7eb; border-radius: var(--radius);
-  padding: var(--pad);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-}
-.page-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
-.small { font-size: 12px; color: #334155; }
-
-.input {
-  height: var(--btn-h); padding: 0 12px; border-radius: 10px;
-  border: 1px solid #e5e7eb; background: #fff; min-width: 110px;
-  font-size: 16px; /* iOS keyboard zoom ရှောင် */
-}
-.input:focus { outline: 2px solid #0ea5e9; }
-
-.btn {
-  height: var(--btn-h); padding: 0 14px; border-radius: 9999px;
-  background: #0ea5e9; color: #fff; border: none; font-weight: 600;
-}
-.btn:active { transform: translateY(1px); }
-
-.header { position: sticky; top: 0; z-index: 20; background: #fff; border-bottom: 1px solid #e5e7eb; }
-.nav a { padding: 8px 10px; text-decoration: none; color: #0f172a; }
-.nav a.active { color: #0ea5e9; font-weight: 700; }
-html, body, #root {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;     /* ဘေးတန်း scroll ထွက်စေမယ့် overflow ပိတ် */
-  margin: 0;
-  padding: 0;
+/* ---------- Base ---------- */
+:root{
+  --gap:12px;
+  --radius:12px;
+  --pad:12px;
+  --btn-h:44px;        /* mobile tap-friendly */
+  --font:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,sans-serif;
 }
 
-.page-narrow {
-  max-width: 430px;       /* ဖုန်း UI သဘောကို ချောချောမောမောထားမယ် */
-  margin: 0 auto;
-  padding: 8px;
-  width: 100%;
-  box-sizing: border-box;
+*{ box-sizing:border-box; }
+html,body,#root{ height:100%; margin:0; padding:0; }   /* ❗ overflow-x hidden မသုံးတော့ */
+
+/* ---------- Layout ---------- */
+body{
+  font-family:var(--font);
+  background:#f8fafc;
+  color:#0f172a;
 }
 
-/* tables ကနေ အလွန်ရှည်တာရှိရင် ဘေး scroll ကို **table အတွင်း** ထဲပဲထားမယ် */
-.card > div[style*="overflow-x"], 
-.card table {
-  max-width: 100%;
-        }
-/* --- SAFE overrides to avoid width conflicts --- */
-.grid { max-width: 100%; }
-.container { max-width: 100%; }
+.container{ max-width:980px; margin:0 auto; padding:var(--pad); }
+.grid{ display:grid; gap:var(--gap); }
+.row{ display:flex; gap:var(--gap); align-items:center; flex-wrap:wrap; }
 
-/* Levelling results horizontal scroll */
-.results-scroll { overflow-x: auto; }
-.results-row { flex-wrap: nowrap; gap: 8px; }
-.results-cell { flex: 0 0 auto; min-width: 90px; }
+.card{
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:var(--radius);
+  padding:var(--pad);
+  box-shadow:0 1px 2px rgba(0,0,0,.06);
+}
 
-/* Tables/preview don’t overflow card */
-.card > div[style*="overflow-x"], .card table { max-width: 100%; }
+.page-title{ font-size:18px; font-weight:700; margin-bottom:6px; }
+.small{ font-size:12px; color:#334155; }
 
-.levelling-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 12px;
-}
-.levelling-table th,
-.levelling-table td {
-  border: 1px solid #ddd;
-  padding: 6px;
-  text-align: center;
-}
-.levelling-table th {
-  background: #f5f5f5;
-  font-weight: bold;
-}
-.input {
-  width: 100px;
-  padding: 4px;
-  border: 1px solid #aaa;
-  border-radius: 4px;
-}
-.btn {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  background: #2196f3;
-  color: white;
-  font-weight: 600;
-}
-.btn:hover {
-  background: #1976d2;
-}
-/* LevellingReview list ကို column stack တစ်ခုချင်းစီဖြစ်စေ */
-.container.review-stack { display:flex; flex-direction:column; gap:16px; }
+/* sticky header / nav */
+.header{ position:sticky; top:0; z-index:20; background:#fff; border-bottom:1px solid #e5e7eb; }
+.nav a{ padding:8px 10px; text-decoration:none; color:#0f172a; }
+.nav a.active, a.active-chip{ color:#0ea5e9 !important; font-weight:700; background:#0ea5e9 !important; }
 
-/* ကဒ်အောက် မြင်သာအောင် margin */
-.card + .card { margin-top: 12px; }
+/* ---------- Controls (single source of truth) ---------- */
+.input{
+  height:var(--btn-h);
+  padding:0 12px;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  background:#fff;
+  color:#0f172a;
+  min-width:110px;
+  font-size:16px;           /* iOS zoom avoid */
+}
+.input:focus{ outline:2px solid #0ea5e9; }
 
-/* Horizontal scroll grid အတွက် parent က overflow-x: auto ရှိရမယ် */
-.h-scroll { overflow-x: auto; }
+.btn{
+  height:var(--btn-h);
+  padding:0 14px;
+  border:none;
+  border-radius:9999px;
+  background:#0ea5e9;
+  color:#fff;
+  font-weight:600;
+  cursor:pointer;
+}
+.btn:hover{ filter:brightness(.97); }
+.btn:active{ transform:translateY(1px); }
+
+/* ---------- Scrollbars (soft) ---------- */
+::-webkit-scrollbar{ height:8px; width:8px; }
+::-webkit-scrollbar-thumb{ background:#cbd5e1; border-radius:9999px; }
+
+/* ---------- Page helpers ---------- */
+.page-narrow{
+  max-width:430px; margin:0 auto; padding:8px; width:100%; box-sizing:border-box;
+}
+
+/* Tables/long content don’t bleed outside card */
+.card > div[style*="overflow-x"], .card table{ max-width:100%; }
+
+/* Keep grids/containers inside viewport width */
+.grid{ max-width:100%; }
+.container{ max-width:100%; }
+
+/* ---------- Levelling / Review specific ---------- */
+
+/* Horizontal scroll container (Review & Results) */
+.h-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+/* Optional mini cells when building long rows */
+.results-scroll{ overflow-x:auto; }
+.results-row{ flex-wrap:nowrap; gap:8px; }
+.results-cell{ flex:0 0 auto; min-width:90px; }
+
+/* Review list stacking */
+.container.review-stack{ display:flex; flex-direction:column; gap:16px; }
+
+/* Card spacing when stacking many items */
+.card + .card{ margin-top:12px; }
