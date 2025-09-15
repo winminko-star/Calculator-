@@ -45,7 +45,7 @@ function TitleRow({ item }) {
 }
 
 /* ---------- horizontal result strip (robust mobile scroll) ---------- */
-function ResultStrip({ results, cols = 6, highlightRefIndex = null }) {
+function ResultStrip({ results, cols = 6 }) {
   // inline-block technique → reliable horizontal scroll even if body has overflow-x:hidden
   return (
     <div style={{ overflowX: "auto", paddingBottom: 4, marginTop: 10, WebkitOverflowScrolling: "touch" }}>
@@ -122,14 +122,15 @@ export default function LevellingReview() {
 
       {items.map((it) => {
         const safeKey = it.id ?? `${it.createdAt}-${Math.random()}`;
-        // if future version stores "cols" we respect it; else fallback 6
+        // if saved, respect chosen columns; else fallback 6 (only used for meta/show)
         const cols = Math.max(1, Math.min(99, Number(it.cols) || 6));
         const results = Array.isArray(it.results) ? it.results : [];
-        const refIdx = typeof it.referenceIndex === "number" ? it.referenceIndex : null;
 
         // meta quick counts
         const total = results.length;
-        const blanks = results.filter((r) => r?.value === null || r?.value === undefined || !Number.isFinite(Number(r?.value))).length;
+        const blanks = results.filter(
+          (r) => r?.value === null || r?.value === undefined || !Number.isFinite(Number(r?.value))
+        ).length;
 
         return (
           <div key={safeKey} className="card" style={{ padding: 12 }}>
@@ -142,7 +143,7 @@ export default function LevellingReview() {
             </div>
 
             {/* results preview (scrollable) */}
-            <ResultStrip results={results} cols={cols} highlightRefIndex={refIdx} />
+            <ResultStrip results={results} cols={cols} />
 
             {/* actions */}
             <div className="row" style={{ gap: 8, marginTop: 8 }}>
@@ -155,4 +156,4 @@ export default function LevellingReview() {
       })}
     </div>
   );
-}
+         }
