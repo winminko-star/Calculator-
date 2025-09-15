@@ -82,6 +82,8 @@ export default function Levelling() {
       title: (title || "").trim() || "(untitled)",
       createdAt: now,
       referenceIndex: refIdx >= 0 ? refIdx : 0,
+      // ✅ keep chosen columns with the record (for Review layout/scroll)
+      cols: Math.max(1, Math.min(99, Number(cols) || 6)),
       rows: rows.map((r, i) => ({
         name: String(i + 1),                       // auto 1..N
         value: r.value === "" ? null : Number(r.value),
