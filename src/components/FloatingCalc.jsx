@@ -7,6 +7,14 @@ const LS_OPEN = "floatingCalc_open";
 const LS_POS  = "floatingCalc_pos";
 const LS_EXPR = "floatingCalc_expr";
 
+/* ---------- helpers ---------- */
+const BUBBLE = 56;      // minimized size
+const MARGIN = 12;      // edge padding
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
 /* ---------- simple-calc internals ---------- */
 const keys = [
   ["AC", "DEL", "(", ")"],
@@ -25,6 +33,7 @@ function safeEval(source){
     if(!/^[0-9+\-*/().\s]*$/.test(s)) return null;
     const opens=(s.match(/\(/g)||[]).length, closes=(s.match(/\)/g)||[]).length;
     if(opens!==closes) return null;
+    // eslint-disable-next-line no-new-func
     const val = Function(`"use strict";return(${s});`)();
     if(typeof val!=="number"||!isFinite(val)) return null;
     return trimTrailingZeros(val);
@@ -41,23 +50,73 @@ export default function FloatingCalc(){
   const [expr, setExpr] = useState(() => localStorage.getItem(LS_EXPR) || "");
   const [flash, setFlash] = useState("");
 
-  useEffect(()=>localStorage.setItem(LS_OPEN, open ? "1":"0"), [open]);
-  useEffect(()=>localStorage.setItem(LS_EXPR, expr), [expr]);
-
-  // default snap to right-middle once
-  useEffect(()=>{
-    if(pos.x==null || pos.y==null){
-      const vw=window.innerWidth, vh=window.innerHeight, b=56, m=12;
-      const x=vw-b-m, y=Math.max(m, Math.min(vh-b-m, vh/2-b/2));
-      const p={x,y}; setPos(p); localStorage.setItem(LS_POS, JSON.stringify(p));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
-
-  // drag setup
+  const panelRef = useRef(null);  // ✅ measure expanded panel
   const start = useRef({x:0,y:0, px:0, py:0});
   const dragging = useRef(false);
 
+  useEffect(()=>localStorage.setItem(LS_OPEN, open ? "1":"0"), [open]);
+  useEffect(()=>localStorage.setItem(LS_EXPR, expr), [expr]);
+
+  // get panel size (bubble vs expanded)
+  function getPanelSize(openNow = open) {
+    if (!openNow) return { w: BUBBLE, h: BUBBLE };
+    const r = panelRef.current?.getBoundingClientRect();
+    const w = r?.width || Math.min(window.innerWidth * 0.92, 380);
+    const h = r?.height || 440;
+    return { w, h };
+  }
+  function clampPos(x, y, openNow = open) {
+    const { w, h } = getPanelSize(openNow);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    return {
+      x: clamp(x, MARGIN, vw - w - MARGIN),
+      y: clamp(y, MARGIN, vh - h - MARGIN),
+    };
+  }
+
+  // default pos (right-middle)
+  useEffect(() => {
+    if (pos.x == null || pos.y == null) {
+      const { w, h } = getPanelSize(false);
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const x = vw - w - MARGIN;
+      const y = clamp((vh - h) / 2, MARGIN, vh - h - MARGIN);
+      const p = { x, y };
+      setPos(p);
+      localStorage.setItem(LS_POS, JSON.stringify(p));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // open/minimize change → clamp once
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const fixed = clampPos(pos.x || 0, pos.y || 0, open);
+      setPos(fixed);
+      localStorage.setItem(LS_POS, JSON.stringify(fixed));
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // window resize/orientationchange → clamp again
+  useEffect(() => {
+    const onResize = () => {
+      const fixed = clampPos(pos.x || 0, pos.y || 0);
+      setPos(fixed);
+      localStorage.setItem(LS_POS, JSON.stringify(fixed));
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos.x, pos.y, open]);
+
+  // drag
   const onDragStart = (e)=>{
     dragging.current = true;
     start.current = { x:e.clientX, y:e.clientY, px:pos.x||0, py:pos.y||0 };
@@ -65,23 +124,21 @@ export default function FloatingCalc(){
   };
   const onDragMove = (e)=>{
     if(!dragging.current) return;
-    const dx=e.clientX-start.current.x, dy=e.clientY-start.current.y;
-    const vw=window.innerWidth, vh=window.innerHeight;
-    const w=open ? Math.min(380, Math.max(300, vw*0.92)) : 56;
-    const h=open ? 440 : 56;
-    const m=8;
-    const x=Math.max(m, Math.min(vw-w-m, (start.current.px||0)+dx));
-    const y=Math.max(m, Math.min(vh-h-m, (start.current.py||0)+dy));
-    setPos({x,y});
+    const dx=e.clientX-start.current.x;
+    const dy=e.clientY-start.current.y;
+    const next = clampPos((start.current.px||0)+dx,(start.current.py||0)+dy);
+    setPos(next);
   };
   const onDragEnd = (e)=>{
     if(!dragging.current) return;
     dragging.current=false;
-    localStorage.setItem(LS_POS, JSON.stringify({x:pos.x, y:pos.y}));
+    const fixed = clampPos(pos.x||0, pos.y||0);
+    setPos(fixed);
+    localStorage.setItem(LS_POS, JSON.stringify(fixed));
     e.currentTarget.releasePointerCapture?.(e.pointerId);
   };
 
-  // calculator logic (no focus stealing; buttons only)
+  // calculator logic
   const push = (k)=>{
     setFlash(k); setTimeout(()=>setFlash(""), 120);
     if(k==="AC") return setExpr("");
@@ -114,21 +171,20 @@ export default function FloatingCalc(){
     return v===null? "" : v.toString();
   },[expr]);
 
-  // container blocks NOTHING underneath by default
+  // container (portal, no interference with page inputs)
   const containerStyle = {
     position:"fixed", left:pos.x||0, top:pos.y||0, zIndex:9999,
-    pointerEvents:"none",   // ✅ let clicks fall through except our inner boxes
+    pointerEvents:"none",
   };
 
   const bubbleCommon = {
-    pointerEvents:"auto",   // ✅ clickable
+    pointerEvents:"auto",
     border:"none", color:"#fff", fontWeight:800,
     boxShadow:"0 8px 20px rgba(2,132,199,0.45)",
-    // drag targets handle all pointer moves; DO NOT disable page scroll globally
   };
 
   const ui = !open ? (
-    // minimized bubble (drag target itself)
+    // minimized bubble
     <div style={containerStyle}>
       <button
         onPointerDown={onDragStart}
@@ -141,14 +197,15 @@ export default function FloatingCalc(){
           width:56, height:56, borderRadius:28,
           background:"linear-gradient(180deg,#0ea5e9 0%,#0284c7 100%)",
           fontSize:26,
-          touchAction:"none" /* drag only on the bubble */,
+          touchAction:"none",
         }}
       >🧮</button>
     </div>
   ) : (
-    // expanded panel; only the header is draggable
+    // expanded panel
     <div style={containerStyle}>
       <div
+        ref={panelRef}
         style={{
           pointerEvents:"auto",
           width:"min(92vw, 380px)",
@@ -159,7 +216,7 @@ export default function FloatingCalc(){
         onMouseDown={(e)=>e.stopPropagation()}
         onTouchStart={(e)=>e.stopPropagation()}
       >
-        {/* draggable header (drag target) */}
+        {/* header (drag handle) */}
         <div
           onPointerDown={onDragStart}
           onPointerMove={onDragMove}
@@ -169,7 +226,7 @@ export default function FloatingCalc(){
             background:"linear-gradient(180deg,#0ea5e9 0%,#0284c7 100%)",
             color:"#fff", padding:8, display:"flex",
             alignItems:"center", justifyContent:"space-between",
-            userSelect:"none", touchAction:"none" /* drag only on header */,
+            userSelect:"none", touchAction:"none",
           }}
         >
           <div style={{ fontWeight:800 }}>🧮 Simple Calculator</div>
@@ -210,7 +267,6 @@ export default function FloatingCalc(){
     </div>
   );
 
-  // render in a portal so it never perturbs your page/forms
   return createPortal(ui, document.body);
 }
 
@@ -223,7 +279,7 @@ function Key({ label, onClick, active }){
     <button
       onClick={(e)=>{ e.stopPropagation(); onClick(); }}
       className="btn"
-      tabIndex={0} /* no autofocus; explicit only */
+      tabIndex={0}
       style={{
         height:62, borderRadius:16, fontSize:22, fontWeight:800,
         background: active ? bgActive : bg, color: fg, border:"none",
