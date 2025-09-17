@@ -24,7 +24,20 @@ import ENHReview from "./pages/ENHReview";
 import PipeEndsSlopePage from "./pages/PipeEndsSlope.jsx";
 import FlangeOnAxisPage from "./pages/FlangeOnAxis.jsx";
 
+function App() {
+  useEffect(() => {
+    const tryLock = async () => {
+      if (screen.orientation?.lock) {
+        try { await screen.orientation.lock("portrait"); } catch {}
+      }
+    };
+    tryLock();
+    window.addEventListener("orientationchange", tryLock);
+    return () => window.removeEventListener("orientationchange", tryLock);
+  }, []);
 
+  return (/* ... */);
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
