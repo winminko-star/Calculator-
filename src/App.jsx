@@ -23,6 +23,7 @@ import CanvasENH from "./pages/CanvasENH";
 import ENHReview from "./pages/ENHReview";
 import PipeEndsSlopePage from "./pages/PipeEndsSlope.jsx";
 import FlangeOnAxisPage from "./pages/FlangeOnAxis.jsx";
+import FloatingCalc from "./components/FloatingCalc";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -59,6 +60,7 @@ export default function App() {
   return (
     <BrowserRouter>
       {user && <NavBar user={user} onLogout={() => signOut(auth)} />}
+      <FloatingCalc />   
       <div className="container">
         <Routes>
           {/* Login: if already authed, go home */}
