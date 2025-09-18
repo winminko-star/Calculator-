@@ -8,7 +8,7 @@ const LS_POS  = "floatingCalc_pos";
 const LS_EXPR = "floatingCalc_expr";
 
 /* ---------- helpers ---------- */
-const BUBBLE = 56;      // minimized size
+const BUBBLE = 32;      // minimized size
 const MARGIN = 12;      // edge padding
 
 function clamp(v, min, max) {
@@ -194,7 +194,7 @@ export default function FloatingCalc(){
         aria-label="Open Calculator"
         style={{
           ...bubbleCommon,
-          width:56, height:56, borderRadius:28,
+          width:32, height:32, borderRadius:16,
           background:"linear-gradient(180deg,#0ea5e9 0%,#0284c7 100%)",
           fontSize:26,
           touchAction:"none",
