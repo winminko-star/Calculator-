@@ -196,7 +196,7 @@ export default function FloatingCalc(){
           ...bubbleCommon,
           width:32, height:32, borderRadius:16,
           background:"linear-gradient(180deg,#0ea5e9 0%,#0284c7 100%)",
-          fontSize:26,
+          fontSize:18,
           touchAction:"none",
         }}
       >🧮</button>
