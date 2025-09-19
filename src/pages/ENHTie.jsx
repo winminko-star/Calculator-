@@ -71,17 +71,42 @@ export default function ENHTiePro() {
 
   const result = useMemo(() => {
     if ([x1,y1,z1,x2,y2,z2].some((v)=>Number.isNaN(v))) {
-      return { dE: "", dN: "", dH: "", dist: "" };
+      return { dE:"", dN:"", dH:"", tie:"", azE:"", azN:"", slopeDeg:"", slopePct:"", dist:"" };
     }
     const dE = x2 - x1;
     const dN = y2 - y1;
     const dH = z2 - z1;
-    const dist = Math.hypot(dE, dN, dH);
+
+    const tie  = Math.hypot(dE, dN);                 // plan distance
+    const dist = Math.hypot(dE, dN, dH);             // 3D distance
+
+    // azimuth from East axis, CCW positive (0..360)
+    let azE = Math.atan2(dN, dE) * 180 / Math.PI;
+    if (azE < 0) azE += 360;
+
+    // azimuth from North axis, CW positive (0..360) — common surveyor style
+    // (equivalently 90° - azE, normalized)
+    let azN = 90 - azE;
+    if (azN < 0) azN += 360;
+    if (azN >= 360) azN -= 360;
+
+    // slope angle from horizontal using tie + height
+    const slopeDeg = Math.atan2(dH, tie || 0) * 180 / Math.PI;  // signed
+    const slopePct = tie === 0 ? "" : ((dH / tie) * 100);
+
+    const f3 = (x)=>Number.isFinite(x)? x.toFixed(3) : "";
+    const f2 = (x)=>Number.isFinite(x)? x.toFixed(2) : "";
+
     return {
-      dE: dE.toFixed(3),
-      dN: dN.toFixed(3),
-      dH: dH.toFixed(3),
-      dist: dist.toFixed(3),
+      dE: f3(dE),
+      dN: f3(dN),
+      dH: f3(dH),
+      tie: f3(tie),
+      azE: f2(azE),
+      azN: f2(azN),
+      slopeDeg: f2(slopeDeg),
+      slopePct: tie===0? "" : f2(slopePct),
+      dist: f3(dist),
     };
   }, [x1,y1,z1,x2,y2,z2]);
 
@@ -142,8 +167,14 @@ export default function ENHTiePro() {
         <div className="row">ΔE = <b>{result.dE}</b> mm</div>
         <div className="row">ΔN = <b>{result.dN}</b> mm</div>
         <div className="row">ΔH = <b>{result.dH}</b> mm</div>
+        <hr style={{ border: "none", borderTop: "1px dashed #e5e7eb", margin: "8px 0" }} />
+        <div className="row">Tie (plan) = <b>{result.tie}</b> mm</div>
+        <div className="row">Azimuth (from East) = <b>{result.azE}</b> °</div>
+        <div className="row">Azimuth (from North) = <b>{result.azN}</b> °</div>
+        <div className="row">Slope angle (horiz) = <b>{result.slopeDeg}</b> °</div>
+        <div className="row">Slope % = <b>{result.slopePct}</b></div>
         <div className="row" style={{ marginTop: 6, fontSize: 18 }}>
-          Distance = <b>{result.dist}</b> mm
+          3D Distance = <b>{result.dist}</b> mm
         </div>
       </div>
 
