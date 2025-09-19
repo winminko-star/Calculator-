@@ -67,9 +67,7 @@ function solve3x3(A,b){
 }
 
 /* ========== SVG Preview (Triplet center + one circle + radii lines) ========== */
-/* ★ Only this part changed: bounds now include center±radius, so circle never crops */
 function Preview({ points, tCenter, radius }) {
-  // bounds include full circle
   const xs = [
     ...points.map(p => p.e),
     ...(tCenter && Number.isFinite(radius) ? [tCenter.cx - radius, tCenter.cx + radius] : []),
@@ -90,20 +88,18 @@ function Preview({ points, tCenter, radius }) {
   const spanX = Math.max(maxX - minX, 1e-6);
   const spanY = Math.max(maxY - minY, 1e-6);
 
-  // little inner margins
   const innerPadX = 0.06 * spanX;
   const innerPadY = 0.06 * spanY;
 
   const sx = (w - 2*pad) / (spanX + 2*innerPadX);
   const sy = (h - 2*pad) / (spanY + 2*innerPadY);
-  const k  = (sx + sy) / 2;
   const x0 = minX - innerPadX;
   const y0 = minY - innerPadY;
 
   const toSvg = (x,y) => ({ X: pad + (x - x0) * sx, Y: h - pad - (y - y0) * sy });
 
   const C = tCenter ? toSvg(tCenter.cx, tCenter.cy) : null;
-  const R = tCenter && Number.isFinite(radius) ? Math.max(radius * k, 0) : null;
+  const R = tCenter && Number.isFinite(radius) ? Math.max(radius * ((sx+sy)/2), 0) : null;
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} width="100%" style={{ display:"block" }}>
@@ -118,18 +114,15 @@ function Preview({ points, tCenter, radius }) {
         ))}
       </g>
 
-      {/* circle */}
       {C && Number.isFinite(R) && (
         <circle cx={C.X} cy={C.Y} r={R} fill="none" stroke="#0ea5e9" strokeWidth="2" />
       )}
 
-      {/* radii */}
       {C && points.map((p)=> {
         const P = toSvg(p.e, p.n);
         return <line key={"r"+p.id} x1={C.X} y1={C.Y} x2={P.X} y2={P.Y} stroke="#94a3b8" strokeWidth="1.5" />;
       })}
 
-      {/* points */}
       {points.map((p,i)=>{
         const P = toSvg(p.e,p.n);
         return (
@@ -140,7 +133,6 @@ function Preview({ points, tCenter, radius }) {
         );
       })}
 
-      {/* triplet center */}
       {C && (
         <>
           <circle cx={C.X} cy={C.Y} r="4" fill="#16a34a" />
@@ -164,8 +156,8 @@ export default function CircleCenter() {
     setE(""); setN("");
   };
   const clearAll = () => setPts([]);
+  const removePoint = (id) => setPts(list => list.filter(p => p.id !== id));
 
-  // Triplet center (average of all circumcenters)
   const tCenter = useMemo(() => {
     if (pts.length < 3) return null;
     const cs = [];
@@ -181,20 +173,17 @@ export default function CircleCenter() {
     return { cx, cy };
   }, [pts]);
 
-  // Per-point radii (from triplet center)
   const radii = useMemo(() => {
     if (!tCenter) return [];
     return pts.map(p => ({ id:p.id, r: Math.hypot(p.e - tCenter.cx, p.n - tCenter.cy) }));
   }, [pts, tCenter]);
 
-  // One circle radius (median of radii)
   const circleR = useMemo(() => {
     if (!radii.length) return undefined;
     const arr = radii.map(x=>x.r).sort((a,b)=>a-b);
     return arr[Math.floor(arr.length/2)];
   }, [radii]);
 
-  // Best-fit center (text only)
   const lCenter = useMemo(() => leastSquaresCenter(pts), [pts]);
 
   return (
@@ -212,23 +201,36 @@ export default function CircleCenter() {
           <button className="btn" onClick={addPoint}>+ Add point</button>
           <button className="btn" style={{ background:"#334155" }} onClick={clearAll}>🧹 Clear</button>
         </div>
-        <div className="small">
+        <div className="small" style={{ display:"grid", gap:6 }}>
           {pts.length ? pts.map((p,i)=>(
-            <div key={p.id}>#{i+1}: E={fmt(p.e)}, N={fmt(p.n)}</div>
+            <div
+              key={p.id}
+              style={{
+                display:"flex", alignItems:"center", justifyContent:"space-between",
+                background:"#f8fafc", border:"1px solid #e5e7eb", borderRadius:8, padding:"6px 8px"
+              }}
+            >
+              <span>#{i+1}: E={fmt(p.e)}, N={fmt(p.n)}</span>
+              <button
+                type="button"
+                onClick={()=>removePoint(p.id)}
+                style={{
+                  border:"none", background:"#ef4444", color:"#fff",
+                  borderRadius:8, padding:"2px 10px", fontWeight:800, lineHeight:1
+                }}
+              >×</button>
+            </div>
           )) : "No points yet."}
         </div>
       </div>
 
-      {/* SVG preview (Triplet only) */}
       <div className="card">
         <Preview points={pts} tCenter={tCenter} radius={circleR} />
       </div>
 
-      {/* Results */}
       <div className="card grid" style={{ gap: 10 }}>
         <div className="page-title">📌 Results</div>
 
-        {/* Triplet */}
         <div className="card">
           <div className="page-title">① Triplet Center (SVG ပြပြီးသား)</div>
           {tCenter ? (
@@ -247,7 +249,6 @@ export default function CircleCenter() {
           )}
         </div>
 
-        {/* Best-fit */}
         <div className="card">
           <div className="page-title">② Least-Squares (Best-Fit) Center</div>
           {lCenter ? (
@@ -259,4 +260,4 @@ export default function CircleCenter() {
       </div>
     </div>
   );
-      }
+    }
