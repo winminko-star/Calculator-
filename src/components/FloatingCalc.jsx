@@ -308,75 +308,94 @@ function Key({label,onClick,active}){
   );
 }
 
-/* ---------- Triangle Pane (SVG + splits) ---------- */
+/* ---------- Triangle Pane (CENTERED stage + compact inputs) ---------- */
 function TrianglePane({ tri, setTri, solved }){
   const show=(u,s)=>Number.isFinite(u)? String(u) : (Number.isFinite(s)? fmt(s) : "");
   const setField=(k)=>(e)=>{ const v=e.target.value.trim(); if(v===""){ setTri(p=>({...p,[k]:NaN})); return; }
     const n=Number(v.replace(/,/g,"")); setTri(p=>({...p,[k]:Number.isFinite(n)? n : NaN })); };
 
-  // anchors
-  const W=260,H=210; const baseY=H-28,apexY=18,leftX=30,rightX=W-30,apexX=W/2,midX=(leftX+rightX)/2;
+  // ---- stage size (everything centered inside this fixed box) ----
+  const STAGE_W = 280;
+  const STAGE_H = 220;
+  const baseY = STAGE_H - 28;
+  const apexY = 20;
+  const leftX = 30;
+  const rightX = STAGE_W - 30;
+  const apexX = STAGE_W / 2;
+  const midX = (leftX + rightX) / 2;
 
   return (
     <div style={{ padding:12, background:"#fff" }}>
-      <div style={{
-        position:"relative",
-        border:"1px dashed #e5e7eb", borderRadius:12, background:"#f8fafc",
-        padding:12, overflow:"visible", minHeight:330
-      }}>
-        {/* SVG */}
-        <div style={{ display:"flex", justifyContent:"center" }}>
-          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
-            <line x1={leftX} y1={baseY} x2={rightX} y2={baseY} stroke="#94a3b8" strokeWidth="2"/>
-            <line x1={leftX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="3"/>
-            <line x1={rightX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="3"/>
-            <line x1={midX} y1={baseY} x2={apexX} y2={apexY} stroke="#22c55e" strokeDasharray="4 4" strokeWidth="2"/>
-            <path d={`M ${midX} ${baseY} h 10 v -10`} fill="none" stroke="#22c55e" strokeWidth="1.5"/>
+      <div
+        style={{
+          border:"1px dashed #e5e7eb",
+          borderRadius:12,
+          background:"#f8fafc",
+          padding:12,
+          overflow:"visible",
+        }}
+      >
+        {/* ---------- CENTERED STAGE ---------- */}
+        <div
+          style={{
+            position:"relative",
+            width: STAGE_W,
+            height: STAGE_H + 120,    // extra room for bottom rows
+            margin: "0 auto",         // center the stage
+          }}
+        >
+          {/* SVG drawing (same width as stage → perfectly centered) */}
+          <svg width={STAGE_W} height={STAGE_H} viewBox={`0 0 ${STAGE_W} ${STAGE_H}`}>
+            <line x1={leftX} y1={baseY} x2={rightX} y2={baseY} stroke="#94a3b8" strokeWidth="2" />
+            <line x1={leftX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="3" />
+            <line x1={rightX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="3" />
+            <line x1={midX} y1={baseY} x2={apexX} y2={apexY} stroke="#22c55e" strokeDasharray="4 4" strokeWidth="2" />
+            <path d={`M ${midX} ${baseY} h 10 v -10`} fill="none" stroke="#22c55e" strokeWidth="1.5" />
           </svg>
+
+          {/* Apex total & split */}
+          <Mini label="Apex (°)"
+            style={{ left:`${apexX}px`, top:`${apexY-18}px`, transform:"translate(-50%,-100%)" }}
+            value={show(tri.apexDeg, solved.apexDeg)} onChange={setField("apexDeg")} />
+          <Mini label="L°"
+            style={{ left:`${apexX-42}px`, top:`${apexY+8}px`, transform:"translate(-100%,0)" }}
+            value={show(tri.apexL, solved.apexL)} onChange={setField("apexL")} />
+          <Mini label="R°"
+            style={{ left:`${apexX+42}px`, top:`${apexY+8}px` }}
+            value={show(tri.apexR, solved.apexR)} onChange={setField("apexR")} />
+
+          {/* Sides a / c */}
+          <Mini label="a"
+            style={{ left:`${leftX-8}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-100%,-50%)" }}
+            value={show(tri.a, solved.a)} onChange={setField("a")} />
+          <Mini label="c"
+            style={{ left:`${rightX+8}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(0,-50%)" }}
+            value={show(tri.c, solved.c)} onChange={setField("c")} />
+
+          {/* Height */}
+          <Mini label="h"
+            style={{ left:`${midX}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-50%,-50%)" }}
+            value={show(tri.h, solved.h)} onChange={setField("h")} />
+
+          {/* Base total & split */}
+          <Mini label="b (Σ)"
+            style={{ left:`${midX}px`, top:`${baseY+16}px`, transform:"translate(-50%,0)" }}
+            value={show(tri.b, solved.b)} onChange={setField("b")} />
+          <Mini label="bL"
+            style={{ left:`${leftX}px`, top:`${baseY+16}px`, transform:"translate(-100%,0)" }}
+            value={show(tri.bL, solved.bL)} onChange={setField("bL")} />
+          <Mini label="bR"
+            style={{ left:`${rightX}px`, top:`${baseY+16}px` }}
+            value={show(tri.bR, solved.bR)} onChange={setField("bR")} />
+
+          {/* Base angles (read-only) */}
+          <Mini label="L (°)" readOnly
+            style={{ left:`${leftX-2}px`, top:`${baseY+48}px`, transform:"translate(-100%,0)" }}
+            value={show(NaN, solved.baseL)} />
+          <Mini label="R (°)" readOnly
+            style={{ left:`${rightX+2}px`, top:`${baseY+48}px` }}
+            value={show(NaN, solved.baseR)} />
         </div>
-
-        {/* Apex total & split (compact & centered) */}
-        <Mini label="Apex (°)"
-              style={{ left:`${apexX}px`, top:`${apexY-22}px`, transform:"translate(-50%,-100%)" }}
-              value={show(tri.apexDeg, solved.apexDeg)} onChange={setField("apexDeg")} />
-        <Mini label="L°"
-              style={{ left:`${apexX-40}px`, top:`${apexY+6}px`, transform:"translate(-100%,0)" }}
-              value={show(tri.apexL, solved.apexL)} onChange={setField("apexL")} />
-        <Mini label="R°"
-              style={{ left:`${apexX+40}px`, top:`${apexY+6}px` }}
-              value={show(tri.apexR, solved.apexR)} onChange={setField("apexR")} />
-
-        {/* Sides a / c */}
-        <Mini label="a"
-              style={{ left:`${leftX-6}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-100%,-50%)" }}
-              value={show(tri.a, solved.a)} onChange={setField("a")} />
-        <Mini label="c"
-              style={{ left:`${rightX+6}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(0,-50%)" }}
-              value={show(tri.c, solved.c)} onChange={setField("c")} />
-
-        {/* Height */}
-        <Mini label="h"
-              style={{ left:`${midX}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-50%,-50%)" }}
-              value={show(tri.h, solved.h)} onChange={setField("h")} />
-
-        {/* Base total & split */}
-        <Mini label="b (Σ)"
-              style={{ left:`${midX}px`, top:`${baseY+14}px`, transform:"translate(-50%,0)" }}
-              value={show(tri.b, solved.b)} onChange={setField("b")} />
-        <Mini label="bL"
-              style={{ left:`${leftX}px`, top:`${baseY+14}px`, transform:"translate(-100%,0)" }}
-              value={show(tri.bL, solved.bL)} onChange={setField("bL")} />
-        <Mini label="bR"
-              style={{ left:`${rightX}px`, top:`${baseY+14}px` }}
-              value={show(tri.bR, solved.bR)} onChange={setField("bR")} />
-
-        {/* Base angles (read-only) */}
-        <Mini label="L (°)" readOnly
-              style={{ left:`${leftX-2}px`, top:`${baseY+46}px`, transform:"translate(-100%,0)" }}
-              value={show(NaN, solved.baseL)} />
-        <Mini label="R (°)" readOnly
-              style={{ left:`${rightX+2}px`, top:`${baseY+46}px` }}
-              value={show(NaN, solved.baseR)} />
       </div>
 
       <div style={{ fontSize:11, color:"#64748b", marginTop:8, lineHeight:1.4 }}>
@@ -412,4 +431,4 @@ function Mini({label,value,onChange,readOnly=false,style}){
       />
     </div>
   );
-                                           }
+    }
