@@ -6,19 +6,19 @@ import { createPortal } from "react-dom";
 const LS_OPEN = "floating_open";
 const LS_POS  = "floating_pos";
 const LS_TAB  = "floating_tab";     // "calc" | "tri"
-const LS_EXPR = "floating_expr";    // calc expression
+const LS_EXPR = "floating_expr";    // calculator expression
 const LS_TRI  = "floating_tri";     // triangle inputs {mode,a,b,c,h}
 
 /* ---------- UI helpers ---------- */
-const BUBBLE = 32;   // minimized size (user asked 32px)
+const BUBBLE = 32;   // minimized bubble size
 const MARGIN = 12;
 
-function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
-function fmt(x){
-  if (!isFinite(x)) return "NaN";
-  const s = Number(x).toFixed(6).replace(/\.?0+$/,"");
+const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+const fmt = (x) => {
+  if (!Number.isFinite(x)) return "NaN";
+  const s = Number(x).toFixed(6).replace(/\.?0+$/, "");
   return s === "-0" ? "0" : s;
-}
+};
 
 /* ---------- Calculator internals ---------- */
 const KEYS = [
@@ -46,22 +46,23 @@ function safeEval(source){
 }
 const tryEval = (s) => { const v = safeEval(s); return v===null ? s : String(v); };
 
-/* ---------- Triangle math (Isosceles + SSS) ---------- */
+/* ---------- Triangle solver ---------- */
 /**
  * modes:
- *  - "iso" : isosceles (a==c). Inputs: a, b, h (any 2 → compute the third). Others auto.
- *  - "sss" : general triangle by three sides a,b,c (triangle inequality).
- * Outputs shown inline around the sketch boxes.
+ *  - "iso" : isosceles (a==c). Inputs: any 2 of (a, b, h) → compute the third.
+ *  - "sss" : general by three sides a,b,c. (triangle inequality required)
+ * Outputs (apex/baseL/baseR) are derived by law-of-cosines.
+ * For UI, we show results in the same input boxes where applicable;
+ * read-only boxes are for angles.
  */
 function solveTriangle(state){
-  const { mode, a, b, c, h } = state; // numbers or NaN
-  let A=a, B=b, C=c, H=h; // work vars
-  let area=NaN, perim=NaN, apex=NaN, baseL=NaN, baseR=NaN; // degrees
-
   const has = (x)=>Number.isFinite(x);
+  let { mode, a, b, c, h } = state;
+  let A=a, B=b, C=c, H=h;
+  let apex=NaN, baseL=NaN, baseR=NaN;
 
   if (mode==="iso"){
-    // At least 2 of (A,B,H)
+    // a == c
     if (has(B) && has(H)){
       A = C = Math.sqrt((B/2)**2 + H**2);
     } else if (has(A) && has(B)){
@@ -73,18 +74,10 @@ function solveTriangle(state){
       B = t>=0 ? 2*Math.sqrt(t) : NaN;
       C = A;
     }
-    // derived
-    if (has(B) && has(H)){ area = 0.5*B*H; }
-    if (has(A) && has(B)){
-      perim = B + 2*A;
-      if (!has(H)){
-        const t = A*A - (B/2)**2;
-        H = t>=0 ? Math.sqrt(t) : NaN;
-      }
-    }
-    // angles (apex opposite base B)
+
     if (has(B) && has(H)){
-      apex = 2*Math.atan2(B/2, H) * 180/Math.PI;
+      const rad = 2*Math.atan2(B/2, H);
+      apex = rad*180/Math.PI;
       baseL = baseR = (180 - apex)/2;
     } else if (has(A) && has(B)){
       const cosApex = (2*A*A - B*B)/(2*A*A);
@@ -93,34 +86,31 @@ function solveTriangle(state){
         baseL = baseR = (180 - apex)/2;
       }
     }
-    return { a:A, b:B, c:C, h:H, area, perim, apex, baseL, baseR };
+    return { a:A, b:B, c:C, h:H, apex, baseL, baseR };
   }
 
-  // SSS: need a,b,c valid
+  // SSS
   if (has(A) && has(B) && has(C) && A+B>C && A+C>B && B+C>A){
-    const s = (A+B+C)/2;
-    area = Math.sqrt(Math.max(0, s*(s-A)*(s-B)*(s-C)));
-    perim = A+B+C;
-    // choose base = B (matches drawing), apex opposite base
     const cosApex = (A*A + C*C - B*B)/(2*A*C);
     apex = (cosApex<=1 && cosApex>=-1) ? Math.acos(cosApex)*180/Math.PI : NaN;
-    const cosLeft  = (B*B + C*C - A*A)/(2*B*C); // left base angle (opposite c? depends on view)
+
+    const cosLeft  = (B*B + C*C - A*A)/(2*B*C);
     const cosRight = (A*A + B*B - C*C)/(2*A*B);
     baseL = (cosLeft<=1 && cosLeft>=-1) ? Math.acos(cosLeft)*180/Math.PI : NaN;
     baseR = (cosRight<=1 && cosRight>=-1) ? Math.acos(cosRight)*180/Math.PI : NaN;
-    const HB = has(B) && area>0 ? (2*area)/B : NaN; // height to base B
-    return { a:A, b:B, c:C, h:HB, area, perim, apex, baseL, baseR };
-  }
 
-  // not enough info
-  return { a:A, b:B, c:C, h:H, area, perim, apex, baseL, baseR };
+    const s = (A+B+C)/2;
+    const area = Math.sqrt(Math.max(0, s*(s-A)*(s-B)*(s-C)));
+    const HB = has(B) && area>0 ? (2*area)/B : NaN;
+    return { a:A, b:B, c:C, h:HB, apex, baseL, baseR };
+  }
+  return { a:A, b:B, c:C, h:H, apex, baseL, baseR };
 }
 
-/* ---------- Main Floating (tabs: Calculator / Triangle) ---------- */
+/* ---------- Main Floating ---------- */
 export default function FloatingCalc(){
-  // UI states
   const [open, setOpen] = useState(()=>localStorage.getItem(LS_OPEN)==="1");
-  const [tab,  setTab ] = useState(()=>localStorage.getItem(LS_TAB) || "calc"); // "calc"|"tri"
+  const [tab,  setTab ] = useState(()=>localStorage.getItem(LS_TAB) || "calc");
 
   // position
   const [pos, setPos] = useState(()=>{
@@ -140,38 +130,31 @@ export default function FloatingCalc(){
       const s = JSON.parse(localStorage.getItem(LS_TRI) || "{}");
       return {
         mode: s.mode || "iso",
-        a: Number.isFinite(+s.a) ? +s.a : NaN,
-        b: Number.isFinite(+s.b) ? +s.b : NaN,
-        c: Number.isFinite(+s.c) ? +s.c : NaN,
-        h: Number.isFinite(+s.h) ? +s.h : NaN,
+        a: nOrNaN(s.a), b: nOrNaN(s.b), c: nOrNaN(s.c), h: nOrNaN(s.h),
       };
     }catch{
       return { mode:"iso", a:NaN, b:NaN, c:NaN, h:NaN };
     }
   });
 
-  /* ---------- persistence ---------- */
+  /* persist */
   useEffect(()=>localStorage.setItem(LS_OPEN, open ? "1":"0"), [open]);
   useEffect(()=>localStorage.setItem(LS_TAB, tab), [tab]);
   useEffect(()=>localStorage.setItem(LS_EXPR, expr), [expr]);
   useEffect(()=>localStorage.setItem(LS_TRI, JSON.stringify(tri)), [tri]);
 
-  /* ---------- sizing & clamp ---------- */
+  /* size + clamp */
   function getPanelSize(){
     if (!open) return { w:BUBBLE, h:BUBBLE };
     const r = panelRef.current?.getBoundingClientRect();
     const w = r?.width  || Math.min(window.innerWidth*0.92, 380);
-    const h = r?.height || 520;
+    const h = r?.height || 540;
     return { w, h };
   }
   function clampPos(x, y){
     const { w, h } = getPanelSize();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    return {
-      x: clamp(x, MARGIN, vw - w - MARGIN),
-      y: clamp(y, MARGIN, vh - h - MARGIN),
-    };
+    const vw = window.innerWidth, vh = window.innerHeight;
+    return { x: clamp(x, MARGIN, vw-w-MARGIN), y: clamp(y, MARGIN, vh-h-MARGIN) };
   }
 
   // default right-middle
@@ -180,20 +163,17 @@ export default function FloatingCalc(){
       const { w, h } = getPanelSize();
       const vw=window.innerWidth, vh=window.innerHeight;
       const x = vw - w - MARGIN;
-      const y = clamp((vh - h)/2, MARGIN, vh - h - MARGIN);
-      const p = { x, y };
-      setPos(p);
-      localStorage.setItem(LS_POS, JSON.stringify(p));
+      const y = clamp((vh-h)/2, MARGIN, vh-h-MARGIN);
+      const p={x,y}; setPos(p); localStorage.setItem(LS_POS, JSON.stringify(p));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  // re-clamp on open/resize/orientation
+  // re-clamp
   useEffect(()=>{
     const t=setTimeout(()=>{
       const fixed = clampPos(pos.x||0, pos.y||0);
-      setPos(fixed);
-      localStorage.setItem(LS_POS, JSON.stringify(fixed));
+      setPos(fixed); localStorage.setItem(LS_POS, JSON.stringify(fixed));
     },0);
     return ()=>clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -202,8 +182,7 @@ export default function FloatingCalc(){
   useEffect(()=>{
     const onResize=()=>{
       const fixed = clampPos(pos.x||0, pos.y||0);
-      setPos(fixed);
-      localStorage.setItem(LS_POS, JSON.stringify(fixed));
+      setPos(fixed); localStorage.setItem(LS_POS, JSON.stringify(fixed));
     };
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
@@ -214,7 +193,7 @@ export default function FloatingCalc(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[pos.x,pos.y,open]);
 
-  /* ---------- drag handlers ---------- */
+  /* drag handlers */
   const onDragStart=(e)=>{
     dragging.current = true;
     start.current = { x:e.clientX, y:e.clientY, px:pos.x||0, py:pos.y||0 };
@@ -223,26 +202,24 @@ export default function FloatingCalc(){
   const onDragMove=(e)=>{
     if(!dragging.current) return;
     const dx=e.clientX-start.current.x, dy=e.clientY-start.current.y;
-    setPos(clampPos((start.current.px||0)+dx, (start.current.py||0)+dy));
+    setPos(clampPos((start.current.px||0)+dx,(start.current.py||0)+dy));
   };
   const onDragEnd=(e)=>{
     if(!dragging.current) return;
     dragging.current=false;
     const fixed = clampPos(pos.x||0, pos.y||0);
-    setPos(fixed);
-    localStorage.setItem(LS_POS, JSON.stringify(fixed));
+    setPos(fixed); localStorage.setItem(LS_POS, JSON.stringify(fixed));
     e.currentTarget.releasePointerCapture?.(e.pointerId);
   };
 
-  /* ---------- Calculator actions ---------- */
+  /* calculator actions */
   const push=(k)=>{
     setFlash(k); setTimeout(()=>setFlash(""), 120);
     if(k==="AC") return setExpr("");
     if(k==="DEL") return setExpr(s=>s.slice(0,-1));
     if(k==="=")  return setExpr(s=>tryEval(s));
     setExpr(s0=>{
-      let s=s0;
-      if(k==="−") k="-";
+      let s=s0; if(k==="−") k="-";
       if(isOp(k)){
         if(!s) return k==="-"? "-" : s;
         const prev=s[s.length-1];
@@ -266,10 +243,10 @@ export default function FloatingCalc(){
     return v===null? "" : v.toString();
   },[expr]);
 
-  /* ---------- Triangle derived ---------- */
+  /* triangle derived */
   const solved = useMemo(()=>solveTriangle(tri), [tri]);
 
-  /* ---------- Render ---------- */
+  /* render */
   const containerStyle = {
     position:"fixed", left:pos.x||0, top:pos.y||0, zIndex:9999, pointerEvents:"none",
   };
@@ -311,7 +288,7 @@ export default function FloatingCalc(){
         onMouseDown={(e)=>e.stopPropagation()}
         onTouchStart={(e)=>e.stopPropagation()}
       >
-        {/* Header (drag + close) */}
+        {/* Header */}
         <div
           onPointerDown={onDragStart}
           onPointerMove={onDragMove}
@@ -326,9 +303,8 @@ export default function FloatingCalc(){
         >
           <div style={{display:"flex", gap:8, alignItems:"center"}}>
             <strong>Floating Tools</strong>
-            {/* Tabs */}
             <div style={{ display:"flex", gap:6, marginLeft:8 }}>
-              <TabBtn label="Calc"  active={tab==="calc"} onClick={()=>setTab("calc")} />
+              <TabBtn label="Calc"     active={tab==="calc"} onClick={()=>setTab("calc")} />
               <TabBtn label="Triangle" active={tab==="tri"}  onClick={()=>setTab("tri")} />
             </div>
           </div>
@@ -414,19 +390,29 @@ function Key({ label, onClick, active }){
   );
 }
 
-/* ---------- Triangle pane ---------- */
+/* ---------- Triangle pane (with SVG sketch) ---------- */
 function TrianglePane({ tri, setTri, solved }){
+  // show: user value if provided, else solved value (if finite)
+  const show = (userVal, solvedVal) =>
+    Number.isFinite(userVal) ? String(userVal) : (Number.isFinite(solvedVal) ? fmt(solvedVal) : "");
+
   const setField = (k)=>(e)=>{
     const v = e.target.value.trim();
-    const n = v==="" ? NaN : Number(v.replace(/,/g,""));
-    setTri(prev => ({ ...prev, [k]: Number.isFinite(n) ? n : NaN }));
+    if (v === "") { setTri(p=>({ ...p, [k]: NaN })); return; } // clear → auto mode
+    const n = Number(v.replace(/,/g,""));
+    setTri(p=>({ ...p, [k]: Number.isFinite(n) ? n : NaN }));
   };
-  const setMode = (m)=> setTri(prev=>({ ...prev, mode:m }));
+  const setMode = (m)=> setTri(p=>({ ...p, mode:m }));
+
+  // simple SVG triangle preview (isosceles-ish proportions)
+  const svgW = 220, svgH = 160;
+  const baseY = svgH - 20, apexY = 20, leftX = 30, rightX = svgW - 30, apexX = svgW/2;
+  const midX = (leftX + rightX)/2;
 
   return (
     <div style={{ padding:12, background:"#fff" }}>
-      {/* Mode selector */}
-      <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+      {/* Mode select */}
+      <div style={{ display:"flex", gap:8, marginBottom:10, alignItems:"center" }}>
         <label style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>Mode:</label>
         <select
           value={tri.mode}
@@ -438,62 +424,82 @@ function TrianglePane({ tri, setTri, solved }){
         </select>
       </div>
 
-      {/* Sketch-like layout */}
+      {/* Sketch + fields */}
       <div style={{
         position:"relative",
-        border:"1px dashed #e5e7eb",
-        borderRadius:12,
-        padding:"18px 10px 14px",
-        minHeight:260,
-        background:"#f8fafc",
+        border:"1px dashed #e5e7eb", borderRadius:12, background:"#f8fafc",
+        padding:"12px 8px 14px",
       }}>
-        {/* Apex input/output row */}
+        {/* SVG figure */}
         <div style={{ display:"flex", justifyContent:"center", marginBottom:8 }}>
-          <Field label="Apex (°)" value={fmt(solved.apex)} readOnly />
+          <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}>
+            {/* base */}
+            <line x1={leftX} y1={baseY} x2={rightX} y2={baseY} stroke="#94a3b8" strokeWidth="2" />
+            {/* sides */}
+            <line x1={leftX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="2.5" />
+            <line x1={rightX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="2.5" />
+            {/* height */}
+            <line x1={midX} y1={baseY} x2={apexX} y2={apexY} stroke="#22c55e" strokeDasharray="4 4" strokeWidth="2" />
+            {/* right angle marker at foot (approx) */}
+            <path d={`M ${midX} ${baseY} h 12 v -12`} fill="none" stroke="#22c55e" strokeWidth="1.5" />
+          </svg>
         </div>
 
-        {/* Sides around the triangle */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, alignItems:"center" }}>
-          <div style={{ display:"flex", justifyContent:"center" }}>
-            <Field label="a (left)" value={valueOrEmpty(tri.a)} onChange={setField("a")} disabled={tri.mode==="iso" && Number.isFinite(tri.c)} />
-          </div>
-          <div style={{ display:"flex", justifyContent:"center" }}>
-            <Field label="c (right)" value={valueOrEmpty(tri.c)} onChange={setField("c")} disabled={tri.mode==="iso"} />
-          </div>
-        </div>
+        {/* Apex angle (read-only) */}
+        <Row center>
+          <Field label="Apex (°)" value={show(NaN, solved.apex)} readOnly />
+        </Row>
 
-        {/* Middle height */}
-        <div style={{ display:"flex", justifyContent:"center", margin:"8px 0" }}>
-          <Field label="h (to base)" value={valueOrEmpty(tri.h)} onChange={setField("h")} />
-        </div>
+        {/* Left & Right sides */}
+        <Row>
+          <Field
+            label="a (left)"
+            value={show(tri.a, solved.a)}
+            onChange={setField("a")}
+            disabled={tri.mode==="iso" && Number.isFinite(tri.c)}
+          />
+          <Field
+            label="c (right)"
+            value={show(tri.c, solved.c)}
+            onChange={setField("c")}
+            disabled={tri.mode==="iso"} // isosceles => a=c (fill a / b / h)
+          />
+        </Row>
 
-        {/* Base */}
-        <div style={{ display:"flex", justifyContent:"center", marginBottom:8 }}>
-          <Field label="b (base)" value={valueOrEmpty(tri.b)} onChange={setField("b")} />
-        </div>
+        {/* Height to base */}
+        <Row center>
+          <Field label="h (to base)" value={show(tri.h, solved.h)} onChange={setField("h")} />
+        </Row>
 
-        {/* Base angles inline */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-          <Field label="Base L (°)" value={fmt(solved.baseL)} readOnly />
-          <Field label="Base R (°)" value={fmt(solved.baseR)} readOnly />
-        </div>
+        {/* Base length */}
+        <Row center>
+          <Field label="b (base)" value={show(tri.b, solved.b)} onChange={setField("b")} />
+        </Row>
 
-        {/* Area / Perimeter */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:10 }}>
-          <Field label="Area" value={fmt(solved.area)} readOnly />
-          <Field label="Perimeter" value={fmt(solved.perim)} readOnly />
-        </div>
+        {/* Base angles (read-only) */}
+        <Row>
+          <Field label="Base L (°)" value={show(NaN, solved.baseL)} readOnly />
+          <Field label="Base R (°)" value={show(NaN, solved.baseR)} readOnly />
+        </Row>
       </div>
 
-      {/* Note */}
       <div style={{ fontSize:11, color:"#64748b", marginTop:8 }}>
-        • Isosceles: a=c. (Any 2 of a, b, h → auto compute) • SSS: enter a, b, c.  
-        Missing/invalid values will show <code>NaN</code>.
+        • Isosceles (a=c): a/b/h ထဲက **၂ခု** ဖြည့်ရင် ကျန်တစ်ခု auto ထွက်မယ်။ • SSS: a,b,c ဖြည့်ရင် angle တွေ auto ထွက်မယ်။ မလုံလောက်/မကျေ မျှတရင် field တွေက **NaN** ဖြစ်မယ်။
       </div>
     </div>
   );
 }
 
+/* small layout helpers */
+function Row({ children, center=false }){
+  return (
+    <div style={{
+      display:"grid",
+      gridTemplateColumns: center ? "1fr" : "1fr 1fr",
+      gap:10, justifyItems: center ? "center" : "stretch", marginBottom:8
+    }}>{children}</div>
+  );
+}
 function Field({ label, value, onChange, readOnly=false, disabled=false }){
   return (
     <div style={{ display:"grid", gap:4, minWidth:120 }}>
@@ -514,4 +520,5 @@ function Field({ label, value, onChange, readOnly=false, disabled=false }){
   );
 }
 
-function valueOrEmpty(v){ return Number.isFinite(v) ? String(v) : ""; }
+/* utils */
+function nOrNaN(v){ const n=Number(v); return Number.isFinite(n)? n : NaN; }
