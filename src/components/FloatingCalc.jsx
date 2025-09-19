@@ -12,7 +12,7 @@ const LS_TRI  = "floating_tri";
 const BUBBLE = 32;
 const MARGIN = 12;
 const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
-const fmt = (x)=>Number.isFinite(x)? Number(x).toFixed(6).replace(/\.?0+$/,"").replace(/^-0$/,"0") : "NaN";
+const fmt = (x)=>Number.isFinite(x)? Number(x).toFixed(6).replace(/\.?0+$/,"").replace(/^-0$/,"0") : "";
 const nOrNaN = (v)=>{ const n=Number(v); return Number.isFinite(n)? n : NaN; };
 
 /* Sanitizer: Myanmar digits, degree sign, spaces, etc. */
@@ -153,7 +153,7 @@ function solveTriangleAuto(s0){
 /* ========== main floating component ========== */
 export default function FloatingCalc(){
   const [open,setOpen]=useState(()=>localStorage.getItem(LS_OPEN)==="1");
-  const [tab,setTab]=useState("calc");
+  const [tab,setTab]=useState("tri"); // Triangle tab default
 
   // position
   const [pos,setPos]=useState(()=>{
@@ -165,14 +165,15 @@ export default function FloatingCalc(){
   const [expr,setExpr]=useState(()=>localStorage.getItem(LS_EXPR)||"");
   const [flash,setFlash]=useState("");
 
-  // triangle state
+  // triangle state (0 => NaN so auto-solver ထပ်ဖြည့်လို့ရ)
   const [tri,setTri]=useState(()=>{
     try{
       const s=JSON.parse(localStorage.getItem(LS_TRI)||"{}");
+      const z2n=(v)=> (v===0 ? NaN : nOrNaN(v));
       return {
-        a:nOrNaN(s.a), b:nOrNaN(s.b), c:nOrNaN(s.c), h:nOrNaN(s.h),
-        bL:nOrNaN(s.bL), bR:nOrNaN(s.bR),
-        apexDeg:nOrNaN(s.apexDeg), apexL:nOrNaN(s.apexL), apexR:nOrNaN(s.apexR),
+        a:z2n(s.a), b:z2n(s.b), c:z2n(s.c), h:z2n(s.h),
+        bL:z2n(s.bL), bR:z2n(s.bR),
+        apexDeg:z2n(s.apexDeg), apexL:z2n(s.apexL), apexR:z2n(s.apexR),
       };
     }catch{
       return { a:NaN,b:NaN,c:NaN,h:NaN,bL:NaN,bR:NaN,apexDeg:NaN,apexL:NaN,apexR:NaN };
@@ -201,19 +202,16 @@ export default function FloatingCalc(){
       const p={ x:vw-w-MARGIN, y:clamp((vh-h)/2,MARGIN,vh-h-MARGIN) };
       setPos(p); localStorage.setItem(LS_POS, JSON.stringify(p));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+  },[]); // eslint-disable-line
   useEffect(()=>{
     const t=setTimeout(()=>{ const p=clampPos(pos.x||0,pos.y||0); setPos(p); localStorage.setItem(LS_POS, JSON.stringify(p)); },0);
     return ()=>clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[open]);
+  },[open]); // eslint-disable-line
   useEffect(()=>{
     const onR=()=>{ const p=clampPos(pos.x||0,pos.y||0); setPos(p); localStorage.setItem(LS_POS, JSON.stringify(p)); };
     window.addEventListener("resize",onR); window.addEventListener("orientationchange",onR);
     return ()=>{ window.removeEventListener("resize",onR); window.removeEventListener("orientationchange",onR); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[pos.x,pos.y,open]);
+  },[pos.x,pos.y,open]); // eslint-disable-line
 
   const onDragStart=(e)=>{ dragging.current=true; start.current={x:e.clientX,y:e.clientY,px:pos.x||0,py:pos.y||0}; e.currentTarget.setPointerCapture?.(e.pointerId); };
   const onDragMove=(e)=>{ if(!dragging.current) return; const dx=e.clientX-start.current.x,dy=e.clientY-start.current.y; setPos(clampPos(start.current.px+dx,start.current.py+dy)); };
@@ -250,8 +248,7 @@ export default function FloatingCalc(){
       }
     }
     if (changed) setTri(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solved]);
+  }, [solved]); // eslint-disable-line
 
   useEffect(()=>{ if(open) setTouched({}); },[open]);
 
@@ -263,7 +260,7 @@ export default function FloatingCalc(){
       <div style={containerStyle}>
         <button
           onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd}
-          onClick={()=>{ setTab("calc"); setOpen(true); }}
+          onClick={()=>{ setTab("tri"); setOpen(true); }}
           aria-label="Open Tools"
           style={{
             pointerEvents:"auto", width:BUBBLE, height:BUBBLE, borderRadius:BUBBLE/2,
@@ -347,10 +344,10 @@ function Key({label,onClick,active}){
       onPointerUp={(e)=>{e.currentTarget.style.transform="scale(1)";}}
     >{label}</button>
   );
-                }
+}
 /* ========== Triangle Pane (CENTERED stage + compact inputs) ========== */
 function TrianglePane({ tri, setTri, solved, setTouched }){
-  const show=(u,s)=>Number.isFinite(u)? String(u) : (Number.isFinite(s)? fmt(s) : "");
+  const show=(u,s)=> (Number.isFinite(u) && u!==0) ? String(u) : (Number.isFinite(s)? fmt(s) : "");
   const setField=(k)=>(e)=>{
     const raw = e.target.value;
     const n = toNumberLoose(raw);
@@ -423,7 +420,7 @@ function TrianglePane({ tri, setTri, solved, setTouched }){
       </div>
 
       <div style={{ fontSize:11, color:"#64748b", marginTop:8, lineHeight:1.4 }}>
-        • Auto: a, b / bL / bR, h, Apex° သို့မဟုတ် Apex L/R — solvable ဖြစ်တာနဲ့ input box ထဲကိုပဲ auto ပြန်ဖြည့်တယ်။  
+        • Auto: a, b / bL / bR, h, Apex° သို့မဟုတ် Apex L/R — solvable ဖြစ်တာနဲ့ input box ထဲကို auto ပြန်ဖြည့်တယ်။  
         • Ties: <code>b = bL + bR</code>, <code>Apex° = L° + R°</code>. မလုံလောက်ရင် ဗလာ/NaN။
       </div>
     </div>
@@ -444,7 +441,12 @@ function Mini({label,value,onChange,readOnly=false,style}){
           background: readOnly ? "#f1f5f9" : "#fff",
           textAlign:"center", fontSize:12
         }}
+        onFocus={(e)=>{ 
+          // ရိုက်ရလွယ်အောင် — focus ထဲဝင်ရင် select-all + 0 ဆို auto clear
+          if(e.target.value==="0") { e.target.value=""; e.target.dispatchEvent(new Event('input',{bubbles:true})); }
+          e.target.select(); 
+        }}
       />
     </div>
   );
-            }
+          }
