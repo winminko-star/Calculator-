@@ -5,9 +5,8 @@ import { createPortal } from "react-dom";
 /* ---------- localStorage keys ---------- */
 const LS_OPEN = "floating_open";
 const LS_POS  = "floating_pos";
-const LS_TAB  = "floating_tab";     // "calc" | "tri"
-const LS_EXPR = "floating_expr";    // calculator expression
-const LS_TRI  = "floating_tri";     // triangle inputs {mode,a,b,c,h}
+const LS_EXPR = "floating_expr";   // calculator expression
+const LS_TRI  = "floating_tri";    // triangle inputs {mode,a,b,c,h}
 
 /* ---------- UI helpers ---------- */
 const BUBBLE = 32;   // minimized bubble size
@@ -18,6 +17,10 @@ const fmt = (x) => {
   if (!Number.isFinite(x)) return "NaN";
   const s = Number(x).toFixed(6).replace(/\.?0+$/, "");
   return s === "-0" ? "0" : s;
+};
+const nOrNaN = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : NaN;
 };
 
 /* ---------- Calculator internals ---------- */
@@ -51,9 +54,7 @@ const tryEval = (s) => { const v = safeEval(s); return v===null ? s : String(v);
  * modes:
  *  - "iso" : isosceles (a==c). Inputs: any 2 of (a, b, h) → compute the third.
  *  - "sss" : general by three sides a,b,c. (triangle inequality required)
- * Outputs (apex/baseL/baseR) are derived by law-of-cosines.
- * For UI, we show results in the same input boxes where applicable;
- * read-only boxes are for angles.
+ * Outputs shown inside the same fields (Apex/Base L/Base R are read-only).
  */
 function solveTriangle(state){
   const has = (x)=>Number.isFinite(x);
@@ -101,7 +102,7 @@ function solveTriangle(state){
 
     const s = (A+B+C)/2;
     const area = Math.sqrt(Math.max(0, s*(s-A)*(s-B)*(s-C)));
-    const HB = has(B) && area>0 ? (2*area)/B : NaN;
+    const HB = has(B) && area>0 ? (2*area)/B : NaN; // height to base B
     return { a:A, b:B, c:C, h:HB, apex, baseL, baseR };
   }
   return { a:A, b:B, c:C, h:H, apex, baseL, baseR };
@@ -110,7 +111,7 @@ function solveTriangle(state){
 /* ---------- Main Floating ---------- */
 export default function FloatingCalc(){
   const [open, setOpen] = useState(()=>localStorage.getItem(LS_OPEN)==="1");
-  const [tab,  setTab ] = useState(()=>localStorage.getItem(LS_TAB) || "calc");
+  const [tab,  setTab ] = useState("calc"); // always start on Calc
 
   // position
   const [pos, setPos] = useState(()=>{
@@ -128,10 +129,7 @@ export default function FloatingCalc(){
   const [tri, setTri] = useState(()=>{
     try{
       const s = JSON.parse(localStorage.getItem(LS_TRI) || "{}");
-      return {
-        mode: s.mode || "iso",
-        a: nOrNaN(s.a), b: nOrNaN(s.b), c: nOrNaN(s.c), h: nOrNaN(s.h),
-      };
+      return { mode: s.mode || "iso", a:nOrNaN(s.a), b:nOrNaN(s.b), c:nOrNaN(s.c), h:nOrNaN(s.h) };
     }catch{
       return { mode:"iso", a:NaN, b:NaN, c:NaN, h:NaN };
     }
@@ -139,7 +137,6 @@ export default function FloatingCalc(){
 
   /* persist */
   useEffect(()=>localStorage.setItem(LS_OPEN, open ? "1":"0"), [open]);
-  useEffect(()=>localStorage.setItem(LS_TAB, tab), [tab]);
   useEffect(()=>localStorage.setItem(LS_EXPR, expr), [expr]);
   useEffect(()=>localStorage.setItem(LS_TRI, JSON.stringify(tri)), [tri]);
 
@@ -148,7 +145,7 @@ export default function FloatingCalc(){
     if (!open) return { w:BUBBLE, h:BUBBLE };
     const r = panelRef.current?.getBoundingClientRect();
     const w = r?.width  || Math.min(window.innerWidth*0.92, 380);
-    const h = r?.height || 540;
+    const h = r?.height || 560;
     return { w, h };
   }
   function clampPos(x, y){
@@ -258,7 +255,7 @@ export default function FloatingCalc(){
           onPointerDown={onDragStart}
           onPointerMove={onDragMove}
           onPointerUp={onDragEnd}
-          onClick={()=>setOpen(true)}
+          onClick={()=>{ setTab("calc"); setOpen(true); }}  // open on Calc
           aria-label="Open Tools"
           style={{
             pointerEvents:"auto",
@@ -390,28 +387,26 @@ function Key({ label, onClick, active }){
   );
 }
 
-/* ---------- Triangle pane (with SVG sketch) ---------- */
+/* ---------- Triangle pane with anchored mini fields ---------- */
 function TrianglePane({ tri, setTri, solved }){
-  // show: user value if provided, else solved value (if finite)
-  const show = (userVal, solvedVal) =>
-    Number.isFinite(userVal) ? String(userVal) : (Number.isFinite(solvedVal) ? fmt(solvedVal) : "");
+  // show: user value if provided, else solved value; otherwise empty
+  const show = (u, s) => Number.isFinite(u) ? String(u) : (Number.isFinite(s) ? fmt(s) : "");
 
   const setField = (k)=>(e)=>{
     const v = e.target.value.trim();
-    if (v === "") { setTri(p=>({ ...p, [k]: NaN })); return; } // clear → auto mode
+    if (v === "") { setTri(p=>({ ...p, [k]: NaN })); return; }
     const n = Number(v.replace(/,/g,""));
     setTri(p=>({ ...p, [k]: Number.isFinite(n) ? n : NaN }));
   };
   const setMode = (m)=> setTri(p=>({ ...p, mode:m }));
 
-  // simple SVG triangle preview (isosceles-ish proportions)
-  const svgW = 220, svgH = 160;
-  const baseY = svgH - 20, apexY = 20, leftX = 30, rightX = svgW - 30, apexX = svgW/2;
-  const midX = (leftX + rightX)/2;
+  // SVG anchors
+  const W=260, H=190;
+  const baseY=H-24, apexY=18, leftX=30, rightX=W-30, apexX=W/2, midX=(leftX+rightX)/2;
 
   return (
     <div style={{ padding:12, background:"#fff" }}>
-      {/* Mode select */}
+      {/* Mode */}
       <div style={{ display:"flex", gap:8, marginBottom:10, alignItems:"center" }}>
         <label style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>Mode:</label>
         <select
@@ -424,86 +419,69 @@ function TrianglePane({ tri, setTri, solved }){
         </select>
       </div>
 
-      {/* Sketch + fields */}
-      <div style={{
-        position:"relative",
-        border:"1px dashed #e5e7eb", borderRadius:12, background:"#f8fafc",
-        padding:"12px 8px 14px",
-      }}>
+      {/* Sketch + anchored fields */}
+      <div
+        style={{
+          position:"relative",
+          border:"1px dashed #e5e7eb",
+          borderRadius:12,
+          background:"#f8fafc",
+          padding:12,
+          overflow:"hidden",
+        }}
+      >
         {/* SVG figure */}
-        <div style={{ display:"flex", justifyContent:"center", marginBottom:8 }}>
-          <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}>
-            {/* base */}
-            <line x1={leftX} y1={baseY} x2={rightX} y2={baseY} stroke="#94a3b8" strokeWidth="2" />
-            {/* sides */}
-            <line x1={leftX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="2.5" />
-            <line x1={rightX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="2.5" />
-            {/* height */}
-            <line x1={midX} y1={baseY} x2={apexX} y2={apexY} stroke="#22c55e" strokeDasharray="4 4" strokeWidth="2" />
-            {/* right angle marker at foot (approx) */}
-            <path d={`M ${midX} ${baseY} h 12 v -12`} fill="none" stroke="#22c55e" strokeWidth="1.5" />
+        <div style={{ display:"flex", justifyContent:"center" }}>
+          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+            <line x1={leftX} y1={baseY} x2={rightX} y2={baseY} stroke="#94a3b8" strokeWidth="2"/>
+            <line x1={leftX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="3"/>
+            <line x1={rightX} y1={baseY} x2={apexX} y2={apexY} stroke="#0ea5e9" strokeWidth="3"/>
+            <line x1={midX} y1={baseY} x2={apexX} y2={apexY} stroke="#22c55e" strokeDasharray="4 4" strokeWidth="2"/>
+            <path d={`M ${midX} ${baseY} h 10 v -10`} fill="none" stroke="#22c55e" strokeWidth="1.5"/>
           </svg>
         </div>
 
-        {/* Apex angle (read-only) */}
-        <Row center>
-          <Field label="Apex (°)" value={show(NaN, solved.apex)} readOnly />
-        </Row>
+        {/* anchored mini inputs/outputs */}
+        {/* Apex (°) */}
+        <MiniField style={{ left:`${apexX}px`, top:`${apexY-30}px`, transform:"translate(-50%, -100%)" }}
+                   label="Apex (°)" value={show(NaN, solved.apex)} readOnly />
 
-        {/* Left & Right sides */}
-        <Row>
-          <Field
-            label="a (left)"
-            value={show(tri.a, solved.a)}
-            onChange={setField("a")}
-            disabled={tri.mode==="iso" && Number.isFinite(tri.c)}
-          />
-          <Field
-            label="c (right)"
-            value={show(tri.c, solved.c)}
-            onChange={setField("c")}
-            disabled={tri.mode==="iso"} // isosceles => a=c (fill a / b / h)
-          />
-        </Row>
+        {/* Left side a */}
+        <MiniField style={{ left:`${leftX-6}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-100%, -50%)" }}
+                   label="a (left)" value={show(tri.a, solved.a)}
+                   onChange={setField("a")} disabled={tri.mode==="iso" && Number.isFinite(tri.c)} />
 
-        {/* Height to base */}
-        <Row center>
-          <Field label="h (to base)" value={show(tri.h, solved.h)} onChange={setField("h")} />
-        </Row>
+        {/* Right side c */}
+        <MiniField style={{ left:`${rightX+6}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(0, -50%)" }}
+                   label="c (right)" value={show(tri.c, solved.c)}
+                   onChange={setField("c")} disabled={tri.mode==="iso"} />
 
-        {/* Base length */}
-        <Row center>
-          <Field label="b (base)" value={show(tri.b, solved.b)} onChange={setField("b")} />
-        </Row>
+        {/* Height h */}
+        <MiniField style={{ left:`${midX}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-50%, -50%)" }}
+                   label="h (to base)" value={show(tri.h, solved.h)} onChange={setField("h")} />
 
-        {/* Base angles (read-only) */}
-        <Row>
-          <Field label="Base L (°)" value={show(NaN, solved.baseL)} readOnly />
-          <Field label="Base R (°)" value={show(NaN, solved.baseR)} readOnly />
-        </Row>
+        {/* Base b */}
+        <MiniField style={{ left:`${midX}px`, top:`${baseY+18}px`, transform:"translate(-50%, 0)" }}
+                   label="b (base)" value={show(tri.b, solved.b)} onChange={setField("b")} />
+
+        {/* Base angles */}
+        <MiniField style={{ left:`${leftX}px`, top:`${baseY+18}px`, transform:"translate(-100%, 0)" }}
+                   label="Base L (°)" value={show(NaN, solved.baseL)} readOnly />
+        <MiniField style={{ left:`${rightX}px`, top:`${baseY+18}px`, transform:"translate(0, 0)" }}
+                   label="Base R (°)" value={show(NaN, solved.baseR)} readOnly />
       </div>
 
       <div style={{ fontSize:11, color:"#64748b", marginTop:8 }}>
-        • Isosceles (a=c): a/b/h ထဲက **၂ခု** ဖြည့်ရင် ကျန်တစ်ခု auto ထွက်မယ်။ • SSS: a,b,c ဖြည့်ရင် angle တွေ auto ထွက်မယ်။ မလုံလောက်/မကျေ မျှတရင် field တွေက **NaN** ဖြစ်မယ်။
+        • Isosceles (a=c): a/b/h ထဲက ၂ ခု ဖြည့်ရင် ကျန်တစ်ခု auto. • SSS: a,b,c ဖြည့်ရင် angle & h auto. မလုံလောက်ရင် field က ဗလာ/NaN ဖြစ်မယ်။
       </div>
     </div>
   );
 }
 
-/* small layout helpers */
-function Row({ children, center=false }){
+function MiniField({ label, value, onChange, readOnly=false, disabled=false, style }){
   return (
-    <div style={{
-      display:"grid",
-      gridTemplateColumns: center ? "1fr" : "1fr 1fr",
-      gap:10, justifyItems: center ? "center" : "stretch", marginBottom:8
-    }}>{children}</div>
-  );
-}
-function Field({ label, value, onChange, readOnly=false, disabled=false }){
-  return (
-    <div style={{ display:"grid", gap:4, minWidth:120 }}>
-      <div style={{ fontSize:12, color:"#334155" }}>{label}</div>
+    <div style={{ position:"absolute", width:110, ...style }}>
+      <div style={{ fontSize:11, color:"#334155", marginBottom:3 }}>{label}</div>
       <input
         type="text"
         inputMode="decimal"
@@ -512,13 +490,12 @@ function Field({ label, value, onChange, readOnly=false, disabled=false }){
         readOnly={readOnly}
         disabled={disabled}
         style={{
-          height:36, borderRadius:10, padding:"0 10px",
-          border:"1px solid #e5e7eb", background: readOnly? "#f1f5f9" : "#fff",
+          height:30, borderRadius:8, padding:"0 8px",
+          border:"1px solid #e5e7eb",
+          background: readOnly ? "#f1f5f9" : "#fff",
+          width:"100%",
         }}
       />
     </div>
   );
 }
-
-/* utils */
-function nOrNaN(v){ const n=Number(v); return Number.isFinite(n)? n : NaN; }
