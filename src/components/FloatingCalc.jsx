@@ -39,13 +39,6 @@ const tryEval=(s)=>{ const v=safeEval(s); return v===null? s : String(v); };
  *   bL, bR  : base split (b = bL + bR)
  *   apexDeg : total apex angle (°)
  *   apexL, apexR : apex split angles (°) with altitude (apexDeg = apexL + apexR)
- *
- * Rules:
- *  - Any time two of (b, bL, bR) are known → fill the third
- *  - Any time two of (apexDeg, apexL, apexR) are known → fill the third
- *  - SSS if a,b,c valid → solve all incl. h, apex, base angles, bL/bR
- *  - SAS with (a,c,apexDeg) → solve b, h, base angles, bL/bR
- *  - If (h + bL/bR) known → a/c from right triangles, apexL/R from atan(bL/H), atan(bR/H)
  */
 function solveTriangleAuto(s0){
   // clone
@@ -79,8 +72,9 @@ function solveTriangleAuto(s0){
     // base split from projection
     bL = (A*A - C*C + B*B)/(2*B); bR = B - bL;
     // apex split from altitude
-    apexL = Math.atan2(bL, H); apexR = Math.atan2(bR, H); apexDeg = deg(apexL+apexR);
-    baseL = deg(bl); baseR = deg(br); apexL=deg(apexL); apexR=deg(apexR);
+    const apL = Math.atan2(bL, H), apR = Math.atan2(bR, H);
+    apexDeg = deg(apL+apR); apexL = deg(apL); apexR = deg(apR);
+    baseL = deg(bl); baseR = deg(br);
     return pack(A,B,C,H,apexDeg,apexL,apexR,baseL,baseR,bL,bR);
   }
 
@@ -113,14 +107,13 @@ function solveTriangleAuto(s0){
     }
   }
 
-  /* If after fills we now have SSS, solve again for angles properly */
+  /* If after fills we now have SSS, solve again */
   if(has(A) && has(B) && has(C) && A+B>C && A+C>B && B+C>A){
     return solveTriangleAuto({ a:A,b:B,c:C,h:H, bL,bR, apexDeg, apexL, apexR });
   }
 
-  /* If total base + height + one side known → other side via Pythagoras with split from side projections */
+  /* If B & H & side known → estimate split then sides */
   if(has(B) && has(H) && (has(A) || has(C))){
-    // estimate split from known side
     if(has(A) && !has(bL)) bL = Math.sqrt(Math.max(0,A*A - H*H));
     if(has(C) && !has(bR)) bR = Math.sqrt(Math.max(0,C*C - H*H));
     if(has(bL) && !has(bR)) bR = B - bL;
@@ -142,7 +135,7 @@ function solveTriangleAuto(s0){
 /* ---------- main floating ---------- */
 export default function FloatingCalc(){
   const [open,setOpen]=useState(()=>localStorage.getItem(LS_OPEN)==="1");
-  const [tab,setTab]=useState("calc"); // always default to Calc
+  const [tab,setTab]=useState("calc"); // default Calc
 
   // position
   const [pos,setPos]=useState(()=>{
@@ -154,7 +147,7 @@ export default function FloatingCalc(){
   const [expr,setExpr]=useState(()=>localStorage.getItem(LS_EXPR)||"");
   const [flash,setFlash]=useState("");
 
-  // triangle state (auto fields)
+  // triangle state
   const [tri,setTri]=useState(()=>{
     try{
       const s=JSON.parse(localStorage.getItem(LS_TRI)||"{}");
@@ -315,7 +308,7 @@ function Key({label,onClick,active}){
   );
 }
 
-/* ---------- Triangle Pane (SVG + apex split + base split) ---------- */
+/* ---------- Triangle Pane (SVG + splits) ---------- */
 function TrianglePane({ tri, setTri, solved }){
   const show=(u,s)=>Number.isFinite(u)? String(u) : (Number.isFinite(s)? fmt(s) : "");
   const setField=(k)=>(e)=>{ const v=e.target.value.trim(); if(v===""){ setTri(p=>({...p,[k]:NaN})); return; }
@@ -326,7 +319,11 @@ function TrianglePane({ tri, setTri, solved }){
 
   return (
     <div style={{ padding:12, background:"#fff" }}>
-      <div style={{ position:"relative", border:"1px dashed #e5e7eb", borderRadius:12, background:"#f8fafc", padding:12, overflow:"visible", minHeight:320 }}>
+      <div style={{
+        position:"relative",
+        border:"1px dashed #e5e7eb", borderRadius:12, background:"#f8fafc",
+        padding:12, overflow:"visible", minHeight:330
+      }}>
         {/* SVG */}
         <div style={{ display:"flex", justifyContent:"center" }}>
           <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
@@ -338,58 +335,81 @@ function TrianglePane({ tri, setTri, solved }){
           </svg>
         </div>
 
-        {/* Apex total & split */}
-        <Mini label="Apex (°)"  style={{ left:`${apexX}px`, top:`${apexY-26}px`, transform:"translate(-50%,-100%)" }}
+        {/* Apex total & split (compact & centered) */}
+        <Mini label="Apex (°)"
+              style={{ left:`${apexX}px`, top:`${apexY-22}px`, transform:"translate(-50%,-100%)" }}
               value={show(tri.apexDeg, solved.apexDeg)} onChange={setField("apexDeg")} />
-        <Mini label="L°" style={{ left:`${apexX-40}px`, top:`${apexY+6}px`, transform:"translate(-100%,0)" }}
+        <Mini label="L°"
+              style={{ left:`${apexX-40}px`, top:`${apexY+6}px`, transform:"translate(-100%,0)" }}
               value={show(tri.apexL, solved.apexL)} onChange={setField("apexL")} />
-        <Mini label="R°" style={{ left:`${apexX+40}px`, top:`${apexY+6}px` }}
+        <Mini label="R°"
+              style={{ left:`${apexX+40}px`, top:`${apexY+6}px` }}
               value={show(tri.apexR, solved.apexR)} onChange={setField("apexR")} />
 
         {/* Sides a / c */}
-        <Mini label="a" style={{ left:`${leftX-6}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-100%,-50%)" }}
+        <Mini label="a"
+              style={{ left:`${leftX-6}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-100%,-50%)" }}
               value={show(tri.a, solved.a)} onChange={setField("a")} />
-        <Mini label="c" style={{ left:`${rightX+6}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(0,-50%)" }}
+        <Mini label="c"
+              style={{ left:`${rightX+6}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(0,-50%)" }}
               value={show(tri.c, solved.c)} onChange={setField("c")} />
 
         {/* Height */}
-        <Mini label="h" style={{ left:`${midX}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-50%,-50%)" }}
+        <Mini label="h"
+              style={{ left:`${midX}px`, top:`${(apexY+baseY)/2}px`, transform:"translate(-50%,-50%)" }}
               value={show(tri.h, solved.h)} onChange={setField("h")} />
 
         {/* Base total & split */}
-        <Mini label="b (Σ)" style={{ left:`${midX}px`, top:`${baseY+18}px`, transform:"translate(-50%,0)" }}
+        <Mini label="b (Σ)"
+              style={{ left:`${midX}px`, top:`${baseY+14}px`, transform:"translate(-50%,0)" }}
               value={show(tri.b, solved.b)} onChange={setField("b")} />
-        <Mini label="bL" style={{ left:`${leftX}px`, top:`${baseY+18}px`, transform:"translate(-100%,0)" }}
+        <Mini label="bL"
+              style={{ left:`${leftX}px`, top:`${baseY+14}px`, transform:"translate(-100%,0)" }}
               value={show(tri.bL, solved.bL)} onChange={setField("bL")} />
-        <Mini label="bR" style={{ left:`${rightX}px`, top:`${baseY+18}px` }}
+        <Mini label="bR"
+              style={{ left:`${rightX}px`, top:`${baseY+14}px` }}
               value={show(tri.bR, solved.bR)} onChange={setField("bR")} />
 
         {/* Base angles (read-only) */}
-        <Mini label="L (°)" readOnly style={{ left:`${leftX-2}px`, top:`${baseY+52}px`, transform:"translate(-100%,0)" }}
+        <Mini label="L (°)" readOnly
+              style={{ left:`${leftX-2}px`, top:`${baseY+46}px`, transform:"translate(-100%,0)" }}
               value={show(NaN, solved.baseL)} />
-        <Mini label="R (°)" readOnly style={{ left:`${rightX+2}px`, top:`${baseY+52}px` }}
+        <Mini label="R (°)" readOnly
+              style={{ left:`${rightX+2}px`, top:`${baseY+46}px` }}
               value={show(NaN, solved.baseR)} />
       </div>
 
       <div style={{ fontSize:11, color:"#64748b", marginTop:8, lineHeight:1.4 }}>
-        • **Auto**: a, b/ bL/ bR, h, Apex° or Apex L/R စုံလင်သမျှ ပေါင်းစပ်ထည့်လို့ရတယ် — solvable ဖြစ်တာနဲ့ box ထဲကိုပဲ auto ဖြည့်တယ်။  
+        • **Auto**: a, b / bL / bR, h, Apex° သို့မဟုတ် Apex L/R စုစည်းချက်များမှ solvable ဖြစ်ရာတိုင်း box ထဲကိုပဲ auto ပြန်ဖြည့်တယ်။  
         • Ties: <code>b = bL + bR</code>, <code>Apex° = L° + R°</code>. မလုံလောက်/မမှန်ရင် ဗလာ/NaN။
       </div>
     </div>
   );
 }
 
+/* ---------- compact mini input ---------- */
 function Mini({label,value,onChange,readOnly=false,style}){
   return (
-    <div style={{ position:"absolute", width:64, ...style }}>
-      <div style={{ fontSize:10, color:"#334155", marginBottom:2, textAlign:"center" }}>{label}</div>
+    <div style={{ position:"absolute", width:48, ...style, textAlign:"center" }}>
+      <div style={{ fontSize:9, color:"#334155", marginBottom:1, textAlign:"center" }}>{label}</div>
       <input
-        type="text" inputMode="decimal" value={value??""} onChange={onChange}
-        readOnly={readOnly} placeholder="0"
-        style={{ height:26, borderRadius:6, padding:"0 4px", width:"100%",
-          border:"1px solid #e5e7eb", background: readOnly? "#eef2f7" : "#fff",
-          textAlign:"center", fontSize:13 }}
+        type="text"
+        inputMode="decimal"
+        value={value ?? ""}
+        onChange={onChange}
+        readOnly={readOnly}
+        placeholder="0"
+        style={{
+          height:22,
+          borderRadius:6,
+          padding:"0 2px",
+          width:"100%",
+          border:"1px solid #cbd5e1",
+          background: readOnly ? "#f1f5f9" : "#fff",
+          textAlign:"center",
+          fontSize:12,
+        }}
       />
     </div>
   );
-}
+                                                                }
