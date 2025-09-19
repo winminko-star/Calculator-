@@ -412,4 +412,4 @@ function Mini({label,value,onChange,readOnly=false,style}){
       />
     </div>
   );
-                                                                }
+                                           }
