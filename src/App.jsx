@@ -24,6 +24,7 @@ import ENHReview from "./pages/ENHReview";
 import PipeEndsSlopePage from "./pages/PipeEndsSlope.jsx";
 import FlangeOnAxisPage from "./pages/FlangeOnAxis.jsx";
 import FloatingCalc from "./components/FloatingCalc";
+import ChainageOffsetPro from "./pages/ChainageOffsetPro";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -106,6 +107,7 @@ export default function App() {
           <Route path="/enh-review" element={<ENHReview />} />
           <Route path="/pipe-ends-slope" element={<PipeEndsSlopePage />} />
           <Route path="/flange-on-axis" element={<FlangeOnAxisPage />} />
+          <Route path="/chainage-offset-pro" element={<ChainageOffsetPro />} />
 
           {/* Fallback */}
           <Route
