@@ -52,8 +52,9 @@ export default function NavBar({ user, onLogout }) {
             paddingTop: 8,
           }}
         >
-          <Chip to="/chainage-offset-pro" label="Chainage Offset Pro" />
+          
           <Chip to="/" label="Home" />
+          <Chip to="/chainage-offset-pro" label="Chainage Offset Pro" />
           <Chip to="/drawing2d" label="2D Drawing" />
           <Chip to="/review" label="2D Review" />
           <Chip to="/righttriangle" label="Right Triangle" />
@@ -69,8 +70,7 @@ export default function NavBar({ user, onLogout }) {
           <Chip to="/pipe-ends-slope" label="Pipe Ends Slope" />
           <Chip to="/flange-on-axis" label="Flange On Axis" />
           <Chip to="/notepad" label="Note Pad" />
-          
-          
+      Offset         
          </nav>
       </div>
     </div>
