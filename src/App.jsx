@@ -25,6 +25,7 @@ import PipeEndsSlopePage from "./pages/PipeEndsSlope.jsx";
 import FlangeOnAxisPage from "./pages/FlangeOnAxis.jsx";
 import FloatingCalc from "./components/FloatingCalc";
 import ChainageOffsetPro from "./pages/ChainageOffsetPro";
+import StationMerge from "./pages/StationMerge";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -108,6 +109,7 @@ export default function App() {
           <Route path="/pipe-ends-slope" element={<PipeEndsSlopePage />} />
           <Route path="/flange-on-axis" element={<FlangeOnAxisPage />} />
           <Route path="/chainage-offset-pro" element={<ChainageOffsetPro />} />
+          <Route path="/station-merge" element={<StationMerge />} />
 
           {/* Fallback */}
           <Route
