@@ -54,6 +54,7 @@ export default function NavBar({ user, onLogout }) {
         >
           
           <Chip to="/" label="Home" />
+          <Chip to="/station-merge" label="Station Merge" />
           <Chip to="/chainage-offset-pro" label="Chainage Offset Pro" />
           <Chip to="/drawing2d" label="2D Drawing" />
           <Chip to="/review" label="2D Review" />
