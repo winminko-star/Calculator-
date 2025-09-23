@@ -71,7 +71,7 @@ export default function NavBar({ user, onLogout }) {
           <Chip to="/pipe-ends-slope" label="Pipe Ends Slope" />
           <Chip to="/flange-on-axis" label="Flange On Axis" />
           <Chip to="/notepad" label="Note Pad" />
-      Offset         
+              
          </nav>
       </div>
     </div>
