@@ -1,6 +1,7 @@
 // src/pages/Home.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import SingaporeWeatherFloating from "../components/SingaporeWeatherFloating";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -85,6 +86,7 @@ export default function Home() {
           Someone who loves you is waiting for you. So work safely.
         </div>
       </div>
+      <SingaporeWeatherFloating />
     </div>
   );
     }
