@@ -82,11 +82,11 @@ export default function Home() {
       <div className="photoCard">
         {/* put the image file at /public/couple.jpg (or change the src path) */}
         <img src="/couple.jpg" alt="Two people smiling outdoors" className="heroImg" />
+        <SingaporeWeatherFloating />
         <div className="rainbowText">
           Someone who loves you is waiting for you. So work safely.
         </div>
       </div>
-      <SingaporeWeatherFloating />
-    </div>
+      </div>
   );
     }
