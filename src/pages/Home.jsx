@@ -85,6 +85,7 @@ export default function Home() {
         <SingaporeWeatherFloating />
         <div className="rainbowText">
           Someone who loves you is waiting for you. So work safely.
+          Created by Win Min Ko(Seatrium DC Team).
         </div>
       </div>
       </div>
