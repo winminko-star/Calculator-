@@ -84,8 +84,8 @@ export default function Home() {
         <img src="/couple.jpg" alt="Two people smiling outdoors" className="heroImg" />
         <SingaporeWeatherFloating />
         <div className="rainbowText">
-          Someone who loves you is waiting for you. So work safely.
-          Created by Win Min Ko(Seatrium DC Team).
+          <Someone who loves you is waiting for you. So work safely./>
+          <Created by Win Min Ko(Seatrium DC Team)./>
         </div>
       </div>
       </div>
