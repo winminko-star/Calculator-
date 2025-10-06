@@ -1,4 +1,3 @@
-// src/components/SingaporeWeatherFloating.jsx
 import React, { useEffect, useState } from "react";
 import "./SingaporeWeatherFloating.css";
 
@@ -9,11 +8,11 @@ export default function SingaporeWeatherFloating() {
   useEffect(() => {
     async function fetchWeather() {
       try {
-        const res = await fetch(
-          "https://api.open-meteo.com/v1/forecast?latitude=1.3521&longitude=103.8198&current_weather=true"
-        );
+        const apiKey = "c3afb98f45a0557918efe65941e0639f"; // ✅ your key
+        const url = `https://api.openweathermap.org/data/2.5/weather?lat=1.3521&lon=103.8198&units=metric&appid=${apiKey}`;
+        const res = await fetch(url);
         const data = await res.json();
-        setWeather(data.current_weather);
+        setWeather(data);
       } catch (err) {
         console.error("Failed to load weather:", err);
       }
@@ -25,49 +24,45 @@ export default function SingaporeWeatherFloating() {
     return <div className="weather-floating small">⛅</div>;
   }
 
-  // 10 conditions mapping
-  const weatherMap = {
-    0: { label: "☀️ Sunny", image: "/images/sunny.jpg" },
-    1: { label: "🌤 Mostly Sunny", image: "/images/mostly_sunny.jpg" },
-    2: { label: "⛅ Partly Cloudy", image: "/images/partly_cloudy.jpg" },
-    3: { label: "☁️ Overcast", image: "/images/cloudy.jpg" },
-    45: { label: "🌫 Foggy", image: "/images/foggy.jpg" },
-    48: { label: "🌫 Dense Fog", image: "/images/dense_fog.jpg" },
-    51: { label: "🌦 Light Drizzle", image: "/images/drizzle.jpg" },
-    61: { label: "🌧 Rainy", image: "/images/rain.jpg" },
-    71: { label: "🌨 Light Snow", image: "/images/snow.jpg" },
-    95: { label: "⛈ Thunderstorm", image: "/images/storm.jpg" },
-  };
+  const main = weather.weather[0].main;
+  const temp = Math.round(weather.main.temp);
 
-  const scene = weatherMap[weather.weathercode] || {
-    label: "🌤 Normal",
-    image: "/images/default.jpg",
-  };
+  const condition =
+    {
+      Clear: { label: "☀️ Sunny", image: "/images/sunny.jpg" },
+      Clouds: { label: "☁️ Cloudy", image: "/images/cloudy.jpg" },
+      Rain: { label: "🌧 Rainy", image: "/images/rain.jpg" },
+      Drizzle: { label: "🌦 Light Rain", image: "/images/drizzle.jpg" },
+      Thunderstorm: { label: "⛈ Storm", image: "/images/storm.jpg" },
+      Mist: { label: "🌫 Misty", image: "/images/foggy.jpg" },
+      Haze: { label: "🌫 Hazy", image: "/images/foggy.jpg" },
+    }[main] || { label: "🌤 Normal", image: "/images/default.jpg" };
 
   return (
     <>
-      {/* Small Floating Icon */}
+      {/* Floating mini icon */}
       {!expanded && (
         <div
           className="weather-floating small"
           onClick={() => setExpanded(true)}
           title="Show Singapore Weather"
         >
-          {scene.label.split(" ")[0]} {/* emoji only */}
+          {condition.label.split(" ")[0]}
         </div>
       )}
 
-      {/* Expanded Popup */}
+      {/* Expanded panel */}
       {expanded && (
         <div className="weather-floating expanded">
           <button className="close-btn" onClick={() => setExpanded(false)}>
             ×
           </button>
           <div className="weather-scene">
-            <img src={scene.image} alt={scene.label} className="bg" />
+            <img src={condition.image} alt={condition.label} className="bg" />
             <div className="overlay">
-              <div className="condition">{scene.label}</div>
-              <div className="temp">{weather.temperature}°C</div>
+              <div className="condition">{condition.label}</div>
+              <div className="temp">{temp}°C</div>
+              <div className="desc">{weather.weather[0].description}</div>
               <div className="desc">Singapore Weather</div>
             </div>
           </div>
