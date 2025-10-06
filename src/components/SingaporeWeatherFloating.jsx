@@ -8,10 +8,11 @@ export default function SingaporeWeatherFloating() {
   useEffect(() => {
     async function fetchWeather() {
       try {
-        const apiKey = "c3afb98f45a0557918efe65941e0639f"; // ✅ your key
+        const apiKey = "c3afb98f45a0557918efe65941e0639f";
         const url = `https://api.openweathermap.org/data/2.5/weather?lat=1.3521&lon=103.8198&units=metric&appid=${apiKey}`;
         const res = await fetch(url);
         const data = await res.json();
+        console.log("Weather data:", data); // 👀 for debugging
         setWeather(data);
       } catch (err) {
         console.error("Failed to load weather:", err);
@@ -24,8 +25,11 @@ export default function SingaporeWeatherFloating() {
     return <div className="weather-floating small">⛅</div>;
   }
 
-  const main = weather.weather[0].main;
-  const temp = Math.round(weather.main.temp);
+  // 🧩 check for missing data safely
+  const main = weather.weather && weather.weather[0] ? weather.weather[0].main : "Clear";
+  const description =
+    weather.weather && weather.weather[0] ? weather.weather[0].description : "clear sky";
+  const temp = weather.main && weather.main.temp ? Math.round(weather.main.temp) : "--";
 
   const condition =
     {
@@ -62,7 +66,7 @@ export default function SingaporeWeatherFloating() {
             <div className="overlay">
               <div className="condition">{condition.label}</div>
               <div className="temp">{temp}°C</div>
-              <div className="desc">{weather.weather[0].description}</div>
+              <div className="desc">{description}</div>
               <div className="desc">Singapore Weather</div>
             </div>
           </div>
