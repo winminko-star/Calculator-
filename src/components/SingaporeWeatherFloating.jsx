@@ -1,3 +1,4 @@
+// src/components/SingaporeWeatherFloating.jsx
 import React, { useEffect, useState } from "react";
 import "./SingaporeWeatherFloating.css";
 
@@ -8,11 +9,10 @@ export default function SingaporeWeatherFloating() {
   useEffect(() => {
     async function fetchWeather() {
       try {
-        const apiKey = "c3afb98f45a0557918efe65941e0639f";
-        const url = `https://api.openweathermap.org/data/2.5/weather?lat=1.3521&lon=103.8198&units=metric&appid=${apiKey}`;
-        const res = await fetch(url);
+        const res = await fetch(
+          `https://api.openweathermap.org/data/2.5/weather?lat=1.3521&lon=103.8198&appid=c3afb98f45a0557918efe65941e0639f&units=metric`
+        );
         const data = await res.json();
-        console.log("Weather data:", data); // 👀 for debugging
         setWeather(data);
       } catch (err) {
         console.error("Failed to load weather:", err);
@@ -25,53 +25,60 @@ export default function SingaporeWeatherFloating() {
     return <div className="weather-floating small">⛅</div>;
   }
 
-  // 🧩 check for missing data safely
-  const main = weather.weather && weather.weather[0] ? weather.weather[0].main : "Clear";
-  const description =
-    weather.weather && weather.weather[0] ? weather.weather[0].description : "clear sky";
-  const temp = weather.main && weather.main.temp ? Math.round(weather.main.temp) : "--";
+  // OpenWeatherMap Weather Codes Mapping
+  const weatherCode = weather.weather?.[0]?.id || 800;
+  const main = weather.weather?.[0]?.main || "Clear";
 
-  const condition =
-    {
-      Clear: { label: "☀️ Sunny", image: "/images/sunny.jpg" },
-      Clouds: { label: "☁️ Cloudy", image: "/images/cloudy.jpg" },
-      Rain: { label: "🌧 Rainy", image: "/images/rain.jpg" },
-      Drizzle: { label: "🌦 Light Rain", image: "/images/drizzle.jpg" },
-      Thunderstorm: { label: "⛈ Storm", image: "/images/storm.jpg" },
-      Mist: { label: "🌫 Misty", image: "/images/foggy.jpg" },
-      Haze: { label: "🌫 Hazy", image: "/images/foggy.jpg" },
-    }[main] || { label: "🌤 Normal", image: "/images/default.jpg" };
+  let scene = { label: "☀️ Sunny", image: "/images/sunny.jpg" };
+
+  if (weatherCode >= 200 && weatherCode < 300)
+    scene = { label: "⛈ Thunderstorm", image: "/images/storm.jpg" };
+  else if (weatherCode >= 300 && weatherCode < 400)
+    scene = { label: "🌦 Drizzle", image: "/images/drizzle.jpg" };
+  else if (weatherCode >= 500 && weatherCode < 600)
+    scene = { label: "🌧 Rainy", image: "/images/rain.jpg" };
+  else if (weatherCode >= 600 && weatherCode < 700)
+    scene = { label: "🌨 Snowy", image: "/images/snow.jpg" };
+  else if (weatherCode >= 700 && weatherCode < 800)
+    scene = { label: "🌫 Foggy", image: "/images/foggy.jpg" };
+  else if (weatherCode === 800)
+    scene = { label: "☀️ Clear Sky", image: "/images/sunny.jpg" };
+  else if (weatherCode > 800 && weatherCode <= 802)
+    scene = { label: "⛅ Partly Cloudy", image: "/images/partly_cloudy.jpg" };
+  else if (weatherCode > 802)
+    scene = { label: "☁️ Overcast", image: "/images/cloudy.jpg" };
 
   return (
     <>
-      {/* Floating mini icon */}
+      {/* Small Floating Icon */}
       {!expanded && (
         <div
           className="weather-floating small"
           onClick={() => setExpanded(true)}
           title="Show Singapore Weather"
         >
-          {condition.label.split(" ")[0]}
+          {scene.label.split(" ")[0]}
         </div>
       )}
 
-      {/* Expanded panel */}
+      {/* Expanded Popup */}
       {expanded && (
         <div className="weather-floating expanded">
           <button className="close-btn" onClick={() => setExpanded(false)}>
             ×
           </button>
           <div className="weather-scene">
-            <img src={condition.image} alt={condition.label} className="bg" />
+            <img src={scene.image} alt={scene.label} className="bg" />
             <div className="overlay">
-              <div className="condition">{condition.label}</div>
-              <div className="temp">{temp}°C</div>
-              <div className="desc">{description}</div>
-              <div className="desc">Singapore Weather</div>
+              <div className="condition">{scene.label}</div>
+              <div className="temp">{weather.main.temp}°C</div>
+              <div className="desc">
+                {weather.weather?.[0]?.description || main}
+              </div>
             </div>
           </div>
         </div>
       )}
     </>
   );
-}
+    }
