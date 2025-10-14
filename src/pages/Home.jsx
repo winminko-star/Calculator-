@@ -1,11 +1,60 @@
 // src/pages/Home.jsx
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import SingaporeWeatherFloating from "../components/SingaporeWeatherFloating";
+import CircleFit from "../components/CircleFit";
 
 export default function Home() {
   const navigate = useNavigate();
+  const [showCircle, setShowCircle] = useState(false);
+  const [position, setPosition] = useState({ x: 50, y: 50 });
+  const panelRef = useRef(null);
+  const dragging = useRef(false);
+  const offset = useRef({ x: 0, y: 0 });
 
+  // --- Drag handlers ---
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!dragging.current) return;
+      const newX = e.clientX - offset.current.x;
+      const newY = e.clientY - offset.current.y;
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => (dragging.current = false);
+
+    const handleTouchMove = (e) => {
+      if (!dragging.current) return;
+      const touch = e.touches[0];
+      const newX = touch.clientX - offset.current.x;
+      const newY = touch.clientY - offset.current.y;
+      setPosition({ x: newX, y: newY });
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("touchmove", handleTouchMove);
+    window.addEventListener("touchend", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleMouseUp);
+    };
+  }, []);
+
+  const startDrag = (e) => {
+    dragging.current = true;
+    const clientX = e.clientX || e.touches[0].clientX;
+    const clientY = e.clientY || e.touches[0].clientY;
+    offset.current = {
+      x: clientX - position.x,
+      y: clientY - position.y,
+    };
+  };
+
+  // --- Navigation Buttons ---
   const Btn = ({ icon, label, desc, to }) => (
     <button
       className="btn"
@@ -70,6 +119,7 @@ export default function Home() {
         }
       `}</style>
 
+      {/* Navigation Buttons */}
       <Btn icon="🧭" label="2D Drawing (E,N)" desc="Points • Lines (length) • Angle" to="/drawing2d" />
       <Btn icon="📂" label="2D Review" desc="Saved drawings • dates • auto cleanup" to="/review" />
       <Btn icon="📐" label="Right Triangle" desc="Hypotenuse, legs, angles…" to="/righttriangle" />
@@ -80,14 +130,48 @@ export default function Home() {
 
       {/* --- Photo + rainbow message footer --- */}
       <div className="photoCard">
-        {/* put the image file at /public/couple.jpg (or change the src path) */}
         <img src="/couple.jpg" alt="Two people smiling outdoors" className="heroImg" />
-         <SingaporeWeatherFloating />
+        <SingaporeWeatherFloating />
         <div className="rainbowText">
-           Someone who loves you is waiting for you. So work safely.
-          <h4>Created by Win Min Ko(Seatrium DC Team).</h4>
+          Someone who loves you is waiting for you. So work safely.
+          <h4>Created by Win Min Ko (Seatrium DC Team).</h4>
         </div>
       </div>
-      </div>
+
+      {/* --- Floating Draggable CircleFit Panel --- */}
+      <button
+        onClick={() => setShowCircle(!showCircle)}
+        className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow-lg transition-all z-50"
+      >
+        ⚙️ {showCircle ? "Hide Circle Fit" : "Show Circle Fit"}
+      </button>
+
+      {showCircle && (
+        <div
+          ref={panelRef}
+          onMouseDown={startDrag}
+          onTouchStart={startDrag}
+          style={{
+            position: "fixed",
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+            zIndex: 1000,
+            touchAction: "none",
+          }}
+          className="bg-white rounded-2xl shadow-2xl border p-4 w-[340px] max-h-[90vh] overflow-auto cursor-move select-none"
+        >
+          <h2 className="text-lg font-semibold mb-2 text-gray-700 flex justify-between items-center">
+            🔵 Circle Fit
+            <button
+              onClick={() => setShowCircle(false)}
+              className="text-red-500 hover:text-red-700 text-sm"
+            >
+              ✖
+            </button>
+          </h2>
+          <CircleFit />
+        </div>
+      )}
+    </div>
   );
-    }
+        }
