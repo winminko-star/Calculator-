@@ -86,12 +86,13 @@ export default function Home() {
       <div className="photoCard">  
         <img src="/couple.jpg" alt="Two people smiling outdoors" className="heroImg" />  
          <SingaporeWeatherFloating /> 
-        <FloatingCircleCalc />
         <div className="rainbowText">  
           Someone who loves you is waiting for you. So work safely.  
           <h4>Created by Win Min Ko(Seatrium DC Team).</h4>  
+          
         </div>  
       </div>  
+      <FloatingCircleCalc />
     </div>
   );
       }
