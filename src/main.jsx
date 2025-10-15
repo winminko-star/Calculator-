@@ -1,22 +1,17 @@
-import React from "react";
-import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import App from "./App";
-import Dashboard from "./pages/Dashboard";
-import Review from "./pages/Review";
-import ErrorBoundary from "./ErrorBoundary";
-import "./index.css";
+// src/main.jsx or src/index.jsx
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import App from './App'
+import './index.css'
 
-createRoot(document.getElementById("root")).render(
+const container = document.getElementById('root')
+const root = createRoot(container)
+
+root.render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/review" element={<Review />} />
-        </Routes>
-      </BrowserRouter>
-    </ErrorBoundary>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </React.StrictMode>
-);
+)
