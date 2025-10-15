@@ -24,7 +24,7 @@ import ENHReview from "./pages/ENHReview";
 import PipeEndsSlopePage from "./pages/PipeEndsSlope.jsx";
 import FlangeOnAxisPage from "./pages/FlangeOnAxis.jsx";
 import FloatingCalc from "./components/FloatingCalc";
-import FloatingCalc from "./components/FloatingCircleCalc";
+import FloatingCircleCalc from "./components/FloatingCircleCalc";
 import ChainageOffsetPro from "./pages/ChainageOffsetPro";
 import StationMerge from "./pages/StationMerge";
 
@@ -64,6 +64,7 @@ return (
 <BrowserRouter>
 {user && <NavBar user={user} onLogout={() => signOut(auth)} />}
 <FloatingCalc />
+      <FloatingCircleCalc />
 
 <div className="container">
 <Routes>
