@@ -2,6 +2,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import SingaporeWeatherFloating from "../components/SingaporeWeatherFloating";
+import FloatingCircleCalc from "../components/FloatingCircleCalc";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -84,6 +85,7 @@ export default function Home() {
       {/* --- Photo + rainbow message footer --- */}  
       <div className="photoCard">  
         <img src="/couple.jpg" alt="Two people smiling outdoors" className="heroImg" />  
+        <FloatingCircleCalc />
         <SingaporeWeatherFloating />  
         <div className="rainbowText">  
           Someone who loves you is waiting for you. So work safely.  
