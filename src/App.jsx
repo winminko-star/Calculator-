@@ -64,7 +64,7 @@ return (
 <BrowserRouter>
 {user && <NavBar user={user} onLogout={() => signOut(auth)} />}
 <FloatingCalc />
-      <FloatingCircleCalc/>
+
 <div className="container">
 <Routes>
 {/* Login: if already authed, go home */}
