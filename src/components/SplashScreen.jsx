@@ -12,8 +12,8 @@ export default function SplashScreen() {
   }, [navigate]);
 
   useEffect(() => {
-    const text = "SEATRIUM DC TEAM";
-    const emojis = ["🌟","🔥","💧","🍀","🍎","🎵","⚡","❤️"]; // emoji 8 ခု
+    const text = "SEATRIUM CD MAET";
+    const emojis = ["🍀","🍀","🍀","🍀","🍀","🍀","🍀","🍀"]; // emoji 8 ခု
     const circle = document.getElementById("textCircle");
     const radius = 120; // WIN အလယ်အောက် pivot
     const chars = [...text.split(''), ...emojis];
