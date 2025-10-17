@@ -71,43 +71,45 @@ export default function Levelling() {
     return out;
   }, [results, cols]);
 
-  // save to Firebase (each save = new record)
   const saveResults = async () => {
-    const title = prompt("Title for this levelling result?");
-    if (title === null) return;
+  // ✅ password check
+  const pwd = prompt("Enter password to save:");
+  if (pwd !== "007") return alert("❌ Wrong password");
 
-    const db = getDatabase();
-    const now = Date.now();
-    const payload = {
-      title: (title || "").trim() || "(untitled)",
-      createdAt: now,
-      referenceIndex: refIdx >= 0 ? refIdx : 0,
-      // ✅ keep chosen columns with the record (for Review layout/scroll)
-      cols: Math.max(1, Math.min(99, Number(cols) || 6)),
-      rows: rows.map((r, i) => ({
-        name: String(i + 1),                       // auto 1..N
-        value: r.value === "" ? null : Number(r.value),
-        diff:  r.diff  === "" ? null : Number(r.diff),
-        isRef: r.isRef,
-      })),
-      results: rows.map((r, i) => {
-        const v = r.value === "" ? null : Number(r.value);
-        const d = r.diff === "" ? 0 : Number(r.diff);
-        const hasRef =
-          refIdx >= 0 && rows[refIdx].value !== "" && !isNaN(Number(rows[refIdx].value));
-        const ref = hasRef ? Number(rows[refIdx].value) : null;
-        const value =
-          v === null || ref === null || isNaN(v) || isNaN(ref)
-            ? null
-            : v - ref - (isNaN(d) ? 0 : d);
-        return { name: String(i + 1), value, isRef: r.isRef };
-      }),
-    };
+  const title = prompt("Title for this levelling result?");
+  if (title === null) return;
 
-    const newRef = push(dbRef(db, "levellings"));
-    await set(newRef, payload);
-    alert("Saved ✅");
+  const db = getDatabase();
+  const now = Date.now();
+  const payload = {
+    title: (title || "").trim() || "(untitled)",
+    createdAt: now,
+    referenceIndex: refIdx >= 0 ? refIdx : 0,
+    cols: Math.max(1, Math.min(99, Number(cols) || 6)),
+    rows: rows.map((r, i) => ({
+      name: String(i + 1),
+      value: r.value === "" ? null : Number(r.value),
+      diff: r.diff === "" ? null : Number(r.diff),
+      isRef: r.isRef,
+    })),
+    results: rows.map((r, i) => {
+      const v = r.value === "" ? null : Number(r.value);
+      const d = r.diff === "" ? 0 : Number(r.diff);
+      const hasRef =
+        refIdx >= 0 && rows[refIdx].value !== "" && !isNaN(Number(rows[refIdx].value));
+      const ref = hasRef ? Number(rows[refIdx].value) : null;
+      const value =
+        v === null || ref === null || isNaN(v) || isNaN(ref)
+          ? null
+          : v - ref - (isNaN(d) ? 0 : d);
+      return { name: String(i + 1), value, isRef: r.isRef };
+    }),
   };
+
+  const newRef = push(dbRef(db, "levellings"));
+  await set(newRef, payload);
+  alert("Saved ✅");
+};
 
   return (
     <div className="container grid" style={{ gap: 16 }}>
