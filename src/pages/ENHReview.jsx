@@ -26,9 +26,11 @@ export default function ENHReview() {
   }, []);
 
   const del = async (id) => {
-    if (!confirm("Delete this review?")) return;
-    await remove(ref(db, "enh_reviews/" + id));
-  };
+  const pwd = prompt("Enter password to delete:");
+  if (pwd !== "007") return alert("❌ Wrong password");
+  if (!confirm("Delete this review?")) return;
+  await remove(ref(db, "enh_reviews/" + id));
+};
 
   const loadToCanvas = (review) => {
     localStorage.setItem("ENH_REVIEW_LOAD", JSON.stringify(review));
