@@ -5,13 +5,14 @@ import "./index.css";
 import ErrorBoundary from "./ErrorBoundary";
 
 createRoot(document.getElementById("root")).render(
-<React.StrictMode>
-<ErrorBoundary>
-<App />
-</ErrorBoundary>
-</React.StrictMode>
+  <React.StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  </React.StrictMode>
 );
-// ⏳ optional: ensure splash hides after 4s
+
+// ⏳ Optional: Hide splash after 4 seconds
 setTimeout(() => {
   const splash = document.getElementById("splash-screen");
   if (splash) splash.style.display = "none";
