@@ -12,7 +12,7 @@ export default function SplashScreen() {
   }, [navigate]);
 
   useEffect(() => {
-    const text = "TEAM CD MUIRTAES";
+    const text = "TEAM DC MUIRTAES";
     const emojis = ["🍀","🍀","🍀","🍀","🍀","🍀","🍀","🍀"]; // emoji 8 ခု
     const circle = document.getElementById("textCircle");
     const radius = 120; // WIN အလယ်အောက် pivot
