@@ -175,9 +175,11 @@ export default function AllReview() {
   };
 
   const del = async (id) => {
-    if (!confirm("Delete this drawing?")) return;
-    await remove(dbRef(db, `drawings/${id}`));
-  };
+  const pwd = prompt("Enter password to delete:");
+  if (pwd !== "007") return alert("❌ Wrong password");
+  if (!confirm("Delete this drawing?")) return;
+  await remove(dbRef(db, `drawings/${id}`));
+};
 
   return (
     <div className="grid">
