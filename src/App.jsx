@@ -30,100 +30,108 @@ import ChainageOffsetPro from "./pages/ChainageOffsetPro";
 import StationMerge from "./pages/StationMerge";
 
 export default function App() {
-const [user, setUser] = useState(null);
-const [ready, setReady] = useState(false);
+  const [user, setUser] = useState(null);
+  const [ready, setReady] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
-// Lock to portrait when possible
-useEffect(() => {
-const tryLock = async () => {
-if (screen.orientation?.lock) {
-try {
-await screen.orientation.lock("portrait");
-} catch {}
-}
-};
-tryLock();
-window.addEventListener("orientationchange", tryLock);
-return () => window.removeEventListener("orientationchange", tryLock);
-}, []);
+  // Splash screen 3s
+  useEffect(() => {
+    const timer = setTimeout(() => setShowSplash(false), 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
-// Auth state
-useEffect(() => {
-const unsub = onAuthStateChanged(auth, (u) => {
-setUser(u || null);
-setReady(true);
-});
-return () => unsub();
-}, []);
+  // Lock portrait
+  useEffect(() => {
+    const tryLock = async () => {
+      if (screen.orientation?.lock) {
+        try {
+          await screen.orientation.lock("portrait");
+        } catch {}
+      }
+    };
+    tryLock();
+    window.addEventListener("orientationchange", tryLock);
+    return () => window.removeEventListener("orientationchange", tryLock);
+  }, []);
 
-// Loading state (avoid returning null)
-if (!ready) {
-return <div className="container">Loading…</div>;
-}
+  // Auth state
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u || null);
+      setReady(true);
+    });
+    return () => unsub();
+  }, []);
 
-return (
-<BrowserRouter>
-{user && <NavBar user={user} onLogout={() => signOut(auth)} />}
-<FloatingCalc />
-      <FloatingCircleCalc />
+  if (!ready) return <div className="container">Loading…</div>;
 
-<div className="container">
-<Routes>
-{/* Login: if already authed, go home */}
-<Route
-path="/login"
-element={!user ? <AuthLogin /> : <Navigate to="/" replace />}
-/>
+  return (
+    <BrowserRouter>
+      {showSplash ? (
+        <SplashScreen />
+      ) : (
+        <>
+          {user && <NavBar user={user} onLogout={() => signOut(auth)} />}
+          <FloatingCalc />
+          <FloatingCircleCalc />
 
-{/* Protected routes */}  
-      <Route path="/" element={<SplashScreen />} />
-      <Route  
-        path="/"  
-        element={user ? <Home /> : <Navigate to="/login" replace />}  
-      />  
-      <Route  
-        path="/drawing2d"  
-        element={user ? <Drawing2D /> : <Navigate to="/login" replace />}  
-      />  
-      <Route  
-        path="/review"  
-        element={user ? <AllReview /> : <Navigate to="/login" replace />}  
-      />  
-      <Route  
-        path="/righttriangle"  
-        element={user ? <RightTriangle /> : <Navigate to="/login" replace />}  
-      />  
-      <Route  
-        path="/circlecenter"  
-        element={user ? <CircleCenter /> : <Navigate to="/login" replace />}  
-      />  
-      <Route  
-        path="/levelling"  
-        element={user ? <Levelling /> : <Navigate to="/login" replace />}  
-      />  
+          <div className="container">
+            <Routes>
+              {/* Login: if already authed, go home */}
+              <Route
+                path="/login"
+                element={!user ? <AuthLogin /> : <Navigate to="/" replace />}
+              />
 
-      {/* Public pages */}  
-      <Route path="/levelling-review" element={<LevellingReview />} />  
-      <Route path="/simple-calc" element={<SimpleCalc />} />  
-      <Route path="/circlearc" element={<CircleArc />} />  
-      <Route path="/enh-calc" element={<ENHCalc />} />  
-      <Route path="/notepad" element={<NotePad />} />  
-      <Route path="/enh-tie" element={<ENHTie />} />  
-      <Route path="/enh-canvas" element={<CanvasENH />} />  
-      <Route path="/enh-review" element={<ENHReview />} />  
-      <Route path="/pipe-ends-slope" element={<PipeEndsSlopePage />} />  
-      <Route path="/flange-on-axis" element={<FlangeOnAxisPage />} />  
-      <Route path="/chainage-offset-pro" element={<ChainageOffsetPro />} />  
-      <Route path="/station-merge" element={<StationMerge />} />  
+              {/* Protected routes */}
+              <Route
+                path="/"
+                element={user ? <Home /> : <Navigate to="/login" replace />}
+              />
+              <Route
+                path="/drawing2d"
+                element={user ? <Drawing2D /> : <Navigate to="/login" replace />}
+              />
+              <Route
+                path="/review"
+                element={user ? <AllReview /> : <Navigate to="/login" replace />}
+              />
+              <Route
+                path="/righttriangle"
+                element={user ? <RightTriangle /> : <Navigate to="/login" replace />}
+              />
+              <Route
+                path="/circlecenter"
+                element={user ? <CircleCenter /> : <Navigate to="/login" replace />}
+              />
+              <Route
+                path="/levelling"
+                element={user ? <Levelling /> : <Navigate to="/login" replace />}
+              />
 
-      {/* Fallback */}  
-      <Route  
-        path="*"  
-        element={<Navigate to={user ? "/" : "/login"} replace />}  
-      />  
-    </Routes>  
-  </div>  
-</BrowserRouter>
+              {/* Public pages */}
+              <Route path="/levelling-review" element={<LevellingReview />} />
+              <Route path="/simple-calc" element={<SimpleCalc />} />
+              <Route path="/circlearc" element={<CircleArc />} />
+              <Route path="/enh-calc" element={<ENHCalc />} />
+              <Route path="/notepad" element={<NotePad />} />
+              <Route path="/enh-tie" element={<ENHTie />} />
+              <Route path="/enh-canvas" element={<CanvasENH />} />
+              <Route path="/enh-review" element={<ENHReview />} />
+              <Route path="/pipe-ends-slope" element={<PipeEndsSlopePage />} />
+              <Route path="/flange-on-axis" element={<FlangeOnAxisPage />} />
+              <Route path="/chainage-offset-pro" element={<ChainageOffsetPro />} />
+              <Route path="/station-merge" element={<StationMerge />} />
 
-);
-}
+              {/* Fallback */}
+              <Route
+                path="*"
+                element={<Navigate to={user ? "/" : "/login"} replace />}
+              />
+            </Routes>
+          </div>
+        </>
+      )}
+    </BrowserRouter>
+  );
+                             }
