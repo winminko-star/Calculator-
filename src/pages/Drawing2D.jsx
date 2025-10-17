@@ -440,6 +440,12 @@ export default function Drawing2D() {
   };
 
   const saveToFirebase = async () => {
+  const pwd = prompt("Enter password to save:");
+  if (pwd !== "007") {
+    alert("❌ Wrong password!");
+    return;
+  }
+
   const snapshot = {
     points: [...points],
     lines: [...lines],
@@ -467,7 +473,8 @@ export default function Drawing2D() {
       circles: snapshot.circles.length,
     },
   });
-  alert("Saved ✔");
+
+  alert("✅ Saved successfully!");
 };
 
   /* derived */
