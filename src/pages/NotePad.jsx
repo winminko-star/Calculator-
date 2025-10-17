@@ -83,10 +83,12 @@ export default function NotePad() {
   };
 
   const del = async (nid) => {
-    if (!confirm("Delete this note?")) return;
-    await dbRemove(dbRef(db, `notes/${nid}`));
-    if (id === nid) resetForm();
-  };
+  const pwd = prompt("Enter password to delete:");
+  if (pwd !== "007") return alert("❌ Wrong password");
+  if (!confirm("Delete this note?")) return;
+  await dbRemove(dbRef(db, `notes/${nid}`));
+  if (id === nid) resetForm();
+};
 
   return (
     <div className="container" style={{ marginTop: 16 }}>
