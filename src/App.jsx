@@ -5,6 +5,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "./firebase";
 import "./App.css";
 
+import SplashScreen from "./components/SplashScreen";
 import NavBar from "./components/NavBar";
 import Home from "./pages/Home";
 import AuthLogin from "./pages/AuthLogin";
@@ -75,6 +76,7 @@ element={!user ? <AuthLogin /> : <Navigate to="/" replace />}
 />
 
 {/* Protected routes */}  
+      <Route path="/" element={<SplashScreen />} />
       <Route  
         path="/"  
         element={user ? <Home /> : <Navigate to="/login" replace />}  
