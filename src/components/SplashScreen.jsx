@@ -1,3 +1,4 @@
+// src/components/SplashScreen.jsx
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./SplashScreen.css";
@@ -11,11 +12,15 @@ export default function SplashScreen() {
   }, [navigate]);
 
   useEffect(() => {
-    const text = "SEATRIUM CD MAET • ";
-    const emoji= "🌼🌸🌼🌸🌼🌸🌼🌸";
+    const text = "SEATRIUM DC TEAM";
+    const emojis = ["🌟","🔥","💧","🍀","🍎","🎵","⚡","❤️"]; // emoji 8 ခု
     const circle = document.getElementById("textCircle");
-    const radius = 120;
-    const chars = text.split('');
+    const radius = 120; // WIN အလယ်အောက် pivot
+    const chars = [...text.split(''), ...emojis];
+    const colors = [
+      "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A",
+      "#98D8C8", "#F7DC6F", "#BB8FCE", "#85C1E2"
+    ];
     const angleStep = 360 / chars.length;
 
     chars.forEach((char, i) => {
@@ -30,10 +35,9 @@ export default function SplashScreen() {
 
       letter.style.left = `calc(50% + ${x}px)`;
       letter.style.top = `calc(50% + ${y}px)`;
-      // Pivot အောက်ဘက် အလယ်မှတ်
-      letter.style.transformOrigin = "center bottom";
-      // စာလုံး orientation အရေအတွက် မ flipped ဖြစ်အောင်
-      letter.style.transform = `translate(-50%, -100%) rotate(${angle}deg) rotate(180deg)`;
+      letter.style.color = colors[i % colors.length]; // emoji + စာလုံးအရောင်စုံ
+      letter.style.fontSize = "28px"; // အနည်းငယ်ကြီး
+      letter.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
 
       circle.appendChild(letter);
     });
@@ -69,4 +73,4 @@ export default function SplashScreen() {
       <div id="textCircle"></div>
     </div>
   );
-            }
+      }
