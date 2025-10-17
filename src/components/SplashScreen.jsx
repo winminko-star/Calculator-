@@ -7,7 +7,6 @@ export default function SplashScreen() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // 3s ပြီးရင် home သို့ navigate
     const timer = setTimeout(() => navigate("/"), 3000);
     return () => clearTimeout(timer);
   }, [navigate]);
@@ -15,7 +14,7 @@ export default function SplashScreen() {
   useEffect(() => {
     const text = "SEATRIUM DC TEAM SINGAPORE • ";
     const circle = document.getElementById("textCircle");
-    const radius = 100; // စက်ဝိုင်းသေး
+    const radius = 150; // WIN badge အလယ်ကို pivot
     const chars = text.split('');
     const angleStep = 360 / chars.length;
 
@@ -24,15 +23,15 @@ export default function SplashScreen() {
       letter.className = `letter letter${i + 1}`;
       letter.textContent = char;
 
-      // စက်ဝိုင်းပတ် rotation
-      const angle = i * angleStep;
-      const rad = (angle - 90) * (Math.PI / 180);
+      // angle starts at bottom (270deg)
+      const angle = i * angleStep - 90;
+      const rad = angle * (Math.PI / 180);
       const x = radius * Math.cos(rad);
       const y = radius * Math.sin(rad);
 
       letter.style.left = `calc(50% + ${x}px)`;
-      letter.style.top = `calc(50% + ${y}px)`; // WIN အလယ်ဗဟို
-      letter.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+      letter.style.top = `calc(50% + ${y}px)`;
+      letter.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`; // bottom pivot
 
       circle.appendChild(letter);
     });
@@ -54,13 +53,13 @@ export default function SplashScreen() {
           <path d="M140,10 L156,70 L218,70 L170,108 L188,168 L140,130 L92,168 L110,108 L62,70 L124,70 Z
                    M140,0 L160,50 L240,50 L180,95 L205,180 L140,135 L75,180 L100,95 L40,50 L120,50 Z"
                 fill="url(#starGradient)" filter="url(#shadow)" />
-          <text x="140" y="140"
+          <text x="140" y="155"
                 fontFamily="Arial Black, sans-serif"
-                fontSize="80"
+                fontSize="65"
                 fontWeight="bold"
                 fill="#E74C3C"
                 textAnchor="middle"
-                style={{ paintOrder: "stroke", stroke: "#C0392B", strokeWidth: 3 }}>
+                style={{ paintOrder: "stroke", stroke: "#C0392B", strokeWidth: 2 }}>
             WIN
           </text>
         </svg>
@@ -68,4 +67,4 @@ export default function SplashScreen() {
       <div id="textCircle"></div>
     </div>
   );
-        }
+    }
