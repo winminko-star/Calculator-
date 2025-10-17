@@ -1,4 +1,3 @@
-// src/components/SplashScreen.jsx
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./SplashScreen.css";
@@ -7,6 +6,7 @@ export default function SplashScreen() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // 3s ပြီးရင် home သို့ navigate
     const timer = setTimeout(() => navigate("/"), 3000);
     return () => clearTimeout(timer);
   }, [navigate]);
@@ -14,7 +14,7 @@ export default function SplashScreen() {
   useEffect(() => {
     const text = "SEATRIUM DC TEAM SINGAPORE • ";
     const circle = document.getElementById("textCircle");
-    const radius = 150; // WIN badge အလယ်ကို pivot
+    const radius = 120; // စက်ဝိုင်း radius
     const chars = text.split('');
     const angleStep = 360 / chars.length;
 
@@ -23,15 +23,15 @@ export default function SplashScreen() {
       letter.className = `letter letter${i + 1}`;
       letter.textContent = char;
 
-      // angle starts at bottom (270deg)
-      const angle = i * angleStep - 90;
-      const rad = angle * (Math.PI / 180);
+      const angle = i * angleStep;
+      const rad = (angle - 90) * (Math.PI / 180);
       const x = radius * Math.cos(rad);
       const y = radius * Math.sin(rad);
 
       letter.style.left = `calc(50% + ${x}px)`;
-      letter.style.top = `calc(50% + ${y}px)`;
-      letter.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`; // bottom pivot
+      letter.style.top = `calc(50% + ${y}px)`; // Win အလယ်
+      letter.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
+      letter.style.transformOrigin = "center bottom"; // pivot အောက်ဘက်
 
       circle.appendChild(letter);
     });
@@ -67,4 +67,4 @@ export default function SplashScreen() {
       <div id="textCircle"></div>
     </div>
   );
-    }
+        }
