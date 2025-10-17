@@ -90,10 +90,12 @@ export default function LevellingReview() {
   }, []);
 
   const delItem = async (id) => {
-    if (!confirm("Delete this saved levelling?")) return;
-    const db = getDatabase();
-    await remove(dbRef(db, `levellings/${id}`));
-  };
+  const pwd = prompt("Enter password to delete:");
+  if (pwd !== "007") return alert("❌ Wrong password");
+  if (!confirm("Delete this saved levelling?")) return;
+  const db = getDatabase();
+  await remove(dbRef(db, `levellings/${id}`));
+};
 
   return (
     <div className="grid">
