@@ -11,3 +11,8 @@ createRoot(document.getElementById("root")).render(
 </ErrorBoundary>
 </React.StrictMode>
 );
+// ⏳ optional: ensure splash hides after 4s
+setTimeout(() => {
+  const splash = document.getElementById("splash-screen");
+  if (splash) splash.style.display = "none";
+}, 4000);
