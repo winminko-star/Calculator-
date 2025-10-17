@@ -11,7 +11,7 @@ export default function SplashScreen() {
   }, [navigate]);
 
   useEffect(() => {
-    const text = "SEATRIUM DC TEAM SINGAPORE • ";
+    const text = "SEATRIUM DC MAET SINGAPORE • ";
     const circle = document.getElementById("textCircle");
     const radius = 120;
     const chars = text.split('');
