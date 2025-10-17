@@ -20,6 +20,7 @@ import CircleArc from "./pages/CircleArc";
 import ENHCalc from "./pages/ENHCalc";
 import ENHTie from "./pages/ENHTie";
 import NotePad from "./pages/NotePad";
+import Notepad2 from "./pages/Notepad2";
 import CanvasENH from "./pages/CanvasENH";
 import ENHReview from "./pages/ENHReview";
 import PipeEndsSlopePage from "./pages/PipeEndsSlope.jsx";
@@ -115,6 +116,7 @@ export default function App() {
               <Route path="/circlearc" element={<CircleArc />} />
               <Route path="/enh-calc" element={<ENHCalc />} />
               <Route path="/notepad" element={<NotePad />} />
+              <Route path="/notepad2" element={<Notepad2 />} />
               <Route path="/enh-tie" element={<ENHTie />} />
               <Route path="/enh-canvas" element={<CanvasENH />} />
               <Route path="/enh-review" element={<ENHReview />} />
