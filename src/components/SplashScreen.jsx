@@ -6,7 +6,6 @@ export default function SplashScreen() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // 3s ပြီးရင် home သို့ navigate
     const timer = setTimeout(() => navigate("/"), 3000);
     return () => clearTimeout(timer);
   }, [navigate]);
@@ -14,7 +13,7 @@ export default function SplashScreen() {
   useEffect(() => {
     const text = "SEATRIUM DC TEAM SINGAPORE • ";
     const circle = document.getElementById("textCircle");
-    const radius = 120; // စက်ဝိုင်း radius
+    const radius = 120;
     const chars = text.split('');
     const angleStep = 360 / chars.length;
 
@@ -29,9 +28,11 @@ export default function SplashScreen() {
       const y = radius * Math.sin(rad);
 
       letter.style.left = `calc(50% + ${x}px)`;
-      letter.style.top = `calc(50% + ${y}px)`; // Win အလယ်
-      letter.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
-      letter.style.transformOrigin = "center bottom"; // pivot အောက်ဘက်
+      letter.style.top = `calc(50% + ${y}px)`;
+      // Pivot အောက်ဘက် အလယ်မှတ်
+      letter.style.transformOrigin = "center bottom";
+      // စာလုံး orientation အရေအတွက် မ flipped ဖြစ်အောင်
+      letter.style.transform = `translate(-50%, -100%) rotate(${angle}deg) rotate(180deg)`;
 
       circle.appendChild(letter);
     });
@@ -67,4 +68,4 @@ export default function SplashScreen() {
       <div id="textCircle"></div>
     </div>
   );
-        }
+            }
