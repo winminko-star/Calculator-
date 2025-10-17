@@ -194,8 +194,13 @@ function draw() {
 // auto redraw when inputs change
 useEffect(() => { draw(); }, [values, specialJoins, closeShape]);
 
-// Save to Firebase (data only)
 const saveReview = () => {
+  const pw = prompt("Enter password to save:");
+  if (pw !== "007") {
+    alert("❌ Wrong password");
+    return;
+  }
+
   const snap = { ts: Date.now(), count, values, specialJoins, closeShape };
   push(ref(db, "enh_reviews"), snap)
     .then(()=>alert("✅ Saved"))
