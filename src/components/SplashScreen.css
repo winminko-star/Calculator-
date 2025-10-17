@@ -1,19 +1,16 @@
-/* src/components/SplashScreen.css */
-
-/* ---------- keyframes ---------- */
 @keyframes rotate {
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes pop {
   0% { transform: scale(0); opacity: 0; }
-  60% { transform: scale(1.08); opacity: 1; }
+  60% { transform: scale(1.1); opacity: 1; }
   100% { transform: scale(1); }
 }
 
@@ -22,83 +19,46 @@
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* ---------- container (important: fixed + top-level overlay) ---------- */
 .splash-container {
-  position: fixed;          /* <-- make it full-screen overlay */
-  inset: 0;                 /* top:0; right:0; bottom:0; left:0; */
   width: 100vw;
   height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative;
   overflow: hidden;
-  animation: fadeIn 700ms ease-in-out both;
-  z-index: 9999;            /* sit above everything */
-  transition: opacity 900ms ease, visibility 900ms ease, transform 900ms ease;
-  will-change: opacity, visibility, transform;
+  animation: fadeIn 1s ease-in-out;
 }
 
-/* When React toggles this class, splash will fade and become non-interactive */
-.splash-container.fade-out {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;     /* allow clicks to pass through after fade */
-  transform: scale(1.02);   /* subtle scale for nicer exit */
-}
-
-/* ---------- WIN badge ---------- */
 .win-badge svg {
   width: 280px;
   height: 280px;
-  filter: drop-shadow(0 14px 36px rgba(0,0,0,0.32));
-  animation: pop 800ms cubic-bezier(.2,.9,.3,1) both;
+  filter: drop-shadow(0 10px 30px rgba(0,0,0,0.3));
+  animation: pop 0.8s ease-out;
 }
 
-/* If you want the badge to also fade when .fade-out applied: */
-.splash-container.fade-out .win-badge svg {
-  transform: scale(1.04);
-  opacity: 0;
-  transition: opacity 700ms ease, transform 700ms ease;
-}
-
-/* ---------- circular text ---------- */
 #textCircle {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 320px;   /* a little bigger for nicer spacing */
-  height: 320px;
-  transform: translate(-50%, -50%);
+  width: 250px;
+  height: 250px;
+  transform: translateX(-50%);
   animation: rotate 20s linear infinite;
-  pointer-events: none;
-  z-index: 2;
 }
 
-/* letters */
 .letter {
   position: absolute;
-  font-size: 28px;           /* slightly smaller for better fit */
-  font-weight: 800;
+  font-size: 22px; /* readable */
+  font-weight: bold;
   text-transform: uppercase;
   transform-origin: center;
-  text-shadow:
-    1px 1px 0 rgba(0,0,0,0.18),
-    2px 2px 6px rgba(255,255,255,0.06);
-  white-space: pre;
-  opacity: 0;
-  animation: fadeInLetter 420ms ease forwards;
-  /* animation-delay is set inline from JS for staggering */
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.2), 4px 4px 0 rgba(0,0,0,0.1), 1px 1px 10px rgba(255,255,255,0.5);
+  animation: fadeInLetter 0.5s ease forwards;
 }
 
-/* if splash is fading, also fade letters quickly */
-.splash-container.fade-out .letter {
-  opacity: 0 !important;
-  transform: translate(-50%, -50%) scale(1.08) !important;
-  transition: opacity 400ms ease, transform 400ms ease;
-}
-
-/* ---------- Rainbow colors for letters (1..28) ---------- */
+/* Rainbow colors for letters */
 .letter1 { color: #FF6B6B; }  .letter2 { color: #4ECDC4; }
 .letter3 { color: #45B7D1; }  .letter4 { color: #FFA07A; }
 .letter5 { color: #98D8C8; }  .letter6 { color: #F7DC6F; }
@@ -113,16 +73,3 @@
 .letter23 { color: #4ECDC4; } .letter24 { color: #F7DC6F; }
 .letter25 { color: #BB8FCE; } .letter26 { color: #85C1E2; }
 .letter27 { color: #52B788; } .letter28 { color: #E63946; }
-
-/* ---------- responsiveness ---------- */
-@media (max-width: 520px) {
-  .win-badge svg { width: 200px; height: 200px; }
-  #textCircle { width: 220px; height: 220px; }
-  .letter { font-size: 16px; } /* smaller letters on phones */
-}
-
-@media (max-width: 360px) {
-  .win-badge svg { width: 180px; height: 180px; }
-  #textCircle { width: 200px; height: 200px; }
-  .letter { font-size: 14px; }
-  }
