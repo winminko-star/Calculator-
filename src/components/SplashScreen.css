@@ -1,0 +1,77 @@
+/* src/components/SplashScreen.css */
+
+@keyframes rotate {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes fadeInLetter {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.splash-container {
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 1s ease-in-out;
+}
+
+.win-badge svg {
+  width: 280px;
+  height: 280px;
+  filter: drop-shadow(0 10px 30px rgba(0,0,0,0.3));
+  animation: pop 0.8s ease-out;
+}
+
+#textCircle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 290px;
+  height: 290px;
+  transform: translate(-50%, -50%);
+  animation: rotate 20s linear infinite;
+}
+
+.letter {
+  position: absolute;
+  font-size: 32px;
+  font-weight: bold;
+  text-transform: uppercase;
+  transform-origin: center;
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.2), 4px 4px 0 rgba(0,0,0,0.1), 1px 1px 10px rgba(255,255,255,0.5);
+  animation: fadeInLetter 0.5s ease forwards;
+}
+
+/* Rainbow colors for letters */
+.letter1 { color: #FF6B6B; }  .letter2 { color: #4ECDC4; }
+.letter3 { color: #45B7D1; }  .letter4 { color: #FFA07A; }
+.letter5 { color: #98D8C8; }  .letter6 { color: #F7DC6F; }
+.letter7 { color: #BB8FCE; }  .letter8 { color: #85C1E2; }
+.letter9 { color: #F8B739; }  .letter10 { color: #52B788; }
+.letter11 { color: #E63946; } .letter12 { color: #06FFA5; }
+.letter13 { color: #FF006E; } .letter14 { color: #8338EC; }
+.letter15 { color: #3A86FF; } .letter16 { color: #FB5607; }
+.letter17 { color: #FFBE0B; } .letter18 { color: #FF006E; }
+.letter19 { color: #8338EC; } .letter20 { color: #3A86FF; }
+.letter21 { color: #06FFA5; } .letter22 { color: #FF6B6B; }
+.letter23 { color: #4ECDC4; } .letter24 { color: #F7DC6F; }
+.letter25 { color: #BB8FCE; } .letter26 { color: #85C1E2; }
+.letter27 { color: #52B788; } .letter28 { color: #E63946; }
