@@ -103,13 +103,13 @@ a.active-chip{
 /* Card spacing when stacking many items */
 .card + .card{ margin-top:12px; }
 
-/* 🌈 Splash Screen Styles */
+/* 🌈 Seatrium Splash Screen */
 #splash-screen {
   position: fixed;
   inset: 0;
   background: linear-gradient(-45deg, #001f4d, #004e92, #0072ff, #00c6ff);
   background-size: 400% 400%;
-  animation: gradientMove 10s ease infinite, fadeOut 1s ease 3s forwards; /* total 4s */
+  animation: gradientMove 10s ease infinite, fadeOut 1s ease 3s forwards; /* 4s total */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -130,20 +130,19 @@ a.active-chip{
   100% { background-position: 0% 50%; }
 }
 
-/* 🌟 Image entrance animation */
+/* 🌟 Fade in logo */
 @keyframes fadeIn {
   from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
 }
 
-/* ☁ Floating effect for logo */
+/* ☁ Floating logo animation */
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
 }
 
-/* 🌙 Fade out effect */
+/* 🌙 Fade out overlay */
 @keyframes fadeOut {
   to { opacity: 0; visibility: hidden; }
-        }
-
+  }
