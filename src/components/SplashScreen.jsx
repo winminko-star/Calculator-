@@ -11,7 +11,8 @@ export default function SplashScreen() {
   }, [navigate]);
 
   useEffect(() => {
-    const text = "SEATRIUM CD MAET 🌼🌸🌼🌸🌼🌸🌼🌸🌼 • ";
+    const text = "SEATRIUM CD MAET • ";
+    const emoji= "🌼🌸🌼🌸🌼🌸🌼🌸";
     const circle = document.getElementById("textCircle");
     const radius = 120;
     const chars = text.split('');
