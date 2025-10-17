@@ -46,40 +46,46 @@ export default function NotePad() {
   };
 
   const saveNew = async () => {
-    const t = (title || "").trim();
-    const b = (body || "").trim();
-    if (!t && !b) return alert("Write something first.");
-    const now = Date.now();
-    const expiresAt = now + 90 * 24 * 60 * 60 * 1000; // auto-clean in ~90 days (optional)
-    await dbSet(push(dbRef(db, "notes")), {
-      title: t || "Untitled",
-      body: b,
-      createdAt: now,
-      updatedAt: now,
-      expiresAt,
-    });
-    resetForm();
-  };
+  const pwd = prompt("Enter password to save:");
+  if (pwd !== "007") return alert("❌ Wrong password");
+
+  const t = (title || "").trim();
+  const b = (body || "").trim();
+  if (!t && !b) return alert("Write something first.");
+  const now = Date.now();
+  const expiresAt = now + 90 * 24 * 60 * 60 * 1000;
+  await dbSet(push(dbRef(db, "notes")), {
+    title: t || "Untitled",
+    body: b,
+    createdAt: now,
+    updatedAt: now,
+    expiresAt,
+  });
+  resetForm();
+};
+
+const saveEdit = async () => {
+  const pwd = prompt("Enter password to update:");
+  if (pwd !== "007") return alert("❌ Wrong password");
+
+  if (!id) return;
+  const t = (title || "").trim();
+  const b = (body || "").trim();
+  if (!t && !b) return alert("Write something first.");
+  const now = Date.now();
+  await dbUpdate(dbRef(db, `notes/${id}`), {
+    title: t || "Untitled",
+    body: b,
+    updatedAt: now,
+  });
+  resetForm();
+};
 
   const loadForEdit = (n) => {
     setId(n.id);
     setTitle(n.title || "");
     setBody(n.body || "");
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const saveEdit = async () => {
-    if (!id) return;
-    const t = (title || "").trim();
-    const b = (body || "").trim();
-    if (!t && !b) return alert("Write something first.");
-    const now = Date.now();
-    await dbUpdate(dbRef(db, `notes/${id}`), {
-      title: t || "Untitled",
-      body: b,
-      updatedAt: now,
-    });
-    resetForm();
   };
 
   const del = async (nid) => {
