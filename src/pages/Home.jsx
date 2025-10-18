@@ -81,7 +81,8 @@ export default function Home() {
       <Btn icon="📏" label="Levelling" desc="Rise/Fall, RL, misclosure…" to="/levelling" />  
       <Btn icon="📝" label="Levelling Review" desc="Saved levelling results" to="/levelling-review" />  
       <Btn icon="🧮" label="Simple Calculator" desc="Big keys • one decimal • clean UI" to="/simple-calc" /> 
-      <Btn icon="✍️" label="Notepad" desc="Notepad for users(No Password)" to="/notepad2" />  
+      <Btn icon="✍️" label="Notepad" desc="Notepad for users(No Password)" to="/notepad2" /> 
+      <Btn icon="📹" label="Basic Lesson" desc="List of Lessons" to="/video" />  
 
       {/* --- Photo + rainbow message footer --- */}  
       <div className="photoCard">  
