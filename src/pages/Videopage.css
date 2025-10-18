@@ -1,0 +1,120 @@
+.video-page {
+  min-height: 100vh;
+  padding: 40px 20px;
+  background: linear-gradient(135deg, #ffecd2, #fcb69f);
+  color: #fff;
+  font-family: "Arial", sans-serif;
+}
+
+.video-page-title {
+  text-align: center;
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.video-search {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.video-search input {
+  width: 300px;
+  max-width: 90%;
+  padding: 10px 15px;
+  border-radius: 25px;
+  border: none;
+  font-size: 1rem;
+}
+
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 30px;
+  justify-items: center;
+}
+
+.video-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s, box-shadow 0.3s, border 0.5s;
+  width: 100%;
+  max-width: 360px;
+  position: relative;
+  border: 4px solid transparent;
+  background-clip: padding-box;
+}
+
+.video-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  border-image: linear-gradient(45deg, #ff6a00, #ee0979, #8e2de2) 1;
+}
+
+.video-wrapper {
+  position: relative;
+}
+
+.video-element {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 12px;
+}
+
+.play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 3rem;
+  color: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.video-wrapper:hover .play-overlay {
+  opacity: 1;
+}
+
+.video-title {
+  text-align: center;
+  padding: 10px 0;
+  font-size: 1.1rem;
+  font-weight: bold;
+  background: rgba(0,0,0,0.3);
+}
+
+.fullscreen-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: 5px;
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.fullscreen-btn:hover {
+  background: rgba(0,0,0,0.7);
+}
+
+/* Responsive hover rainbow animation */
+@keyframes rainbow-border {
+  0% { border-color: #ff6a00; }
+  25% { border-color: #ee0979; }
+  50% { border-color: #8e2de2; }
+  75% { border-color: #4facfe; }
+  100% { border-color: #ff6a00; }
+}
+
+.video-card:hover {
+  animation: rainbow-border 3s linear infinite;
+    }
