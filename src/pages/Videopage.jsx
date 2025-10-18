@@ -3,7 +3,7 @@ import React, { useRef, useState } from "react";
 import "./Videopage.css";
 
 const videos = [
-  { id: 1, src: "/videos/numbersBaby1.mp4", title: "Numbers" },
+  { id: 1, src: "/videos/numbersBaby1.mp4", poster:"NumbersBaby1.jpg,title: "Numbers" },
   { id: 2, src: "/videos/video2.mp4", title: "Amazing Video 2" },
   { id: 3, src: "/videos/video3.mp4", title: "Amazing Video 3" },
   { id: 4, src: "/videos/video4.mp4", title: "Amazing Video 4" },
@@ -14,6 +14,7 @@ export default function Videopage() {
   const videoRefs = useRef([]);
   const [search, setSearch] = useState("");
   const [playingIdx, setPlayingIdx] = useState(null);
+  const [rotation, setRotation] = useState({}); // key: idx, value: deg
 
   const handlePlay = (id, idx) => {
     videoRefs.current.forEach((video, vIdx) => {
@@ -29,9 +30,14 @@ export default function Videopage() {
     if (videoEl.requestFullscreen) {
       videoEl.requestFullscreen();
     } else if (videoEl.webkitEnterFullscreen) {
-      // iOS Safari
       videoEl.webkitEnterFullscreen();
     }
+  };
+
+  const rotateVideo = (idx) => {
+    const current = rotation[idx] || 0;
+    const next = (current + 90) % 360;
+    setRotation({ ...rotation, [idx]: next });
   };
 
   const filteredVideos = videos.filter((v) =>
@@ -57,6 +63,10 @@ export default function Videopage() {
             <div
               className={`video-wrapper ${playingIdx === idx ? "playing" : ""}`}
               onClick={() => videoRefs.current[idx]?.play()}
+              style={{
+                transform: `rotate(${rotation[idx] || 0}deg)`,
+                transition: "transform 0.3s ease",
+              }}
             >
               <video
                 ref={(el) => (videoRefs.current[idx] = el)}
@@ -76,12 +86,21 @@ export default function Videopage() {
             </div>
 
             <div className="video-title">{video.title}</div>
-            <button
-              className="fullscreen-btn"
-              onClick={() => toggleFullscreen(idx)}
-            >
-              ⛶ Fullscreen
-            </button>
+
+            <div className="video-buttons">
+              <button
+                className="fullscreen-btn"
+                onClick={() => toggleFullscreen(idx)}
+              >
+                ⛶ Fullscreen
+              </button>
+              <button
+                className="rotate-btn"
+                onClick={() => rotateVideo(idx)}
+              >
+                🔄 Rotate
+              </button>
+            </div>
           </div>
         ))}
       </div>
