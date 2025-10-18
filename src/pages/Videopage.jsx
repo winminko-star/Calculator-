@@ -3,11 +3,11 @@ import React, { useRef, useState } from "react";
 import "./Videopage.css";
 
 const videos = [
-  { id: 1, src: "/videos/numbersBaby1.mp4", poster:"/videos/NumbersBaby1.jpg ",title: "Numbers" },
-  { id: 2, src: "/videos/video2.mp4", title: "Amazing Video 2" },
-  { id: 3, src: "/videos/video3.mp4", title: "Amazing Video 3" },
-  { id: 4, src: "/videos/video4.mp4", title: "Amazing Video 4" },
-  { id: 5, src: "/videos/video5.mp4", title: "Amazing Video 5" },
+  { id: 1, src: "/videos/numbersBaby1.mp4", poster: "/videos/NumbersBaby1.jpg", title: "Numbers" },
+  { id: 2, src: "/videos/video2.mp4", poster: "/videos/video2.jpg", title: "Amazing Video 2" },
+  { id: 3, src: "/videos/video3.mp4", poster: "/videos/video3.jpg", title: "Amazing Video 3" },
+  { id: 4, src: "/videos/video4.mp4", poster: "/videos/video4.jpg", title: "Amazing Video 4" },
+  { id: 5, src: "/videos/video5.mp4", poster: "/videos/video5.jpg", title: "Amazing Video 5" },
 ];
 
 export default function Videopage() {
@@ -71,10 +71,10 @@ export default function Videopage() {
               <video
                 ref={(el) => (videoRefs.current[idx] = el)}
                 src={video.src}
+                poster={video.poster || "/videos/video-poster.jpg"} // <--- video-specific poster
                 controls
                 playsInline
                 preload="metadata"
-                poster="/videos/video-poster.jpg"
                 className="video-element"
                 onPlay={() => handlePlay(video.id, idx)}
               />
@@ -106,4 +106,4 @@ export default function Videopage() {
       </div>
     </div>
   );
-    }
+          }
