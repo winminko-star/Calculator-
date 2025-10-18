@@ -3,7 +3,7 @@
   "short_name": "WMK Calc",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "natural",
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#0ea5e9",
   "description": "2D drawing and calculation tools.",
