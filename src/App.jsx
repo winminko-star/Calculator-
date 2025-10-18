@@ -29,6 +29,7 @@ import FloatingCalc from "./components/FloatingCalc";
 import FloatingCircleCalc from "./components/FloatingCircleCalc";
 import ChainageOffsetPro from "./pages/ChainageOffsetPro";
 import StationMerge from "./pages/StationMerge";
+import Videopage from "./pages/Videopage";
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -124,6 +125,7 @@ export default function App() {
               <Route path="/flange-on-axis" element={<FlangeOnAxisPage />} />
               <Route path="/chainage-offset-pro" element={<ChainageOffsetPro />} />
               <Route path="/station-merge" element={<StationMerge />} />
+              <Route path="/video" element={<Videopage />} />
 
               {/* Fallback */}
               <Route
