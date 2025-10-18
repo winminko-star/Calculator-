@@ -13,13 +13,25 @@ const videos = [
 export default function Videopage() {
   const videoRefs = useRef([]);
   const [search, setSearch] = useState("");
+  const [playingIdx, setPlayingIdx] = useState(null);
 
-  const handlePlay = (id) => {
-    videoRefs.current.forEach((video, idx) => {
-      if (video && videos[idx].id !== id) {
+  const handlePlay = (id, idx) => {
+    videoRefs.current.forEach((video, vIdx) => {
+      if (video && videos[vIdx].id !== id) {
         video.pause();
       }
     });
+    setPlayingIdx(idx);
+  };
+
+  const toggleFullscreen = (idx) => {
+    const videoEl = videoRefs.current[idx];
+    if (videoEl.requestFullscreen) {
+      videoEl.requestFullscreen();
+    } else if (videoEl.webkitEnterFullscreen) {
+      // iOS Safari
+      videoEl.webkitEnterFullscreen();
+    }
   };
 
   const filteredVideos = videos.filter((v) =>
@@ -42,25 +54,31 @@ export default function Videopage() {
       <div className="video-grid">
         {filteredVideos.map((video, idx) => (
           <div key={video.id} className="video-card">
-            <div className="video-wrapper">
+            <div
+              className={`video-wrapper ${playingIdx === idx ? "playing" : ""}`}
+              onClick={() => videoRefs.current[idx]?.play()}
+            >
               <video
                 ref={(el) => (videoRefs.current[idx] = el)}
                 src={video.src}
                 controls
                 playsInline
-                onPlay={() => handlePlay(video.id)}
                 preload="metadata"
                 poster="/videos/video-poster.jpg"
                 className="video-element"
+                onPlay={() => handlePlay(video.id, idx)}
               />
-              <div className="play-overlay">
-                <span>▶</span>
-              </div>
+              {playingIdx !== idx && (
+                <div className="play-overlay">
+                  <span>▶</span>
+                </div>
+              )}
             </div>
+
             <div className="video-title">{video.title}</div>
             <button
               className="fullscreen-btn"
-              onClick={() => videoRefs.current[idx].requestFullscreen()}
+              onClick={() => toggleFullscreen(idx)}
             >
               ⛶ Fullscreen
             </button>
@@ -69,4 +87,4 @@ export default function Videopage() {
       </div>
     </div>
   );
-      }
+              }
