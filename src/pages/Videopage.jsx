@@ -3,7 +3,7 @@ import React, { useRef, useState } from "react";
 import "./Videopage.css";
 
 const videos = [
-  { id: 1, src: "/videos/numbersBaby1.mp4 ", title: "Numbers" },
+  { id: 1, src: "/videos/numbersBaby1.mp4", title: "Numbers" },
   { id: 2, src: "/videos/video2.mp4", title: "Amazing Video 2" },
   { id: 3, src: "/videos/video3.mp4", title: "Amazing Video 3" },
   { id: 4, src: "/videos/video4.mp4", title: "Amazing Video 4" },
@@ -47,6 +47,7 @@ export default function Videopage() {
                 ref={(el) => (videoRefs.current[idx] = el)}
                 src={video.src}
                 controls
+                playsInline
                 onPlay={() => handlePlay(video.id)}
                 preload="metadata"
                 poster="/videos/video-poster.jpg"
@@ -68,4 +69,4 @@ export default function Videopage() {
       </div>
     </div>
   );
-    }
+      }
