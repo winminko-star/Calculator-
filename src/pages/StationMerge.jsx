@@ -1,13 +1,13 @@
+// Part 1/2 - Imports, State, File Upload, STA Parse & Merge
 import React, { useState } from "react";
-import { saveAs } from "file-saver";
-import "./StationMerge.css";
+import "./StationMerge.css"; // သင့်အတိုင်း style လှလှထည့်နိုင်မယ်
+// ✅ Note: FileSaver import မလိုတော့ဘူး, browser native Blob+download က အသုံးပြုမယ်
 
 export default function StationMerge() {
   const [stas, setStas] = useState({});
   const [mergedSta, setMergedSta] = useState([]);
-  const [uploadedFileName, setUploadedFileName] = useState("");
   const [error, setError] = useState("");
-  const [p3Point, setP3Point] = useState({ name: "", H: "" });
+  const [uploadedFileName, setUploadedFileName] = useState("");
 
   // --------------------- File Upload ---------------------
   const handleFileUpload = (e) => {
@@ -49,17 +49,20 @@ export default function StationMerge() {
     if (!stas[baseSta] || !stas[targetSta]) return;
     const basePoints = [...stas[baseSta]];
     const targetPoints = stas[targetSta];
+
     const nameMap = {};
     basePoints.forEach((p) => (nameMap[p.name] = { ...p }));
+
     targetPoints.forEach((p) => {
       if (!nameMap[p.name]) nameMap[p.name] = { ...p };
     });
+
     setMergedSta(Object.values(nameMap));
     setError("");
   };
-
-  // --------------------- Reference Line / ENH ---------------------
-  const calculateWithReference = (p1, p2, p3 = null) => {
+  // Part 2/2 - Reference Line, 3-point ENH, Auto Recalc, Export, Styled Table
+  // --------------------- Reference Line / 3-point ENH ---------------------
+  const calculateWithReference = (p1, p2, updatedPoint = null) => {
     if (!p1 || !p2 || mergedSta.length < 2) return;
 
     const newMerged = mergedSta.map((p) => {
@@ -73,15 +76,13 @@ export default function StationMerge() {
       return { ...p };
     });
 
-    if (p3 && p3.name && p3.H !== "") {
-      const idx = newMerged.findIndex((p) => p.name === p3.name);
-      if (idx >= 0) newMerged[idx].H = parseFloat(p3.H);
+    if (updatedPoint) {
+      const idx = newMerged.findIndex((p) => p.name === updatedPoint.name);
+      if (idx >= 0) newMerged[idx].H = updatedPoint.H;
     }
 
-    const tolerance = 3;
-    const hasError = newMerged.some(
-      (p, i) => Math.abs(p.H - mergedSta[i].H) > tolerance
-    );
+    const tolerance = 3; // mm
+    const hasError = newMerged.some((p, i) => Math.abs(p.H - mergedSta[i].H) > tolerance);
     setError(hasError ? "⚠ Error exceeds tolerance 3mm" : "");
 
     setMergedSta(newMerged);
@@ -93,8 +94,13 @@ export default function StationMerge() {
     const content = mergedSta
       .map((p) => `${p.name} ${p.E.toFixed(3)} ${p.N.toFixed(3)} ${p.H.toFixed(3)}`)
       .join("\n");
+
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, "Merged_STA.txt");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "Merged_STA.txt";
+    link.click();
+    URL.revokeObjectURL(link.href);
   };
 
   return (
@@ -102,7 +108,7 @@ export default function StationMerge() {
       <h2>Station Merge & Reference Calculator</h2>
 
       <input type="file" accept=".txt" onChange={handleFileUpload} />
-      {uploadedFileName && <div className="file-name">Selected File: {uploadedFileName}</div>}
+      {uploadedFileName && <p>Uploaded: {uploadedFileName}</p>}
 
       <div className="merge-actions">
         <button
@@ -118,28 +124,12 @@ export default function StationMerge() {
         <button
           onClick={() => {
             if (mergedSta.length >= 2)
-              calculateWithReference(mergedSta[0], mergedSta[1], p3Point);
+              calculateWithReference(mergedSta[0], mergedSta[1]);
             else alert("Need at least 2 points for reference line");
           }}
         >
           Auto Reference Line
         </button>
-      </div>
-
-      <div className="enh-input">
-        <label>Optional 3rd point for ENH:</label>
-        <input
-          type="text"
-          placeholder="Point Name"
-          value={p3Point.name}
-          onChange={(e) => setP3Point({ ...p3Point, name: e.target.value })}
-        />
-        <input
-          type="number"
-          placeholder="H value"
-          value={p3Point.H}
-          onChange={(e) => setP3Point({ ...p3Point, H: e.target.value })}
-        />
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -170,4 +160,4 @@ export default function StationMerge() {
       <button onClick={exportTxt}>Export TXT</button>
     </div>
   );
-            }
+  }
