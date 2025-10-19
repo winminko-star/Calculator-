@@ -1,7 +1,7 @@
 // StationMerge.jsx
 import React, { useState } from "react";
 import { saveAs } from "file-saver";
-import "./StationMerge.css";
+
 
 export default function StationMerge() {
   const [stas, setStas] = useState({});
