@@ -4,9 +4,5 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  build: {
-    rollupOptions: {
-      external: ['file-saver'], // ✅ external file error မဖြစ်အောင် ထည့်
-    },
-  },
+  base: './', // Netlify, GitHub Pages မှာသုံးရင်အရေးကြီး
 })
