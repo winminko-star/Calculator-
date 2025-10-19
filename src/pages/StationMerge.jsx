@@ -1,12 +1,14 @@
-// StationMerge.jsx
+// src/pages/StationMerge.jsx
 import React, { useState } from "react";
 import { saveAs } from "file-saver";
-
+import "./index.css";
 
 export default function StationMerge() {
   const [stas, setStas] = useState({});
   const [mergedSta, setMergedSta] = useState([]);
   const [error, setError] = useState("");
+  const [refPoints, setRefPoints] = useState([]);
+  const [enhPoints, setEnhPoints] = useState({ name: "", E: "", N: "", H: "" });
 
   // --------------------- File Upload ---------------------
   const handleFileUpload = (e) => {
@@ -28,7 +30,7 @@ export default function StationMerge() {
         if (!groups[currentSta]) groups[currentSta] = [];
       } else if (line.trim() !== "") {
         const [name, E, N, H] = line.trim().split(/\s+/);
-        if (!name || !E || !N || !H) return; // invalid line skip
+        if (!name || !E || !N || !H) return;
         groups[currentSta].push({
           name,
           E: parseFloat(E),
@@ -42,89 +44,92 @@ export default function StationMerge() {
     setError("");
   };
 
-  // --------------------- Merge STA ---------------------
-  const mergeStas = (baseSta, targetSta) => {
-    if (!stas[baseSta] || !stas[targetSta]) return;
-    const basePoints = [...stas[baseSta]];
-    const targetPoints = stas[targetSta];
+  // --------------------- Merge STAs ---------------------
+  const mergeStas = (base, target) => {
+    if (!stas[base] || !stas[target]) return;
+    const basePts = [...stas[base]];
+    const targetPts = stas[target];
+    const merged = [...basePts];
 
-    const nameMap = {};
-    basePoints.forEach((p) => (nameMap[p.name] = { ...p }));
-
-    targetPoints.forEach((p) => {
-      if (!nameMap[p.name]) {
-        nameMap[p.name] = { ...p };
-      } else {
-        // Optional: keep base H, can adjust later
-      }
+    targetPts.forEach((p) => {
+      if (!merged.find((x) => x.name === p.name)) merged.push(p);
     });
 
-    setMergedSta(Object.values(nameMap));
+    setMergedSta(merged);
     setError("");
   };
 
-  // --------------------- Reference Line / 3-point ENH ---------------------
-  const calculateWithReference = (p1, p2, updatedPoint = null) => {
-    if (!p1 || !p2 || mergedSta.length < 2) return;
-
+  // --------------------- Reference Line Calculation ---------------------
+  const calculateWithReference = () => {
+    if (refPoints.length !== 2) return alert("Select 2 reference points first.");
+    const [p1, p2] = refPoints;
     const newMerged = mergedSta.map((p) => {
       if (p.name !== p1.name && p.name !== p2.name) {
         const deltaN = p2.N - p1.N;
-        if (deltaN === 0) return { ...p }; // avoid divide by zero
-        const slope = (p2.H - p1.H) / deltaN;
+        const slope = deltaN === 0 ? 0 : (p2.H - p1.H) / deltaN;
         const H_new = p1.H + slope * (p.N - p1.N);
         return { ...p, H: parseFloat(H_new.toFixed(3)) };
       }
-      return { ...p };
+      return p;
     });
 
-    if (updatedPoint) {
-      const idx = newMerged.findIndex((p) => p.name === updatedPoint.name);
-      if (idx >= 0) newMerged[idx].H = updatedPoint.H;
-    }
-
-    // Error check (difference > 3mm from original H)
     const tolerance = 3;
-    const hasError = newMerged.some((p, i) => Math.abs(p.H - mergedSta[i].H) > tolerance);
+    const hasError = newMerged.some(
+      (p, i) => Math.abs(p.H - mergedSta[i].H) > tolerance
+    );
     setError(hasError ? "⚠ Error exceeds tolerance 3mm" : "");
-
     setMergedSta(newMerged);
   };
 
-  // --------------------- Export TXT ---------------------
-  const exportTxt = () => {
-    if (!mergedSta.length) return;
-    const content = mergedSta
-      .map((p) => `${p.name} ${p.E.toFixed(3)} ${p.N.toFixed(3)} ${p.H.toFixed(3)}`)
-      .join("\n");
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, "Merged_STA.txt");
+  // --------------------- 3-point ENH Calculation ---------------------
+  const handleEnhApply = () => {
+    if (!enhPoints.name) return alert("Enter 3rd point name");
+    const updated = mergedSta.map((p) =>
+      p.name === enhPoints.name
+        ? { ...p, ...enhPoints, E: +enhPoints.E, N: +enhPoints.N, H: +enhPoints.H }
+        : p
+    );
+    setMergedSta(updated);
+    setError("");
   };
 
+  // --------------------- Export ---------------------
+  const exportTxt = () => {
+    const content = mergedSta
+      .map(
+        (p) => `${p.name} ${p.E.toFixed(3)} ${p.N.toFixed(3)} ${p.H.toFixed(3)}`
+      )
+      .join("\n");
+    saveAs(new Blob([content], { type: "text/plain;charset=utf-8" }), "Merged_STA.txt");
+  };
+
+  // --------------------- JSX Layout ---------------------
   return (
     <div className="station-merge-container">
-      <h2>Station Merge & Reference Calculator</h2>
+      <h2>📘 Station Merge & Reference Calculator</h2>
       <input type="file" accept=".txt" onChange={handleFileUpload} />
+
+      <div className="sta-list">
+        {Object.keys(stas).map((k) => (
+          <div key={k} className="sta-item">
+            {k} ({stas[k].length} pts)
+          </div>
+        ))}
+      </div>
 
       <div className="merge-actions">
         <button
           onClick={() => {
             const keys = Object.keys(stas);
             if (keys.length >= 2) mergeStas(keys[0], keys[1]);
-            else alert("Need at least 2 STAs to merge");
           }}
         >
-          Merge First 2 STAs
+          🔗 Merge First 2 STAs
         </button>
 
-        <button
-          onClick={() => {
-            if (mergedSta.length >= 2) calculateWithReference(mergedSta[0], mergedSta[1]);
-            else alert("Need at least 2 points for reference line");
-          }}
-        >
-          Auto Reference Line
-        </button>
+        <button onClick={calculateWithReference}>📏 Reference Line</button>
+        <button onClick={handleEnhApply}>🧮 3-Point ENH Apply</button>
+        <button onClick={exportTxt}>💾 Export</button>
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -140,8 +145,15 @@ export default function StationMerge() {
             </tr>
           </thead>
           <tbody>
-            {mergedSta.map((p, idx) => (
-              <tr key={idx}>
+            {mergedSta.map((p, i) => (
+              <tr
+                key={i}
+                onClick={() => {
+                  if (refPoints.find((r) => r.name === p.name)) return;
+                  if (refPoints.length < 2)
+                    setRefPoints([...refPoints, p]);
+                }}
+              >
                 <td>{p.name}</td>
                 <td>{p.E.toFixed(3)}</td>
                 <td>{p.N.toFixed(3)}</td>
@@ -151,8 +163,6 @@ export default function StationMerge() {
           </tbody>
         </table>
       )}
-
-      <button onClick={exportTxt}>Export TXT</button>
     </div>
   );
-          }
+                                       }
