@@ -1,19 +1,18 @@
-// Part 1/2 - Imports, State, File Upload, STA Parse & Merge
+// StationMerge.jsx
 import React, { useState } from "react";
-import "./StationMerge.css"; // သင့်အတိုင်း style လှလှထည့်နိုင်မယ်
-// ✅ Note: FileSaver import မလိုတော့ဘူး, browser native Blob+download က အသုံးပြုမယ်
+import { saveAs } from "file-saver";
+import "./StationMerge.css";
 
 export default function StationMerge() {
   const [stas, setStas] = useState({});
   const [mergedSta, setMergedSta] = useState([]);
   const [error, setError] = useState("");
-  const [uploadedFileName, setUploadedFileName] = useState("");
+  const [selectedPoints, setSelectedPoints] = useState({ p1: "", p2: "", p3: "" });
 
   // --------------------- File Upload ---------------------
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setUploadedFileName(file.name);
     const reader = new FileReader();
     reader.onload = () => parseStaFile(reader.result);
     reader.readAsText(file);
@@ -31,12 +30,7 @@ export default function StationMerge() {
       } else if (line.trim() !== "") {
         const [name, E, N, H] = line.trim().split(/\s+/);
         if (!name || !E || !N || !H) return;
-        groups[currentSta].push({
-          name,
-          E: parseFloat(E),
-          N: parseFloat(N),
-          H: parseFloat(H),
-        });
+        groups[currentSta].push({ name, E: parseFloat(E), N: parseFloat(N), H: parseFloat(H) });
       }
     });
     setStas(groups);
@@ -49,28 +43,33 @@ export default function StationMerge() {
     if (!stas[baseSta] || !stas[targetSta]) return;
     const basePoints = [...stas[baseSta]];
     const targetPoints = stas[targetSta];
-
     const nameMap = {};
     basePoints.forEach((p) => (nameMap[p.name] = { ...p }));
-
     targetPoints.forEach((p) => {
       if (!nameMap[p.name]) nameMap[p.name] = { ...p };
     });
-
     setMergedSta(Object.values(nameMap));
     setError("");
   };
-  // Part 2/2 - Reference Line, 3-point ENH, Auto Recalc, Export, Styled Table
+
   // --------------------- Reference Line / 3-point ENH ---------------------
-  const calculateWithReference = (p1, p2, updatedPoint = null) => {
-    if (!p1 || !p2 || mergedSta.length < 2) return;
+  const calculateWithReference = () => {
+    const { p1, p2, p3 } = selectedPoints;
+    const ref1 = mergedSta.find((p) => p.name === p1);
+    const ref2 = mergedSta.find((p) => p.name === p2);
+    const updatedPoint = mergedSta.find((p) => p.name === p3) || null;
+
+    if (!ref1 || !ref2) {
+      alert("Please select reference points p1 and p2");
+      return;
+    }
 
     const newMerged = mergedSta.map((p) => {
-      if (p.name !== p1.name && p.name !== p2.name) {
-        const deltaN = p2.N - p1.N;
+      if (p.name !== ref1.name && p.name !== ref2.name) {
+        const deltaN = ref2.N - ref1.N;
         if (deltaN === 0) return { ...p };
-        const slope = (p2.H - p1.H) / deltaN;
-        const H_new = p1.H + slope * (p.N - p1.N);
+        const slope = (ref2.H - ref1.H) / deltaN;
+        const H_new = ref1.H + slope * (p.N - ref1.N);
         return { ...p, H: parseFloat(H_new.toFixed(3)) };
       }
       return { ...p };
@@ -81,10 +80,10 @@ export default function StationMerge() {
       if (idx >= 0) newMerged[idx].H = updatedPoint.H;
     }
 
-    const tolerance = 3; // mm
+    // Error check
+    const tolerance = 3;
     const hasError = newMerged.some((p, i) => Math.abs(p.H - mergedSta[i].H) > tolerance);
     setError(hasError ? "⚠ Error exceeds tolerance 3mm" : "");
-
     setMergedSta(newMerged);
   };
 
@@ -94,21 +93,15 @@ export default function StationMerge() {
     const content = mergedSta
       .map((p) => `${p.name} ${p.E.toFixed(3)} ${p.N.toFixed(3)} ${p.H.toFixed(3)}`)
       .join("\n");
-
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "Merged_STA.txt";
-    link.click();
-    URL.revokeObjectURL(link.href);
+    saveAs(blob, "Merged_STA.txt");
   };
 
+  // --------------------- JSX ---------------------
   return (
     <div className="station-merge-container">
       <h2>Station Merge & Reference Calculator</h2>
-
       <input type="file" accept=".txt" onChange={handleFileUpload} />
-      {uploadedFileName && <p>Uploaded: {uploadedFileName}</p>}
 
       <div className="merge-actions">
         <button
@@ -121,15 +114,36 @@ export default function StationMerge() {
           Merge First 2 STAs
         </button>
 
-        <button
-          onClick={() => {
-            if (mergedSta.length >= 2)
-              calculateWithReference(mergedSta[0], mergedSta[1]);
-            else alert("Need at least 2 points for reference line");
-          }}
-        >
-          Auto Reference Line
-        </button>
+        <div className="reference-picker">
+          <label>
+            p1:
+            <select value={selectedPoints.p1} onChange={(e) => setSelectedPoints({ ...selectedPoints, p1: e.target.value })}>
+              <option value="">Select</option>
+              {mergedSta.map((p) => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            p2:
+            <select value={selectedPoints.p2} onChange={(e) => setSelectedPoints({ ...selectedPoints, p2: e.target.value })}>
+              <option value="">Select</option>
+              {mergedSta.map((p) => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Optional p3 (ENH adjust):
+            <select value={selectedPoints.p3} onChange={(e) => setSelectedPoints({ ...selectedPoints, p3: e.target.value })}>
+              <option value="">None</option>
+              {mergedSta.map((p) => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+          <button onClick={calculateWithReference}>Apply Reference Line</button>
+        </div>
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -160,4 +174,4 @@ export default function StationMerge() {
       <button onClick={exportTxt}>Export TXT</button>
     </div>
   );
-  }
+          }
