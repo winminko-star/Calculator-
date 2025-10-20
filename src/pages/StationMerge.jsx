@@ -473,7 +473,7 @@ export default function StationMerge() {
               );
               const out = staPts.map((p) => ({
                 ...p,
-                E: scale * (cos * p.E – sin * p.N) + tx,
+               E: scale * (cos * p.E - sin * p.N) + tx,
                 N: scale * (sin * p.E + cos * p.N) + ty,
               }));
               setTransformed(out);
