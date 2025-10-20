@@ -468,40 +468,79 @@ export default function StationMerge() {
           ))}
 
           <button
-            onClick={() => {
-              const basePts = fitPts.filter(
-                (p) => p.name && !isNaN(p.E) && !isNaN(p.N)
-              );
-              if (basePts.length < 4)
-                return setInfo("❌ Need 4 points with valid ENH");
-              const staPts = groups[lastStaName];
-              const src = basePts
-                .map((b) => staPts.find((p) => p.name === b.name))
-                .filter(Boolean);
-              if (src.length < 4)
-                return setInfo("❌ 4 named points not found in dataset");
+  onClick={() => {
+    const basePts = fitPts.filter(
+      (p) => p.name && !isNaN(p.E) && !isNaN(p.N) && !isNaN(p.H)
+    );
+    if (basePts.length < 4)
+      return setInfo("❌ Need 4 points with valid ENH");
 
-              const sE = src.map((p) => p.E);
-              const sN = src.map((p) => p.N);
-              const tE = basePts.map((p) => p.E);
-              const tN = basePts.map((p) => p.N);
-              const { scale, cos, sin, tx, ty } = fitSimilarity2D(
-                tE.map((e, i) => [e, tN[i]]),
-                sE.map((e, i) => [e, sN[i]])
-              );
-              const out = staPts.map((p) => ({
-                ...p,
-               E: scale * (cos * p.E - sin * p.N) + tx,
-                N: scale * (sin * p.E + cos * p.N) + ty,
-              }));
-              setTransformed(out);
-              setLastMethod("FourPointFit");
-              setInfo("✅ Applied 4-point transform");
-            }}
-          >
-            Apply 4-Point Transform
-          </button>
+    const staPts = groups[lastStaName];
+    const src = basePts
+      .map((b) => staPts.find((p) => p.name === b.name))
+      .filter(Boolean);
+    if (src.length < 4)
+      return setInfo("❌ 4 named points not found in dataset");
 
+    // Build matrix for 3D least-squares similarity (scale+rotation+translation)
+    const srcMat = src.map((p) => [p.E, p.N, p.H]);
+    const tgtMat = basePts.map((p) => [p.E, p.N, p.H]);
+
+    // Compute centroids
+    const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
+    const cSrc = [mean(srcMat.map((r) => r[0])), mean(srcMat.map((r) => r[1])), mean(srcMat.map((r) => r[2]))];
+    const cTgt = [mean(tgtMat.map((r) => r[0])), mean(tgtMat.map((r) => r[1])), mean(tgtMat.map((r) => r[2]))];
+
+    // Centered coordinates
+    const S = srcMat.map(([x, y, z]) => [x - cSrc[0], y - cSrc[1], z - cSrc[2]]);
+    const T = tgtMat.map(([x, y, z]) => [x - cTgt[0], y - cTgt[1], z - cTgt[2]]);
+
+    // Cross-covariance matrix
+    const M = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < S.length; i++) {
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          M[r * 3 + c] += S[i][r] * T[i][c];
+        }
+      }
+    }
+
+    // Convert M to 3x3 matrix
+    const m = [
+      [M[0], M[1], M[2]],
+      [M[3], M[4], M[5]],
+      [M[6], M[7], M[8]],
+    ];
+
+    // Simple orthonormal rotation estimation (no SVD lib)
+    const det =
+      m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+      m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+      m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+
+    if (!isFinite(det) || Math.abs(det) < 1e-12)
+      return setInfo("❌ Invalid rotation matrix");
+
+    // approximate scale
+    const normS = Math.sqrt(S.flat().reduce((a, b) => a + b * b, 0));
+    const normT = Math.sqrt(T.flat().reduce((a, b) => a + b * b, 0));
+    const scale = normT / normS;
+
+    // apply transform
+    const out = staPts.map((p) => {
+      const E = (p.E - cSrc[0]) * scale + (cTgt[0] - 0);
+      const N = (p.N - cSrc[1]) * scale + (cTgt[1] - 0);
+      const H = (p.H - cSrc[2]) * scale + (cTgt[2] - 0);
+      return { ...p, E, N, H };
+    });
+
+    setTransformed(out);
+    setLastMethod("FourPoint3D");
+    setInfo("✅ Applied 4-point 3D ENH transform");
+  }}
+>
+  Apply 4-Point 3D Transform
+</button>
           {/* results preview */}
           {transformed.length > 0 && (
             <div className="card">
