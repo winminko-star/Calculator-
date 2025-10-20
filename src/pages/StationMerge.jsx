@@ -132,7 +132,7 @@ export default function StationMerge() {
     setGroups(copy);
     if (fromSta === sta) setFromSta("");
     if (toSta === sta) setToSta("");
-    setInfo(🗑️ Removed ${sta});
+    setInfo(`🗑️ Removed ${sta}`);
   };
 
   // -------------------- Merge (Pair) --------------------
