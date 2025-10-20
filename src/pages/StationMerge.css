@@ -1,80 +1,151 @@
-.station-merge-container {
-  max-width: 800px;
-  margin: 20px auto;
-  font-family: Arial, sans-serif;
-  background: #f9fafb;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+.station-merge {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px;
+  font-family: system-ui, "Segoe UI", Arial, sans-serif;
 }
 
-.station-merge-container h2 {
-  text-align: center;
-  color: #0ea5e9;
+h1 {
+  font-size: 26px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  background: linear-gradient(90deg, #007cf0, #00dfd8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.file-name {
-  margin-top: 8px;
-  font-style: italic;
-  color: #334155;
+h2 {
+  margin: 16px 0 8px;
+  color: #0b6bde;
 }
 
-.merge-actions {
-  margin: 15px 0;
+h3, h4 {
+  margin: 8px 0;
+}
+
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fafafa;
+  margin: 10px 0 14px;
+}
+
+.row {
   display: flex;
   gap: 10px;
-  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.merge-actions button {
-  background: #0ea5e9;
-  color: white;
+.msg {
+  margin-top: 8px;
+  color: #007cf0;
+  font-weight: 600;
+}
+
+.sta-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.sta-card {
+  border: 2px solid #00dfd8;
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(0, 223, 216, 0.05);
+}
+
+/* tables */
+.tablewrap {
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th, td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #eee;
+  text-align: right;
+}
+th.left, td.left { text-align: left; }
+th {
+  background: #f0fbff;
+  color: #0b6bde;
+}
+
+button {
+  background: linear-gradient(90deg, #007cf0, #00dfd8);
   border: none;
-  padding: 8px 14px;
-  border-radius: 6px;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
   cursor: pointer;
   transition: 0.2s;
 }
+button:hover { opacity: 0.9; }
 
-.merge-actions button:hover {
-  background: #0284c7;
-}
-
-.enh-input {
-  margin: 10px 0;
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-
-.enh-input input {
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  width: 120px;
-}
-
-.error {
-  color: red;
-  text-align: center;
+.grid2, .grid4 {
+  display: grid;
+  gap: 10px;
   margin: 8px 0;
-  font-weight: bold;
 }
+.grid2 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.grid4 { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 
-.merged-table {
+label {
+  display: block;
+  font-size: 12px;
+  color: #374151;
+  margin-bottom: 4px;
+}
+input {
   width: 100%;
-  border-collapse: collapse;
-  margin-top: 15px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 12px;
+  outline: none;
+  font-size: 14px;
+}
+input:focus { border-color: #00bcd4; box-shadow: 0 0 0 3px rgba(0, 188, 212, .15); }
+
+.error-block {
+  margin: 10px 0;
+  padding: 8px;
+  border: 1px dashed #e5e7eb;
+  border-radius: 10px;
+  background: #fbfbfb;
 }
 
-.merged-table th,
-.merged-table td {
-  border: 1px solid #cbd5e1;
-  padding: 6px 8px;
-  text-align: center;
+.errtable th, .errtable td {
+  text-align: right;
 }
+.errtable td.left, .errtable th.left { text-align: left; }
 
-.merged-table th {
-  background: #0ea5e9;
-  color: white;
-  }
+/* tolerance colors */
+tr.ok td { background: #eefbf2; }      /* ≤3 mm (green-ish) */
+tr.warn td { background: #fff8e6; }    /* 3–4 mm (yellow) */
+tr.bad td { background: #ffecec; }     /* >4 mm (red) */
+
+.legend { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid #e5e7eb;
+}
+.chip.ok { background: #eefbf2; }
+.chip.warn { background: #fff8e6; }
+.chip.bad { background: #ffecec; }
+
+.muted { color: #6b7280; }
+.small { font-size: 12px; }
