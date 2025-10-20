@@ -422,6 +422,7 @@ export default function StationMerge() {
     Apply Reference Line
   </button>
 </div>
+</div>
 
           {/* manual 4-point fit */}
           <h4>Manual 4 Points ENH Transform</h4>
