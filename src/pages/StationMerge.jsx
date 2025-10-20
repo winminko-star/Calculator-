@@ -379,42 +379,33 @@ export default function StationMerge() {
     const b = pts.find(p => p.name === refB);
     if (!a || !b) return setInfo("❌ Invalid ref A/B points");
 
-    // 1️⃣ Vector A→B
+    // Vector A→B
     const dE = b.E - a.E;
     const dN = b.N - a.N;
     const dH = b.H - a.H;
 
-    // ✅ A→B ကို +N axis နဲ့ align လုပ်ဖို့ angle
-    const θ = Math.atan2(dN, dE);
+    // ✅ Angle to align A→B with +N axis
+    const alpha = Math.atan2(dN, dE);     // direction of A→B from E-axis
+    const theta = Math.PI / 2 - alpha;    // rotate so that A→B → +N
 
-    // 2️⃣ Rotate so A→B aligns with +N axis
+    // Rotate every point around A, then translate so A = (0,0,0)
     const rotated = pts.map(p => {
       const e = p.E - a.E;
       const n = p.N - a.N;
       const h = p.H - a.H;
 
-      const E2 = e * Math.cos(-θ) - n * Math.sin(θ);
-      const N2 = e * Math.sin(-θ) + n * Math.cos(θ);
+      const E2 = e * Math.cos(theta) - n * Math.sin(theta);
+      const N2 = e * Math.sin(theta) + n * Math.cos(theta);
 
       return { ...p, E: E2, N: N2, H: h };
     });
 
-    // 3️⃣ A ကို (0,0,0) ထား
-    const aAfter = rotated.find(p => p.name === refA);
-    const eOffset = aAfter?.E || 0;
-    const nOffset = aAfter?.N || 0;
-    const hOffset = aAfter?.H || 0;
+    // After rotation: A already (0,0,0).  Ensure B.E = 0, B.N = distance, B.H = ΔH
+    // (numerically it's already true; no extra shift needed)
 
-    const final = rotated.map(p => ({
-      ...p,
-      E: p.E - eOffset,
-      N: p.N - nOffset,
-      H: p.H - hOffset,
-    }));
-
-    setTransformed(final);
+    setTransformed(rotated);
     setLastMethod("ReferenceLine");
-    setInfo("✅ Reference line applied (A→B = +N axis, Right = +E, Left = -E)");
+    setInfo("✅ Reference line applied — A=(0,0,0), B=(0, distance, ΔH), Right=+E");
   }}
 >
   Apply Reference Line
