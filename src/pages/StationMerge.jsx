@@ -1,20 +1,23 @@
 // 💡 IDEA by WIN MIN KO
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import "./StationMerge.css";
 
 export default function StationMerge() {
+  // ===== Core State =====
   const [rawText, setRawText] = useState("");
-  const [groups, setGroups] = useState({});
-  const [merged, setMerged] = useState([]);
-  const [filteredPts, setFilteredPts] = useState([]);
+  const [chosenFile, setChosenFile] = useState("");
+  const [groups, setGroups] = useState({});      // { STA1: [{name,E,N,H}, ...], ... }
   const [info, setInfo] = useState("");
-  const [geomDiff, setGeomDiff] = useState([]);
-  const [showGeom, setShowGeom] = useState(false);
-  const [selectedFile, setSelectedFile] = useState("");
+
+  // Merge + Diff
   const [fromSta, setFromSta] = useState("");
   const [toSta, setToSta] = useState("");
+  const [geomDiff, setGeomDiff] = useState([]);  // rows for diff table
+  const [showGeom, setShowGeom] = useState(false);
 
-  // Transform states
+  // (Part 2 will use these)
+  const [transformed, setTransformed] = useState([]);
+  const [lastMethod, setLastMethod] = useState(""); // "ReferenceLine" | "FourPointFit"
   const [refA, setRefA] = useState("");
   const [refB, setRefB] = useState("");
   const [fitPts, setFitPts] = useState([
@@ -23,240 +26,259 @@ export default function StationMerge() {
     { name: "", E: "", N: "", H: "" },
     { name: "", E: "", N: "", H: "" },
   ]);
-  const [transformed, setTransformed] = useState([]);
-  const [lastMethod, setLastMethod] = useState("");
 
-  // ---- File Upload ----
+  // ===== File Upload & Parse =====
   const onFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    setSelectedFile(f.name);
+    setChosenFile(f.name);
     const r = new FileReader();
     r.onload = (ev) => {
       const text = ev.target.result;
       setRawText(text);
       const g = parseSTAFile(text);
       setGroups(g);
-      setFilteredPts([]);
-      setInfo("✅ File loaded successfully");
+      setInfo("File loaded successfully");
+      // reset volatile states
+      setFromSta(""); setToSta("");
+      setGeomDiff([]); setShowGeom(false);
+      setTransformed([]); setLastMethod("");
+      setRefA(""); setRefB("");
+      setFitPts([
+        { name: "", E: "", N: "", H: "" },
+        { name: "", E: "", N: "", H: "" },
+        { name: "", E: "", N: "", H: "" },
+        { name: "", E: "", N: "", H: "" },
+      ]);
     };
     r.readAsText(f);
   };
 
-  // ---- Parser (STA header skip ENH) ----
+  // Parse TXT: "STA#" headers define groups; their ENH are ignored.
   function parseSTAFile(text) {
     const lines = text.split(/\r?\n/);
     const out = {};
     let current = null;
     for (let raw of lines) {
       if (!raw.trim()) continue;
+      // allow comma or tab
       const p = raw.split(/[,\t]/).map((x) => x.trim());
       if (p.length < 4) continue;
       const [name, e, n, h] = p;
+
       if (/^STA\d+/i.test(name)) {
         current = name;
         out[current] = [];
-        continue;
+        continue; // STA header ENH are not counted
       }
+
       if (current) {
-        const E = parseFloat(e),
-          N = parseFloat(n),
-          H = parseFloat(h);
-        if ([E, N, H].every(Number.isFinite))
-          out[current].push({ name, E, N, H });
+        const E = parseFloat(e), N = parseFloat(n), H = parseFloat(h);
+        if ([E, N, H].every(Number.isFinite)) out[current].push({ name, E, N, H });
       }
     }
     return out;
   }
 
-  // ---- Remove unwanted points ----
-  const handleRemovePoint = (sta, name) => {
-    const newGroup = { ...groups };
-    newGroup[sta] = newGroup[sta].filter((p) => p.name !== name);
-    setGroups(newGroup);
-    setFilteredPts([...filteredPts, name]);
-    setInfo(`🗑 Removed point ${name} from ${sta}`);
+  // ===== Optional Filter (point-level & group-level remove) =====
+  const handleRemovePoint = (sta, ptName) => {
+    const copy = { ...groups };
+    copy[sta] = copy[sta].filter((p) => p.name !== ptName);
+    setGroups(copy);
+    setInfo(`Removed ${ptName} from ${sta}`);
   };
 
-  // ---- Similarity fit (rotation + scale + translation) ----
+  const handleRemoveSta = (sta) => {
+    const copy = { ...groups };
+    delete copy[sta];
+    setGroups(copy);
+    if (fromSta === sta) setFromSta("");
+    if (toSta === sta) setToSta("");
+    setInfo(`Removed ${sta}`);
+  };
+
+  // ===== Best-Fit Alignment (2D Similarity + mean ΔH) =====
   function fitSimilarity2D(basePts, movePts) {
+    // basePts, movePts: arrays of [E, N]
     const n = basePts.length;
     let cEx = 0, cEy = 0, cMx = 0, cMy = 0;
     for (let i = 0; i < n; i++) {
-      cEx += basePts[i][0];
-      cEy += basePts[i][1];
-      cMx += movePts[i][0];
-      cMy += movePts[i][1];
+      cEx += basePts[i][0]; cEy += basePts[i][1];
+      cMx += movePts[i][0]; cMy += movePts[i][1];
     }
     cEx /= n; cEy /= n; cMx /= n; cMy /= n;
+
     let Sxx = 0, Sxy = 0, normM = 0, normB = 0;
     for (let i = 0; i < n; i++) {
       const bx = basePts[i][0] - cEx, by = basePts[i][1] - cEy;
       const mx = movePts[i][0] - cMx, my = movePts[i][1] - cMy;
-      Sxx += mx * bx + my * by;
-      Sxy += mx * by - my * bx;
-      normM += mx * mx + my * my;
-      normB += bx * bx + by * by;
+      Sxx += mx*bx + my*by;
+      Sxy += mx*by - my*bx;
+      normM += mx*mx + my*my;
+      normB += bx*bx + by*by;
     }
     const scale = Math.sqrt(normB / normM);
     const r = Math.hypot(Sxx, Sxy) || 1e-12;
     const cos = Sxx / r, sin = Sxy / r;
-    const tx = cEx - scale * (cos * cMx - sin * cMy);
-    const ty = cEy - scale * (sin * cMx + cos * cMy);
+    const tx = cEx - scale * (cos*cMx - sin*cMy);
+    const ty = cEy - scale * (sin*cMx + cos*cMy);
     return { scale, cos, sin, tx, ty };
   }
 
-  // ---- Merge + Geometry Diff ----
-  const handleMerge = () => {
-    if (!fromSta || !toSta) return setInfo("⚠️ Choose two STA names");
-    const base = groups[fromSta], next = groups[toSta];
-    if (!base || !next) return setInfo("⚠️ Invalid STA");
+  // ===== Mega-Merge (pairwise) + 3mm tolerance report =====
+  const TOL = 0.003; // 3 mm
 
+  const handleMerge = () => {
+    if (!fromSta || !toSta) return setInfo("Choose two STA names first");
+    if (!groups[fromSta] || !groups[toSta]) return setInfo("Invalid STA names");
+    if (fromSta === toSta) return setInfo("Choose different STAs");
+
+    const base = groups[fromSta];
+    const next = groups[toSta];
     const baseMap = new Map(base.map((p) => [p.name, p]));
     const nextMap = new Map(next.map((p) => [p.name, p]));
     const common = [...baseMap.keys()].filter((k) => nextMap.has(k));
-    if (common.length < 2) return setInfo("⚠️ Need ≥2 common points");
 
+    if (common.length < 2) {
+      // not enough common points → just union (no check)
+      const mergedArr = [
+        ...base,
+        ...next.filter((p) => !baseMap.has(p.name)),
+      ];
+      const newGroups = { ...groups };
+      delete newGroups[toSta];
+      newGroups[fromSta] = mergedArr;
+      setGroups(newGroups);
+      setGeomDiff([]); setShowGeom(false);
+      setInfo(`${toSta} merged into ${fromSta} (no/insufficient common points)`);
+      return;
+    }
+
+    // fit (2D) + mean ΔH
     const B = common.map((n) => [baseMap.get(n).E, baseMap.get(n).N]);
     const M = common.map((n) => [nextMap.get(n).E, nextMap.get(n).N]);
     const { scale, cos, sin, tx, ty } = fitSimilarity2D(B, M);
-    const dhAvg = common.reduce((a, n) => a + (baseMap.get(n).H - nextMap.get(n).H), 0) / common.length;
+    const dHavg =
+      common.reduce((acc, n) => acc + (baseMap.get(n).H - nextMap.get(n).H), 0) /
+      common.length;
 
+    // ref-based geometry diff (choose first as reference)
     const ref = common[0];
     const rB = baseMap.get(ref), rM = nextMap.get(ref);
     const rMx = scale * (cos * rM.E - sin * rM.N) + tx;
     const rMy = scale * (sin * rM.E + cos * rM.N) + ty;
-    const rMh = rM.H + dhAvg;
-    const diff = [];
+    const rMh = rM.H + dHavg;
+
+    const diffs = [];
+    let exceed = 0, maxmm = 0;
 
     for (let i = 1; i < common.length; i++) {
       const nm = common[i];
       const b = baseMap.get(nm), m = nextMap.get(nm);
       const mX = scale * (cos * m.E - sin * m.N) + tx;
       const mY = scale * (sin * m.E + cos * m.N) + ty;
-      const mH = m.H + dhAvg;
+      const mH = m.H + dHavg;
+
       const dE1 = b.E - rB.E, dN1 = b.N - rB.N, dH1 = b.H - rB.H;
-      const dE2 = mX - rMx, dN2 = mY - rMy, dH2 = mH - rMh;
+      const dE2 = mX - rMx,  dN2 = mY - rMy,  dH2 = mH - rMh;
+
       const de = dE1 - dE2, dn = dN1 - dN2, dh = dH1 - dH2;
-      const dmm = Math.sqrt(de * de + dn * dn + dh * dh) * 1000;
-      diff.push({ name: `${ref}→${nm}`, dE1, dE2, de, dn, dh, dmm });
+      const dmm = Math.sqrt(de*de + dn*dn + dh*dh) * 1000; // mm
+
+      if (dmm > 3) exceed++;
+      if (dmm > maxmm) maxmm = dmm;
+
+      diffs.push({ name: `${ref}→${nm}`, dE1, dE2, de, dn, dh, dmm });
     }
 
-    const mergedNew = [...base];
-    for (const [name, p] of nextMap) if (!baseMap.has(name)) mergedNew.push(p);
-    delete groups[toSta];
-    groups[fromSta] = mergedNew;
+    // merge coords (apply fitted shift to "next" & append non-duplicates)
+    const shiftedNew = next
+      .filter((p) => !baseMap.has(p.name))
+      .map((p) => ({
+        name: p.name,
+        E: scale * (cos * p.E - sin * p.N) + tx,
+        N: scale * (sin * p.E + cos * p.N) + ty,
+        H: p.H + dHavg,
+      }));
 
-    setGroups({ ...groups });
-    setMerged(mergedNew);
-    setGeomDiff(diff);
+    const mergedArr = [...base, ...shiftedNew];
+    const newGroups = { ...groups };
+    delete newGroups[toSta];
+    newGroups[fromSta] = mergedArr;
+    setGroups(newGroups);
+
+    setGeomDiff(diffs);
     setShowGeom(true);
-    setInfo(`✅ ${fromSta} merged with ${toSta}. Diff ready.`);
-  };
-  // ---- Reference Line Transform ----
-  const applyRefLine = () => {
-    if (!merged.length) return setInfo("⚠️ Merge first.");
-    const A = merged.find((p) => p.name === refA);
-    const B = merged.find((p) => p.name === refB);
-    if (!A || !B) return setInfo("⚠️ Invalid reference points");
-    const dE = B.E - A.E, dN = B.N - A.N, dH = B.H - A.H;
-    const dist = Math.hypot(dE, dN);
-    if (dist === 0) return setInfo("⚠️ Coincident reference line");
-    const phi = Math.atan2(dE, dN);
-    const c = Math.cos(phi), s = Math.sin(phi);
-    const out = merged.map((p) => {
-      const e0 = p.E - A.E, n0 = p.N - A.N, h0 = p.H - A.H;
-      return { name: p.name, E: c * e0 - s * n0, N: s * e0 + c * n0, H: h0 };
-    });
-    setTransformed(out);
-    setLastMethod("Reference Line");
-    setInfo(`✅ Ref line applied — ${refA}→${refB}`);
+    setTransformed([]);      // transform only after final (Part 2)
+    setLastMethod("");
+
+    const msg =
+      exceed > 0
+        ? `Merged ${toSta} → ${fromSta}. ${exceed} ref points > 3 mm (max ${maxmm.toFixed(1)} mm).`
+        : `Merged ${toSta} → ${fromSta}. All reference points within 3 mm.`;
+    setInfo(msg);
   };
 
-  // ---- 4-Point Manual Fit ----
-  const apply4PointFit = () => {
-    if (!merged.length) return setInfo("⚠️ Merge first.");
-    for (const p of fitPts)
-      if (!p.name || p.E === "" || p.N === "" || p.H === "")
-        return setInfo("⚠️ Fill all 4 points");
-    const srcMap = new Map(merged.map((p) => [p.name, p]));
-    const src = fitPts.map((p) => {
-      const s = srcMap.get(p.name.trim());
-      if (!s) throw new Error(`Missing ${p.name}`);
-      return [s.E, s.N, s.H];
-    });
-    const tgt = fitPts.map((p) => [parseFloat(p.E), parseFloat(p.N), parseFloat(p.H)]);
-    const A = [], b = [];
-    for (let i = 0; i < 4; i++) {
-      const [xs, ys, zs] = src[i], [xt, yt, zt] = tgt[i];
-      A.push([xs, ys, zs, 0, 0, 0, 0, 0, 0, 1, 0, 0]); b.push(xt);
-      A.push([0, 0, 0, xs, ys, zs, 0, 0, 0, 0, 1, 0]); b.push(yt);
-      A.push([0, 0, 0, 0, 0, 0, xs, ys, zs, 0, 0, 1]); b.push(zt);
-    }
-    const x = solveLinearSystem(A, b);
-    const apply = (E, N, H) => ({
-      E: x[0] * E + x[1] * N + x[2] * H + x[9],
-      N: x[3] * E + x[4] * N + x[5] * H + x[10],
-      H: x[6] * E + x[7] * N + x[8] * H + x[11],
-    });
-    setTransformed(merged.map((p) => ({ name: p.name, ...apply(p.E, p.N, p.H) })));
-    setLastMethod("4-Point Fit");
-    setInfo("✅ 4-Point Fit applied");
-  };
+  // ===== Detect "last STA" (when only one group left) =====
+  const lastStaName = useMemo(() => {
+    const names = Object.keys(groups);
+    if (names.length === 1) return names[0];
+    return "";
+  }, [groups]);
 
-  function solveLinearSystem(A, b) {
-    const n = A.length, m = A[0].length;
-    const M = A.map((r, i) => [...r, b[i]]);
-    for (let i = 0; i < m; i++) {
-      let p = i;
-      for (let j = i + 1; j < n; j++)
-        if (Math.abs(M[j][i]) > Math.abs(M[p][i])) p = j;
-      [M[i], M[p]] = [M[p], M[i]];
-      const div = M[i][i]; if (!div) continue;
-      for (let k = i; k <= m; k++) M[i][k] /= div;
-      for (let j = 0; j < n; j++)
-        if (j !== i) {
-          const f = M[j][i];
-          for (let k = i; k <= m; k++) M[j][k] -= f * M[i][k];
-        }
-    }
-    return M.map((r) => r[m]);
-  }
-
-  // ---- Export ----
-  const onExport = () => {
-    const data = transformed.length ? transformed : merged;
-    if (!data.length) return alert("No data");
-    const t = data
-      .map((p) => `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`)
-      .join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([t], { type: "text/plain" }));
-    a.download = "Final_STA_WMK.txt";
-    a.click();
-  };
-
+  // ===== Render (Upload + Preview + Filter + Merge + Diff) =====
   return (
     <div className="sta-merge">
-      <h1>💡 IDEA by WIN MIN KO</h1>
+      <h1>IDEA by WIN MIN KO</h1>
+      <h2>Station Mega-Merge • 3 mm Tol • Transform Ready</h2>
+
+      {/* Upload */}
       <div className="card">
-        <label>📤 Upload TXT File</label>
+        <label>Upload TXT File</label>
         <input type="file" accept=".txt" onChange={onFile} />
-        {selectedFile && <div className="filename">📄 {selectedFile}</div>}
+        {chosenFile && <div className="filename">File: {chosenFile}</div>}
         {info && <div className="msg">{info}</div>}
       </div>
 
+      {/* Original preview */}
+      {rawText && (
+        <div className="card">
+          <h3>Original Upload</h3>
+          <textarea readOnly value={rawText} className="rawbox" />
+        </div>
+      )}
+
+      {/* Group browser + optional filter */}
       {Object.keys(groups).length > 0 && (
         <div className="card">
-          <h3>🗑 Remove Unwanted Points</h3>
+          <h3>Groups & Points (expand to view)</h3>
           {Object.entries(groups).map(([sta, pts]) => (
-            <details key={sta}>
-              <summary>{sta} ({pts.length} pts)</summary>
-              <ul>
+            <details key={sta} className="sta-card">
+              <summary>
+                {sta} <small>({pts.length} pts)</small>
+                <button
+                  className="mini danger"
+                  onClick={(e) => { e.preventDefault(); handleRemoveSta(sta); }}
+                  style={{ marginLeft: 12 }}
+                >
+                  Remove Group
+                </button>
+              </summary>
+              <ul className="pt-list">
                 {pts.map((p, i) => (
-                  <li key={i}>
-                    {p.name}{" "}
-                    <button onClick={() => handleRemovePoint(sta, p.name)}>Remove</button>
+                  <li key={i} className="point-item">
+                    <div className="point-info">
+                      <b>{p.name}</b>
+                      <span className="coords">
+                        E={p.E.toFixed(3)} N={p.N.toFixed(3)} H={p.H.toFixed(3)}
+                      </span>
+                    </div>
+                    <button
+                      className="mini"
+                      onClick={() => handleRemovePoint(sta, p.name)}
+                    >
+                      Remove
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -265,20 +287,51 @@ export default function StationMerge() {
         </div>
       )}
 
-      {/* Merge & Diff Section */}
-      {/* Transform methods and Export similar to previous version */}
+      {/* Merge controls */}
+      {Object.keys(groups).length >= 2 && (
+        <div className="card">
+          <h3>Pairwise Merge (any order) + 3 mm tolerance check</h3>
+          <div className="row">
+            <select value={fromSta} onChange={(e) => setFromSta(e.target.value)}>
+              <option value="">From (Base)</option>
+              {Object.keys(groups).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select value={toSta} onChange={(e) => setToSta(e.target.value)}>
+              <option value="">To (Merge Into Base)</option>
+              {Object.keys(groups).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <button onClick={handleMerge}>Compare / Merge</button>
+          </div>
+          <div className="hint">
+            After each merge: the second STA disappears, base name remains. Keep merging until one STA left.
+          </div>
+        </div>
+      )}
+
+      {/* Diff + Tol report (Accept to continue) */}
       {showGeom && (
         <div className="card">
           <div className="row space-between">
-            <h3>📊 Geometry Diff ({fromSta} → {toSta})</h3>
-            <button onClick={() => setShowGeom(false)}>✔ Accept</button>
+            <h3>Geometry Difference (best-fit refs) — 3 mm tol</h3>
+            <button onClick={() => { setShowGeom(false); setGeomDiff([]); }}>
+              Accept
+            </button>
           </div>
           <div className="tablewrap">
             <table>
               <thead>
                 <tr>
-                  <th>Ref→Pt</th><th>ΔE₁</th><th>ΔE₂</th>
-                  <th>ΔE diff</th><th>ΔN diff</th><th>ΔH diff</th><th>Δ mm</th>
+                  <th>Ref→Pt</th>
+                  <th>ΔE₁</th>
+                  <th>ΔE₂</th>
+                  <th>ΔE diff</th>
+                  <th>ΔN diff</th>
+                  <th>ΔH diff</th>
+                  <th>Δmm</th>
                 </tr>
               </thead>
               <tbody>
@@ -296,8 +349,201 @@ export default function StationMerge() {
               </tbody>
             </table>
           </div>
+          <div className="hint">Rows highlighted red are over 3 mm tolerance.</div>
         </div>
       )}
+
+      {/* (Part 2 will continue here: final STA detection + Reference Line + 4-Point + Preview + Export) */}
+      {/* when only one STA remains → transformation & export */}
+      {lastStaName && groups[lastStaName] && (
+        <div className="card">
+          <h3>Final Transform (Reference Line / 4 Points) — {lastStaName}</h3>
+
+          {/* reference-line method */}
+          <div className="row">
+            <input
+              placeholder="Ref A name"
+              value={refA}
+              onChange={(e) => setRefA(e.target.value)}
+            />
+            <input
+              placeholder="Ref B name"
+              value={refB}
+              onChange={(e) => setRefB(e.target.value)}
+            />
+            <button
+              onClick={() => {
+                const pts = groups[lastStaName];
+                const a = pts.find((p) => p.name === refA);
+                const b = pts.find((p) => p.name === refB);
+                if (!a || !b)
+                  return setInfo("❌ Invalid ref A/B points");
+                const θ = Math.atan2(b.N - a.N, b.E - a.E);
+                const rotated = pts.map((p) => {
+                  const dE = p.E - a.E;
+                  const dN = p.N - a.N;
+                  const E2 = dE * Math.cos(-θ) - dN * Math.sin(-θ);
+                  const N2 = dE * Math.sin(-θ) + dN * Math.cos(-θ);
+                  return { ...p, E: E2, N: N2 };
+                });
+                setTransformed(rotated);
+                setLastMethod("ReferenceLine");
+                setInfo(`✅ Rotated to reference ${refA}–${refB}`);
+              }}
+            >
+              Apply Reference Line
+            </button>
+          </div>
+
+          {/* manual 4-point fit */}
+          <h4>Manual 4 Points ENH Transform</h4>
+          {fitPts.map((f, i) => (
+            <div key={i} className="row">
+              <input
+                value={f.name}
+                onChange={(e) =>
+                  setFitPts((p) =>
+                    p.map((x, j) =>
+                      j === i ? { ...x, name: e.target.value } : x
+                    )
+                  )
+                }
+                placeholder={`Pt${i + 1} name`}
+              />
+              <input
+                type="number"
+                value={f.E}
+                onChange={(e) =>
+                  setFitPts((p) =>
+                    p.map((x, j) =>
+                      j === i ? { ...x, E: e.target.value } : x
+                    )
+                  )
+                }
+                placeholder="E"
+              />
+              <input
+                type="number"
+                value={f.N}
+                onChange={(e) =>
+                  setFitPts((p) =>
+                    p.map((x, j) =>
+                      j === i ? { ...x, N: e.target.value } : x
+                    )
+                  )
+                }
+                placeholder="N"
+              />
+              <input
+                type="number"
+                value={f.H}
+                onChange={(e) =>
+                  setFitPts((p) =>
+                    p.map((x, j) =>
+                      j === i ? { ...x, H: e.target.value } : x
+                    )
+                  )
+                }
+                placeholder="H"
+              />
+            </div>
+          ))}
+
+          <button
+            onClick={() => {
+              const basePts = fitPts.filter(
+                (p) => p.name && !isNaN(p.E) && !isNaN(p.N)
+              );
+              if (basePts.length < 4)
+                return setInfo("❌ Need 4 points with valid ENH");
+              const staPts = groups[lastStaName];
+              const src = basePts
+                .map((b) => staPts.find((p) => p.name === b.name))
+                .filter(Boolean);
+              if (src.length < 4)
+                return setInfo("❌ 4 named points not found in dataset");
+
+              const sE = src.map((p) => p.E);
+              const sN = src.map((p) => p.N);
+              const tE = basePts.map((p) => p.E);
+              const tN = basePts.map((p) => p.N);
+              const { scale, cos, sin, tx, ty } = fitSimilarity2D(
+                tE.map((e, i) => [e, tN[i]]),
+                sE.map((e, i) => [e, sN[i]])
+              );
+              const out = staPts.map((p) => ({
+                ...p,
+                E: scale * (cos * p.E – sin * p.N) + tx,
+                N: scale * (sin * p.E + cos * p.N) + ty,
+              }));
+              setTransformed(out);
+              setLastMethod("FourPointFit");
+              setInfo("✅ Applied 4-point transform");
+            }}
+          >
+            Apply 4-Point Transform
+          </button>
+
+          {/* results preview */}
+          {transformed.length > 0 && (
+            <div className="card">
+              <h4>
+                Transformed Result ({lastMethod === "ReferenceLine"
+                  ? "Ref Line"
+                  : "4 Points"}
+                )
+              </h4>
+              <table className="result">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>E</th>
+                    <th>N</th>
+                    <th>H</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transformed.map((p, i) => (
+                    <tr key={i}>
+                      <td>{p.name}</td>
+                      <td>{p.E.toFixed(3)}</td>
+                      <td>{p.N.toFixed(3)}</td>
+                      <td>{p.H.toFixed(3)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* export to TXT */}
+              <button
+                onClick={() => {
+                  const txt = transformed
+                    .map(
+                      (p) =>
+                        `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(
+                          3
+                        )}\t${p.H.toFixed(3)}`
+                    )
+                    .join("\n");
+                  const blob = new Blob([txt], {
+                    type: "text/plain;charset=utf-8",
+                  });
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `${lastStaName}_${lastMethod}.txt`;
+                  a.click();
+                }}
+              >
+                📤 Export Result
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
-        }
+                    }
