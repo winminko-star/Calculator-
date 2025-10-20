@@ -375,41 +375,45 @@ export default function StationMerge() {
 <button
   onClick={() => {
     const pts = groups[lastStaName];
-    const a = pts.find((p) => p.name === refA);
-    const b = pts.find((p) => p.name === refB);
+    const a = pts.find(p => p.name === refA);
+    const b = pts.find(p => p.name === refB);
     if (!a || !b) return setInfo("❌ Invalid ref A/B points");
 
-    // Compute rotation angle (A→B)
-    const θ = Math.atan2(b.N - a.N, b.E - a.E);
+    // 1️⃣ Vector A→B
+    const dE = b.E - a.E;
+    const dN = b.N - a.N;
+    const dH = b.H - a.H;
+    const θ = Math.atan2(dE, dN);   // A→B align with +N axis
 
-    // Compute distance between A and B
-    const dist = Math.sqrt((b.E - a.E) ** 2 + (b.N - a.N) ** 2);
+    // 2️⃣ Rotate all points (A→B = N axis)
+    const rotated = pts.map(p => {
+      const e = p.E - a.E;
+      const n = p.N - a.N;
+      const h = p.H - a.H;
 
-    // Transform all points
-    const rotated = pts.map((p) => {
-      const dE = p.E - a.E;
-      const dN = p.N - a.N;
+      // Rotate so A→B becomes +N axis
+      const E2 = e * Math.cos(-θ) - n * Math.sin(-θ);
+      const N2 = e * Math.sin(-θ) + n * Math.cos(-θ);
 
-      // Rotate coordinates
-      const E2 = dE * Math.cos(-θ) - dN * Math.sin(-θ);
-      const N2 = dE * Math.sin(-θ) + dN * Math.cos(-θ);
-
-      // Reference A = (0,0,0)
-      const E = E2;
-      const N = N2;
-      const H = p.H - a.H;
-
-      return { ...p, E, N, H };
+      return { ...p, E: E2, N: N2, H: h };
     });
 
-    // Apply special rule → make B.E = 0 (adjust for E offset)
-    const bAfter = rotated.find((p) => p.name === refB);
-    const eOffset = bAfter ? bAfter.E : 0;
-    const final = rotated.map((p) => ({ ...p, E: p.E - eOffset }));
+    // 3️⃣ A = (0,0,0)
+    const aAfter = rotated.find(p => p.name === refA);
+    const eOffset = aAfter?.E || 0;
+    const nOffset = aAfter?.N || 0;
+    const hOffset = aAfter?.H || 0;
+
+    const final = rotated.map(p => ({
+      ...p,
+      E: p.E - eOffset,
+      N: p.N - nOffset,
+      H: p.H - hOffset
+    }));
 
     setTransformed(final);
     setLastMethod("ReferenceLine");
-    setInfo(`✅ Reference line applied (A→B, E of B set to 0)`);
+    setInfo("✅ Reference line applied (A→B=N axis, N=distance, H=ΔH)");
   }}
 >
   Apply Reference Line
