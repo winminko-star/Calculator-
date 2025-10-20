@@ -379,35 +379,43 @@ export default function StationMerge() {
     const b = pts.find(p => p.name === refB);
     if (!a || !b) return setInfo("❌ Invalid ref A/B points");
 
-    // 1️⃣ Vector A→B (N-axis alignment)
+    // Vector A→B
     const dE = b.E - a.E;
     const dN = b.N - a.N;
     const dH = b.H - a.H;
-    const θ = Math.atan2(dE, dN);   // ✅ Rotate A→B to +N axis
-    const tieDist = Math.sqrt(dE * dE + dN * dN); // ✅ Horizontal only (no H)
 
-    // 2️⃣ Rotate all points to align A→B along +N
+    // ✅ A→B ကို +N axis နဲ့ကိုက်အောင် 회전အောင်လုပ်မဲ့ angle
+    const θ = Math.atan2(dN, dE);
+
+    // ✅ A origin / +N alignment
     const rotated = pts.map(p => {
       const e = p.E - a.E;
       const n = p.N - a.N;
       const h = p.H - a.H;
 
-      const E2 = e * Math.cos(-θ) - n * Math.sin(-θ);
-      const N2 = e * Math.sin(-θ) + n * Math.cos(-θ);
+      // rotate so A→B = +N
+      const E2 = e * Math.cos(θ) - n * Math.sin(θ);
+      const N2 = e * Math.sin(θ) + n * Math.cos(θ);
 
       return { ...p, E: E2, N: N2, H: h };
     });
 
-    // 3️⃣ Adjust A→(0,0,0), and B→(0, tieDist, ΔH)
-    const final = rotated.map(p => {
-      if (p.name === refA) return { ...p, E: 0, N: 0, H: 0 };
-      if (p.name === refB) return { ...p, E: 0, N: tieDist, H: dH };
-      return p;
-    });
+    // ✅ A ကို (0,0,0) ထား — အoffset ဖယ်
+    const aAfter = rotated.find(p => p.name === refA);
+    const eOffset = aAfter?.E || 0;
+    const nOffset = aAfter?.N || 0;
+    const hOffset = aAfter?.H || 0;
+
+    const final = rotated.map(p => ({
+      ...p,
+      E: p.E - eOffset,
+      N: p.N - nOffset,
+      H: p.H - hOffset
+    }));
 
     setTransformed(final);
     setLastMethod("ReferenceLine");
-    setInfo("✅ Reference line applied (A→B=N axis, N=horizontal distance, H=ΔH)");
+    setInfo("✅ Reference line applied (A=(0,0,0), B=(0,Distance,ΔH), Right=+E)");
   }}
 >
   Apply Reference Line
