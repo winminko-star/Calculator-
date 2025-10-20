@@ -383,9 +383,10 @@ export default function StationMerge() {
     const dE = b.E - a.E;
     const dN = b.N - a.N;
     const dH = b.H - a.H;
-    const θ = Math.atan2(b.E - a.E, b.N - a.N);   // ✅ Corrected rotation: A→B becomes N-axis
+    const θ = Math.atan2(dE, dN);   // ✅ Rotate A→B to +N axis
+    const tieDist = Math.sqrt(dE * dE + dN * dN); // ✅ Horizontal only (no H)
 
-    // 2️⃣ Rotate so A→B aligns with +N axis
+    // 2️⃣ Rotate all points to align A→B along +N
     const rotated = pts.map(p => {
       const e = p.E - a.E;
       const n = p.N - a.N;
@@ -397,22 +398,16 @@ export default function StationMerge() {
       return { ...p, E: E2, N: N2, H: h };
     });
 
-    // 3️⃣ Make A = (0,0,0)
-    const aAfter = rotated.find(p => p.name === refA);
-    const eOffset = aAfter?.E || 0;
-    const nOffset = aAfter?.N || 0;
-    const hOffset = aAfter?.H || 0;
-
-    const final = rotated.map(p => ({
-      ...p,
-      E: p.E - eOffset,
-      N: p.N - nOffset,
-      H: p.H - hOffset
-    }));
+    // 3️⃣ Adjust A→(0,0,0), and B→(0, tieDist, ΔH)
+    const final = rotated.map(p => {
+      if (p.name === refA) return { ...p, E: 0, N: 0, H: 0 };
+      if (p.name === refB) return { ...p, E: 0, N: tieDist, H: dH };
+      return p;
+    });
 
     setTransformed(final);
     setLastMethod("ReferenceLine");
-    setInfo("✅ Reference line applied (A→B=N axis, N=distance, H=ΔH)");
+    setInfo("✅ Reference line applied (A→B=N axis, N=horizontal distance, H=ΔH)");
   }}
 >
   Apply Reference Line
