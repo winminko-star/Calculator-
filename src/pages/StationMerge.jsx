@@ -384,17 +384,17 @@ export default function StationMerge() {
     const dN = b.N - a.N;
     const dH = b.H - a.H;
 
-    // ✅ A→B ကို +N axis နဲ့ align ဖြစ်အောင် θ ကို မှန်အောင်ပြောင်း
-    const θ = Math.atan2(dE, dN);  // swapped back to match right-hand rule
+    // ✅ A→B ကို +N axis နဲ့ align လုပ်ဖို့ angle
+    const θ = Math.atan2(dN, dE);
 
-    // 2️⃣ Rotate all points
+    // 2️⃣ Rotate so A→B aligns with +N axis
     const rotated = pts.map(p => {
       const e = p.E - a.E;
       const n = p.N - a.N;
       const h = p.H - a.H;
 
-      const E2 = e * Math.cos(-θ) - n * Math.sin(-θ);
-      const N2 = e * Math.sin(-θ) + n * Math.cos(-θ);
+      const E2 = e * Math.cos(θ) - n * Math.sin(θ);
+      const N2 = e * Math.sin(θ) + n * Math.cos(θ);
 
       return { ...p, E: E2, N: N2, H: h };
     });
@@ -409,12 +409,12 @@ export default function StationMerge() {
       ...p,
       E: p.E - eOffset,
       N: p.N - nOffset,
-      H: p.H - hOffset
+      H: p.H - hOffset,
     }));
 
     setTransformed(final);
     setLastMethod("ReferenceLine");
-    setInfo("✅ Reference line applied (A→B = N-axis, Right = +E, Left = -E)");
+    setInfo("✅ Reference line applied (A→B = +N axis, Right = +E, Left = -E)");
   }}
 >
   Apply Reference Line
