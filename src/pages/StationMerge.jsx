@@ -371,29 +371,57 @@ export default function StationMerge() {
               value={refB}
               onChange={(e) => setRefB(e.target.value)}
             />
-            <button
-              onClick={() => {
-                const pts = groups[lastStaName];
-                const a = pts.find((p) => p.name === refA);
-                const b = pts.find((p) => p.name === refB);
-                if (!a || !b)
-                  return setInfo("❌ Invalid ref A/B points");
-                const θ = Math.atan2(b.N - a.N, b.E - a.E);
-                const rotated = pts.map((p) => {
-                  const dE = p.E - a.E;
-                  const dN = p.N - a.N;
-                  const E2 = dE * Math.cos(-θ) - dN * Math.sin(-θ);
-                  const N2 = dE * Math.sin(-θ) + dN * Math.cos(-θ);
-                  return { ...p, E: E2, N: N2 };
-                });
-                setTransformed(rotated);
-                setLastMethod("ReferenceLine");
-                setInfo(`✅ Rotated to reference ${refA}–${refB}`);
-              }}
-            >
-              Apply Reference Line
-            </button>
-          </div>
+            {/* Reference Line (Right = +E, Left = −E) */}
+<div className="row">
+  <input
+    placeholder="Ref A name"
+    value={refA}
+    onChange={(e) => setRefA(e.target.value)}
+  />
+  <input
+    placeholder="Ref B name"
+    value={refB}
+    onChange={(e) => setRefB(e.target.value)}
+  />
+  <button
+    onClick={() => {
+      const staName = lastStaName;
+      const pts = groups[staName];
+      const a = pts.find((p) => p.name === refA);
+      const b = pts.find((p) => p.name === refB);
+      if (!a || !b) return setInfo("❌ Invalid ref A/B points");
+
+      const dE = b.E - a.E;
+      const dN = b.N - a.N;
+      const dH = b.H - a.H;
+
+      // ✅ rotate so B lies on +N-axis (E=0 for B)
+      const phi = Math.atan2(dE, dN);     // ← main fix
+      const c = Math.cos(-phi);
+      const s = Math.sin(-phi);
+
+      const rotated = pts.map((p) => {
+        const rE = p.E - a.E;
+        const rN = p.N - a.N;
+        const rH = p.H - a.H;
+
+        const E2 = c * rE - s * rN;  // right = +, left = −
+        const N2 = s * rE + c * rN;
+        const H2 = rH;               // keep vertical diff only
+
+        return { ...p, E: E2, N: N2, H: H2 };
+      });
+
+      setTransformed(rotated);
+      setLastMethod("ReferenceLine");
+      setInfo(
+        `✅ Reference Line A→B aligned (N-axis). Right=+E, Left=−E, ΔH=${dH.toFixed(3)}`
+      );
+    }}
+  >
+    Apply Reference Line
+  </button>
+</div>
 
           {/* manual 4-point fit */}
           <h4>Manual 4 Points ENH Transform</h4>
