@@ -393,8 +393,8 @@ export default function StationMerge() {
       const n = p.N - a.N;
       const h = p.H - a.H;
 
-      const E2 = e * Math.cos(θ) - n * Math.sin(θ);
-      const N2 = e * Math.sin(θ) + n * Math.cos(θ);
+      const E2 = e * Math.cos(-θ) - n * Math.sin(θ);
+      const N2 = e * Math.sin(-θ) + n * Math.cos(θ);
 
       return { ...p, E: E2, N: N2, H: h };
     });
