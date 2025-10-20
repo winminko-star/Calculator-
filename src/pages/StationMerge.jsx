@@ -1,3 +1,4 @@
+// 💡 IDEA by WIN MIN KO
 import React, { useState } from "react";
 import "./StationMerge.css";
 
@@ -6,11 +7,13 @@ export default function StationMerge() {
   const [groups, setGroups] = useState({});
   const [merged, setMerged] = useState([]);
   const [info, setInfo] = useState("");
+  const [geomDiff, setGeomDiff] = useState([]);
+  const [showGeom, setShowGeom] = useState(false);
+
   const [fromSta, setFromSta] = useState("");
   const [toSta, setToSta] = useState("");
-  const [geomDiff, setGeomDiff] = useState([]);
 
-  // ------------- FILE UPLOAD -------------
+  // ---- file upload ----
   const onFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -24,208 +27,166 @@ export default function StationMerge() {
     r.readAsText(f);
   };
 
-  // ------------- PARSER -------------
   function parseSTAFile(text) {
     const lines = text.split(/\r?\n/);
     const out = {};
     let current = null;
     for (let raw of lines) {
       if (!raw.trim()) continue;
-      const parts = raw.split(",").map((x) => x.trim());
-      if (parts.length < 4) continue;
-      const [name, e, n, h] = parts;
+      const p = raw.split(",").map((x) => x.trim());
+      if (p.length < 4) continue;
+      const [name, e, n, h] = p;
       if (/^STA\d+/i.test(name)) {
         current = name;
         out[current] = [];
         continue;
       }
       if (current) {
-        const E = parseFloat(e), N = parseFloat(n), H = parseFloat(h);
+        const E = +e, N = +n, H = +h;
         if ([E, N, H].every(Number.isFinite)) out[current].push({ name, E, N, H });
       }
     }
     return out;
   }
 
-  // ------------- MERGE LOGIC -------------
+  // ---- similarity fit (rotation + scale + translation) ----
+  function fitSimilarity2D(basePts, movePts) {
+    const n = basePts.length;
+    let cEx=0,cEy=0,cMx=0,cMy=0;
+    for (let i=0;i<n;i++){cEx+=basePts[i][0];cEy+=basePts[i][1];cMx+=movePts[i][0];cMy+=movePts[i][1];}
+    cEx/=n;cEy/=n;cMx/=n;cMy/=n;
+    let Sxx=0,Sxy=0,normM=0,normB=0;
+    for (let i=0;i<n;i++){
+      const bx=basePts[i][0]-cEx, by=basePts[i][1]-cEy;
+      const mx=movePts[i][0]-cMx, my=movePts[i][1]-cMy;
+      Sxx+=mx*bx+my*by;
+      Sxy+=mx*by-my*bx;
+      normM+=mx*mx+my*my; normB+=bx*bx+by*by;
+    }
+    const scale=Math.sqrt(normB/normM);
+    const r=Math.hypot(Sxx,Sxy)||1e-12;
+    const cos=Sxx/r, sin=Sxy/r;
+    const tx=cEx-scale*(cos*cMx - sin*cMy);
+    const ty=cEy-scale*(sin*cMx + cos*cMy);
+    return {scale,cos,sin,tx,ty};
+  }
+
+  // ---- merge + diff ----
   const handleMerge = () => {
-    if (!fromSta || !toSta) return setInfo("⚠️ Choose two STA names first");
-    if (fromSta === toSta) return setInfo("⚠️ Choose different STAs");
-    if (!groups[fromSta] || !groups[toSta]) return setInfo("⚠️ Invalid STA names");
+    if (!fromSta||!toSta) return setInfo("⚠️ Choose two STA names");
+    const base = groups[fromSta], next = groups[toSta];
+    if (!base||!next) return setInfo("⚠️ Invalid STA");
+    const baseMap=new Map(base.map(p=>[p.name,p]));
+    const nextMap=new Map(next.map(p=>[p.name,p]));
+    const common=[...baseMap.keys()].filter(k=>nextMap.has(k));
+    if (common.length<2) return setInfo("⚠️ Need ≥2 common points for geometry diff");
 
-    const base = groups[fromSta];
-    const next = groups[toSta];
-    const baseMap = new Map(base.map((p) => [p.name, p]));
-    const nextMap = new Map(next.map((p) => [p.name, p]));
-    const common = [...baseMap.keys()].filter((k) => nextMap.has(k));
-    if (common.length === 0)
-      return setInfo("⚠️ No common points between STAs");
+    // best-fit alignment
+    const B=common.map(n=>[baseMap.get(n).E,baseMap.get(n).N]);
+    const M=common.map(n=>[nextMap.get(n).E,nextMap.get(n).N]);
+    const {scale,cos,sin,tx,ty}=fitSimilarity2D(B,M);
 
-    // mean offset
-    let dE = 0, dN = 0, dH = 0;
-    for (const n of common) {
-      const a = baseMap.get(n);
-      const b = nextMap.get(n);
-      dE += a.E - b.E; dN += a.N - b.N; dH += a.H - b.H;
+    // mean height shift
+    const dhAvg = common.reduce((a,n)=>a+(baseMap.get(n).H-nextMap.get(n).H),0)/common.length;
+
+    // geometry difference table
+    const ref=common[0];
+    const rB=baseMap.get(ref), rM=nextMap.get(ref);
+    const rMx=scale*(cos*rM.E - sin*rM.N)+tx;
+    const rMy=scale*(sin*rM.E + cos*rM.N)+ty;
+    const rMh=rM.H+dhAvg;
+    const diff=[];
+    for(let i=1;i<common.length;i++){
+      const nm=common[i];
+      const b=baseMap.get(nm), m=nextMap.get(nm);
+      const mX=scale*(cos*m.E - sin*m.N)+tx;
+      const mY=scale*(sin*m.E + cos*m.N)+ty;
+      const mH=m.H+dhAvg;
+      const dE1=b.E-rB.E, dN1=b.N-rB.N, dH1=b.H-rB.H;
+      const dE2=mX-rMx,  dN2=mY-rMy,  dH2=mH-rMh;
+      const de=dE1-dE2, dn=dN1-dN2, dh=dH1-dH2;
+      const dmm=Math.sqrt(de*de+dn*dn+dh*dh)*1000;
+      diff.push({name:`${ref}→${nm}`, dE1,dE2,de,dn,dh,dmm});
     }
-    dE /= common.length; dN /= common.length; dH /= common.length;
-
-    // build merged
-    const newPts = next
-      .filter((p) => !baseMap.has(p.name))
-      .map((p) => ({ name: p.name, E: p.E + dE, N: p.N + dN, H: p.H + dH }));
-    const mergedArr = [...base, ...newPts];
-    const newGroups = { ...groups };
-    delete newGroups[toSta];
-    newGroups[fromSta] = mergedArr;
-    setGroups(newGroups);
-    setMerged(mergedArr);
-    setInfo(`✅ Merged ${toSta} → ${fromSta}`);
-
-    // geometry difference check (1→All)
-    computeGeometryDiff(baseMap, nextMap, fromSta, toSta);
+    setGeomDiff(diff);
+    setShowGeom(true);
+    setInfo(`✅ Geometry diff ready (rotation+scale fit).`);
   };
 
-  // ------------- GEOMETRY DIFFERENCE (1→All) -------------
-  const computeGeometryDiff = (baseMap, nextMap, s1, s2) => {
-    const pts = [...baseMap.keys()].filter((k) => nextMap.has(k));
-    if (pts.length < 2) return setGeomDiff([]);
-    const p1 = baseMap.get(pts[0]);
-    const p1b = nextMap.get(pts[0]);
-    const diffs = [];
-    for (let i = 1; i < pts.length; i++) {
-      const pA = baseMap.get(pts[i]);
-      const pB = nextMap.get(pts[i]);
-      const dE1 = pA.E - p1.E, dN1 = pA.N - p1.N, dH1 = pA.H - p1.H;
-      const dE2 = pB.E - p1b.E, dN2 = pB.N - p1b.N, dH2 = pB.H - p1b.H;
-      const de = dE1 - dE2, dn = dN1 - dN2, dh = dH1 - dH2;
-      const dmm = Math.sqrt(de * de + dn * dn + dh * dh);
-      diffs.push({ name: `${pts[0]}→${pts[i]}`, dE1, dE2, de, dn, dh, dmm });
-    }
-    setGeomDiff(diffs);
-  };
-
-  // ------------- ACCEPT -------------
-  const handleAccept = () => {
-    setGeomDiff([]);
-    setInfo("✅ Accepted. Ready for next merge.");
-  };
-
-  // ------------- EXPORT -------------
   const onExport = () => {
-    if (!merged.length) return alert("No merged data yet.");
-    const txt = merged.map(
-      (p) => `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`
+    if(!geomDiff.length)return alert("No diff data");
+    const t = geomDiff.map(p =>
+      `${p.name}\t${p.de.toFixed(3)}\t${p.dn.toFixed(3)}\t${p.dh.toFixed(3)}\t${p.dmm.toFixed(1)} mm`
     ).join("\n");
-    const blob = new Blob([txt], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "Merged_STA.txt"; a.click();
-    URL.revokeObjectURL(url);
+    const blob=new Blob([t],{type:"text/plain"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="GeometryDiff_WMK.txt";a.click();
   };
-
-  const staNames = Object.keys(groups);
 
   return (
     <div className="sta-merge">
-      <h1>📐 Station Merge (Pair Mode)</h1>
-
+      <h1>💡 IDEA by WIN MIN KO</h1>
+      <h2>📐 Station Merge & Geometry Difference</h2>
       <div className="card">
-        <input type="file" accept=".txt" onChange={onFile} />
+        <input type="file" accept=".txt" onChange={onFile}/>
         {info && <div className="msg">{info}</div>}
       </div>
 
       {rawText && (
         <div className="card">
-          <h2>🧾 Original Upload Preview</h2>
-          <textarea readOnly value={rawText} className="rawbox" />
+          <h3>🧾 Original Upload</h3>
+          <textarea readOnly value={rawText} className="rawbox"/>
         </div>
       )}
 
-      {staNames.length > 0 && (
+      {Object.keys(groups).length>0 && (
         <div className="card">
-          <h2>🧩 Choose Two STAs to Merge</h2>
+          <h3>🧩 Choose STAs</h3>
           <div className="row">
-            <select value={fromSta} onChange={(e) => setFromSta(e.target.value)}>
-              <option value="">-- From (Base) --</option>
-              {staNames.map((s) => <option key={s}>{s}</option>)}
+            <select value={fromSta} onChange={e=>setFromSta(e.target.value)}>
+              <option value="">From (Base)</option>
+              {Object.keys(groups).map(s=><option key={s}>{s}</option>)}
             </select>
-            <select value={toSta} onChange={(e) => setToSta(e.target.value)}>
-              <option value="">-- To (Merge Into Base) --</option>
-              {staNames.map((s) => <option key={s}>{s}</option>)}
+            <select value={toSta} onChange={e=>setToSta(e.target.value)}>
+              <option value="">To (Compare)</option>
+              {Object.keys(groups).map(s=><option key={s}>{s}</option>)}
             </select>
-            <button onClick={handleMerge}>🔄 Merge Selected</button>
-            <button onClick={onExport}>💾 Export TXT</button>
+            <button onClick={handleMerge}>🔄 Compare</button>
+            <button onClick={onExport}>💾 Export</button>
           </div>
-          <div className="hint">After merge → Base STA name remains.</div>
         </div>
       )}
 
-      {/* geometry difference table */}
-      {geomDiff.length > 0 && (
+      {showGeom && (
         <div className="card">
-          <h2>📊 Geometry Difference (1 → Others)</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Ref→Pt</th><th>ΔE₁</th><th>ΔE₂</th>
-                <th>ΔE diff</th><th>ΔN diff</th><th>ΔH diff</th><th>Δmm</th>
-              </tr>
-            </thead>
-            <tbody>
-              {geomDiff.map((r, i) => (
-                <tr key={i} className={r.dmm > 0.003 ? "err" : ""}>
-                  <td>{r.name}</td>
-                  <td>{r.dE1.toFixed(3)}</td>
-                  <td>{r.dE2.toFixed(3)}</td>
-                  <td>{r.de.toFixed(3)}</td>
-                  <td>{r.dn.toFixed(3)}</td>
-                  <td>{r.dh.toFixed(3)}</td>
-                  <td>{(r.dmm * 1000).toFixed(1)} mm</td>
+          <div className="row space-between">
+            <h3>📊 Geometry Difference ({fromSta} → {toSta})</h3>
+            <button onClick={()=>setShowGeom(false)}>✔ Accept</button>
+          </div>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ref→Pt</th><th>ΔE₁</th><th>ΔE₂</th>
+                  <th>ΔE diff</th><th>ΔN diff</th><th>ΔH diff</th><th>Δmm</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <button onClick={handleAccept}>✅ Accept & Continue Merge</button>
-        </div>
-      )}
-
-      {/* show groups */}
-      {Object.entries(groups).map(([sta, pts]) => (
-        <div key={sta} className="sta-card">
-          <h3>{sta}</h3>
-          <table>
-            <thead><tr><th>Point</th><th>E</th><th>N</th><th>H</th></tr></thead>
-            <tbody>
-              {pts.map((p, i) => (
-                <tr key={i}>
-                  <td>{p.name}</td>
-                  <td>{p.E.toFixed(3)}</td>
-                  <td>{p.N.toFixed(3)}</td>
-                  <td>{p.H.toFixed(3)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
-
-      {merged.length > 0 && (
-        <div className="card">
-          <h2>✅ Last Merged Result ({merged.length} pts)</h2>
-          <table>
-            <thead><tr><th>Point</th><th>E</th><th>N</th><th>H</th></tr></thead>
-            <tbody>
-              {merged.map((p, i) => (
-                <tr key={i}>
-                  <td>{p.name}</td>
-                  <td>{p.E.toFixed(3)}</td>
-                  <td>{p.N.toFixed(3)}</td>
-                  <td>{p.H.toFixed(3)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {geomDiff.map((p,i)=>(
+                  <tr key={i} className={p.dmm>3?"err":""}>
+                    <td>{p.name}</td>
+                    <td>{p.dE1.toFixed(3)}</td>
+                    <td>{p.dE2.toFixed(3)}</td>
+                    <td>{p.de.toFixed(3)}</td>
+                    <td>{p.dn.toFixed(3)}</td>
+                    <td>{p.dh.toFixed(3)}</td>
+                    <td>{p.dmm.toFixed(1)} mm</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
