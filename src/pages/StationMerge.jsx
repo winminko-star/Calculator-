@@ -360,18 +360,7 @@ export default function StationMerge() {
           <h3>Final Transform (Reference Line / 4 Points) — {lastStaName}</h3>
 
           {/* reference-line method */}
-          <div className="row">
-            <input
-              placeholder="Ref A name"
-              value={refA}
-              onChange={(e) => setRefA(e.target.value)}
-            />
-            <input
-              placeholder="Ref B name"
-              value={refB}
-              onChange={(e) => setRefB(e.target.value)}
-            />
-            {/* Reference Line (Right = +E, Left = −E) */}
+          
 <div className="row">
   <input
     placeholder="Ref A name"
