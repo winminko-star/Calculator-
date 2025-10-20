@@ -379,26 +379,25 @@ export default function StationMerge() {
     const b = pts.find(p => p.name === refB);
     if (!a || !b) return setInfo("❌ Invalid ref A/B points");
 
-    // 1️⃣ Vector A→B
+    // 1️⃣ Vector A→B (N-axis alignment)
     const dE = b.E - a.E;
     const dN = b.N - a.N;
     const dH = b.H - a.H;
-    const θ = Math.atan2(dE, dN);   // A→B align with +N axis
+    const θ = Math.atan2(b.E - a.E, b.N - a.N);   // ✅ Corrected rotation: A→B becomes N-axis
 
-    // 2️⃣ Rotate all points (A→B = N axis)
+    // 2️⃣ Rotate so A→B aligns with +N axis
     const rotated = pts.map(p => {
       const e = p.E - a.E;
       const n = p.N - a.N;
       const h = p.H - a.H;
 
-      // Rotate so A→B becomes +N axis
       const E2 = e * Math.cos(-θ) - n * Math.sin(-θ);
       const N2 = e * Math.sin(-θ) + n * Math.cos(-θ);
 
       return { ...p, E: E2, N: N2, H: h };
     });
 
-    // 3️⃣ A = (0,0,0)
+    // 3️⃣ Make A = (0,0,0)
     const aAfter = rotated.find(p => p.name === refA);
     const eOffset = aAfter?.E || 0;
     const nOffset = aAfter?.N || 0;
