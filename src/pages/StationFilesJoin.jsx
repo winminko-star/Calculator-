@@ -1,149 +1,95 @@
 // src/pages/StationFilesJoin.jsx
-// 💡 Station Files Join by Win Min Ko
+// 💡 Station Files Join (Preserve original format, simple rename only) by Win Min Ko
 import React, { useState } from "react";
-import "./StationMerge.css"; // reuse existing style
+import "./StationMerge.css";
 
 export default function StationFilesJoin() {
-  const [groups, setGroups] = useState({});
+  const [fileBlocks, setFileBlocks] = useState([]); // keep raw lines per STA
   const [info, setInfo] = useState("");
 
-  // === Multiple file upload ===
+  // === Upload multiple files ===
   const onFile = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
-
-    let allGroups = { ...groups };
+    let blocks = [...fileBlocks];
+    let staCount = {}; // to track STA repetition
 
     for (const f of files) {
       const text = await f.text();
-      const parsed = parseSTAFile(text, f.name);
-      allGroups = { ...allGroups, ...parsed };
-    }
+      const lines = text.split(/\r?\n/).filter(Boolean);
 
-    setGroups(allGroups);
-    setInfo(`✅ Loaded ${files.length} file(s)`);
-  };
-
-  // === Parse STA file, auto suffix if same group already exists ===
-  const parseSTAFile = (text, fileName) => {
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    let current = "";
-    let out = {};
-    const suffix = fileName.replace(/\.[^.]+$/, ""); // use filename as tag
-
-    lines.forEach((ln) => {
-      if (/^STA/i.test(ln.trim())) {
-        // detect STA header line
-        let name = ln.trim();
-        if (out[name] || groups[name]) {
-          name = `${name}_${suffix}`; // rename only STA name
-        }
-        current = name;
-        out[current] = [];
-      } else {
-        const p = ln.trim().split(/[\s,]+/);
-        if (p.length >= 4 && current) {
-          // ✅ Keep E, N, H exactly as in original file
-          out[current].push({
-            name: p[0],
-            E: p[1],
-            N: p[2],
-            H: p[3],
-          });
+      let current = "";
+      let group = [];
+      for (let ln of lines) {
+        if (/^STA/i.test(ln.trim())) {
+          // When a new STA starts, save previous
+          if (current && group.length) {
+            blocks.push({ name: current, lines: group });
+          }
+          let header = ln.trim();
+          // Check duplicate header names
+          const base = header.split(",")[0];
+          staCount[base] = (staCount[base] || 0) + 1;
+          if (staCount[base] > 1) header = `${base}B`; // second or later = STA1B
+          current = header;
+          group = [header];
+        } else if (current) {
+          group.push(ln.trim());
         }
       }
-    });
-    return out;
+      if (current && group.length) {
+        blocks.push({ name: current, lines: group });
+      }
+    }
+
+    setFileBlocks(blocks);
+    setInfo(`✅ Loaded ${files.length} file(s), total ${blocks.length} STA blocks`);
   };
 
+  // === Clear all ===
   const clearAll = () => {
-    setGroups({});
-    setInfo("Cleared all groups");
+    setFileBlocks([]);
+    setInfo("🧹 Cleared all data");
+  };
+
+  // === Export joined ===
+  const exportJoined = () => {
+    const txt = fileBlocks.map(b => b.lines.join("\n")).join("\n");
+    const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "Joined_STAs.txt";
+    a.click();
   };
 
   return (
     <div className="sta-merge">
-      <h1>📁 Station Files Join</h1>
-      <h3>Upload multiple .TXT files (auto-rename STA if duplicated)</h3>
+      <h1>📁 Station Files Join (Keep Original Format)</h1>
+      <h3>Multiple .TXT files → auto rename duplicates (STA1 → STA1B)</h3>
 
-      {/* Upload */}
       <div className="card">
-        <label>
-          Choose Files:
-          <input
-            type="file"
-            accept=".txt"
-            multiple
-            onChange={onFile}
-            style={{ marginLeft: 8 }}
-          />
-        </label>
-        <button onClick={clearAll} style={{ marginLeft: 8 }}>
-          🧹 Clear
-        </button>
+        <input type="file" accept=".txt" multiple onChange={onFile} />
+        <button onClick={clearAll} style={{ marginLeft: 8 }}>🧹 Clear</button>
         {info && <div className="msg">{info}</div>}
       </div>
 
-      {/* Group preview */}
-      {Object.keys(groups).length > 0 && (
+      {/* Preview */}
+      {fileBlocks.length > 0 && (
         <div className="card">
-          <h3>Loaded Groups ({Object.keys(groups).length})</h3>
-          {Object.entries(groups).map(([g, pts]) => (
-            <details key={g} className="sta-card" open>
-              <summary>
-                {g} <small>({pts.length} pts)</small>
-              </summary>
-              <table className="result">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>E</th>
-                    <th>N</th>
-                    <th>H</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pts.map((p, i) => (
-                    <tr key={i}>
-                      <td>{p.name}</td>
-                      <td>{p.E}</td>
-                      <td>{p.N}</td>
-                      <td>{p.H}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <h3>Loaded Blocks ({fileBlocks.length})</h3>
+          {fileBlocks.map((b, i) => (
+            <details key={i} open>
+              <summary>{b.name}</summary>
+              <pre className="rawbox">{b.lines.join("\n")}</pre>
             </details>
           ))}
         </div>
       )}
 
       {/* Export */}
-      {Object.keys(groups).length > 0 && (
+      {fileBlocks.length > 0 && (
         <div className="card">
-          <button
-            onClick={() => {
-              const txt = Object.entries(groups)
-                .map(([g, pts]) => {
-                  const header = g;
-                  const body = pts
-                    .map((p) => `${p.name}\t${p.E}\t${p.N}\t${p.H}`)
-                    .join("\n");
-                  return `${header}\n${body}`;
-                })
-                .join("\n\n");
-
-              const blob = new Blob([txt], {
-                type: "text/plain;charset=utf-8",
-              });
-              const a = document.createElement("a");
-              a.href = URL.createObjectURL(blob);
-              a.download = "Joined_STAs.txt";
-              a.click();
-            }}
-          >
-            📤 Export Joined File
-          </button>
+          <button onClick={exportJoined}>📤 Export Joined File</button>
         </div>
       )}
 
