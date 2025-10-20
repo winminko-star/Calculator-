@@ -1,102 +1,84 @@
-.sta-merge {
-  max-width: 900px;
-  margin: 0 auto;
+.station-merge {
+  font-family: sans-serif;
   padding: 20px;
-  font-family: system-ui, Arial, sans-serif;
+  max-width: 800px;
+  margin: auto;
 }
 
-h1 {
-  font-size: 26px;
-  background: linear-gradient(90deg, #007cf0, #00dfd8);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.station-merge h1 {
+  font-size: 1.8em;
+  text-align: center;
+  color: #007bff;
 }
 
-.card {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 12px;
-  margin: 12px 0;
+.station-merge input[type="file"] {
+  display: block;
+  margin: 10px auto;
 }
 
-.msg {
-  color: #007cf0;
-  margin-top: 6px;
-  font-weight: 600;
-}
-
-.rawbox {
-  width: 100%;
-  min-height: 160px;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-  font-family: monospace;
-  padding: 8px;
-  background: #fff;
-}
-
-.row {
+.station-merge .merge-section {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+  flex-wrap: wrap;
   align-items: center;
-  margin-top: 8px;
+  justify-content: center;
 }
 
-select {
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+.station-merge select,
+.station-merge input {
+  padding: 5px 6px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  width: 120px;
   font-size: 14px;
 }
 
-button {
-  background: linear-gradient(90deg, #007cf0, #00dfd8);
-  color: white;
+.station-merge button {
+  padding: 6px 10px;
   border: none;
   border-radius: 8px;
-  padding: 8px 16px;
+  background: #0ea5e9;
+  color: #fff;
   cursor: pointer;
-  font-size: 14px;
+  font-weight: 600;
+}
+.station-merge button:hover {
+  background: #0284c7;
 }
 
-button:hover {
-  opacity: 0.9;
+.station-merge .error-summary {
+  margin-top: 10px;
+  background: #fff5f5;
+  color: #b91c1c;
+  padding: 10px;
+  border-radius: 8px;
 }
 
-.sta-list {
+.station-merge .method-area {
   display: grid;
-  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
 }
 
-.sta-card {
-  border: 2px solid #00dfd8;
-  border-radius: 10px;
-  padding: 8px;
-  background: #f0ffff;
+.station-merge .fit-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.station-merge .fit-row input {
+  width: 70px;
+  margin-right: 4px;
 }
 
-th,
-td {
-  padding: 4px 8px;
-  border-bottom: 1px solid #e5e7eb;
-  text-align: right;
+.station-merge .export-btn {
+  display: block;
+  margin: 20px auto;
+  font-size: 16px;
+  background: #10b981;
 }
 
-th:first-child,
-td:first-child {
-  text-align: left;
-}
-
-.hint {
-  font-size: 12px;
-  color: #666;
-  margin-top: 6px;
+.station-merge .export-btn:hover {
+  background: #059669;
   }
