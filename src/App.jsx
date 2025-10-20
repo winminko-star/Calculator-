@@ -27,7 +27,7 @@ import PipeEndsSlopePage from "./pages/PipeEndsSlope.jsx";
 import FlangeOnAxisPage from "./pages/FlangeOnAxis.jsx";
 import FloatingCalc from "./components/FloatingCalc";
 import FloatingCircleCalc from "./components/FloatingCircleCalc";
-import ChainageOffsetPro from "./pages/ChainageOffsetPro";
+import StationFilesJoin from "./pages/StationFilesJoin";
 import StationMerge from "./pages/StationMerge";
 import Videopage from "./pages/Videopage";
 
@@ -123,7 +123,7 @@ export default function App() {
               <Route path="/enh-review" element={<ENHReview />} />
               <Route path="/pipe-ends-slope" element={<PipeEndsSlopePage />} />
               <Route path="/flange-on-axis" element={<FlangeOnAxisPage />} />
-              <Route path="/chainage-offset-pro" element={<ChainageOffsetPro />} />
+              <Route path="/chainage-offset-pro" element={<StationFilesJoin />} />
               <Route path="/station-merge" element={<StationMerge />} />
               <Route path="/video" element={<Videopage />} />
 
