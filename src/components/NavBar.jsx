@@ -8,7 +8,7 @@ export default function NavBar({ user, onLogout }) {
   const routes = [
     { to: "/", label: "Home" },
     { to: "/station-merge", label: "Station Merge" },
-    { to: "/chainage-offset-pro", label: "Chainage Offset Pro" },
+    { to: "/chainage-offset-pro", label: "Station Files Join" },
     { to: "/drawing2d", label: "2D Drawing" },
     { to: "/review", label: "2D Review" },
     { to: "/righttriangle", label: "Right Triangle" },
