@@ -504,8 +504,7 @@ export default function StationMerge() {
               />
             </div>
           ))}
-
- <button
+<button
   onClick={() => {
     const basePts = fitPts.filter(p => p.name && !isNaN(p.E) && !isNaN(p.N) && !isNaN(p.H));
     if (basePts.length < 4) return setInfo("❌ Need 4 valid points");
