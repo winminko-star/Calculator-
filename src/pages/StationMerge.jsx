@@ -18,20 +18,32 @@ function pseudoInverse(A) {
   return math.multiply(invATA, AT);
 }
 
-// ✅ 3D 4-point transform (no level assumption)
+// Rigid 3D (no scale) from srcPts -> dstPts
 function fourPoint3DTransform(srcPts, dstPts) {
-  // srcPts / dstPts: 4×3 arrays
-  const A = math.matrix(srcPts.map(p => [...p, 1])); // (4×4)
-  const B = math.matrix(dstPts); // (4×3)
+  const n = srcPts.length;
+  if (n < 3) throw new Error("Need at least 3 points");
 
-  const A_pinv = pseudoInverse(A); // (4×4)
-  const X = math.multiply(A_pinv, B); // (4×3)
+  const A = math.matrix(srcPts); // nx3
+  const B = math.matrix(dstPts); // nx3
 
-  // ✅ R = top 3×3, T = last row[3] sliced column vector
-  const R = math.subset(X, math.index([0, 1, 2], [0, 1, 2]));
-  const T = math.subset(X, math.index([0, 1, 2], 2)); // fix dimension
+  const meanA = math.mean(A, 0);        // 1x3
+  const meanB = math.mean(B, 0);        // 1x3
+  const Am = math.subtract(A, math.repeat(meanA, n, 1)); // nx3
+  const Bm = math.subtract(B, math.repeat(meanB, n, 1)); // nx3
 
-  return { R, T };
+  const H = math.multiply(math.transpose(Am), Bm); // 3x3
+  const { U, S, V } = math.svd(H);
+
+  let R = math.multiply(V, math.transpose(U));     // 3x3
+  if (math.det(R) < 0) {                           // prevent reflection
+    const Vfix = V.clone();
+    Vfix.subset(math.index([0,1,2], 2),
+      math.multiply(Vfix.subset(math.index([0,1,2], 2)), -1));
+    R = math.multiply(Vfix, math.transpose(U));
+  }
+  const T = math.subtract(meanB, math.multiply(R, meanA)); // 1x3
+
+  return { R, T }; // R:3x3, T:1x3
 }
 
 // ✅ linear solver (optional)
@@ -515,42 +527,29 @@ export default function StationMerge() {
 
     const srcArr = src.map(p => [p.E, p.N, p.H]);
     const dstArr = basePts.map(p => [parseFloat(p.E), parseFloat(p.N), parseFloat(p.H)]);
+try {
+  const { R, T } = fourPoint3DTransform(srcArr, dstArr);
 
-    try {
-      const { R, T } = fourPoint3DTransform(srcArr, dstArr);
+  const out = staPts.map(p => {
+    // v' = R * v + T   (v, T are column/row awarenessကို mathjs handle လုပ်နိုင်တယ်)
+    const v  = math.matrix([p.E, p.N, p.H]);     // 1x3 row
+    const Rt = math.multiply(R, math.transpose(v)); // 3x1
+    const v2 = math.add(Rt, math.transpose(T));     // 3x1
 
-      // ✅ reshape T to column vector (3×1)
-      const TT = math.reshape(T, [3, 1]);
+    return {
+      ...p,
+      E: v2.get([0,0]),
+      N: v2.get([1,0]),
+      H: v2.get([2,0]),
+    };
+  });
 
-      // ✅ transform all STA points into the friend's ENH system
-      const out = staPts.map(p => {
-        const P = math.matrix([[p.E], [p.N], [p.H]]); // (3×1)
-        const rotated = math.add(math.multiply(R, P), TT); // (3×1)
-        return {
-          ...p,
-          E: rotated.get([0, 0]),
-          N: rotated.get([1, 0]),
-          H: rotated.get([2, 0]),
-        };
-      });
-
-      // ✅ keep your 4 input points exactly (unchanged)
-      basePts.forEach(b => {
-        const already = out.find(o => o.name === b.name);
-        if (!already) out.push({
-          name: b.name,
-          E: parseFloat(b.E),
-          N: parseFloat(b.N),
-          H: parseFloat(b.H),
-        });
-      });
-
-      setTransformed(out);
-      setLastMethod("FourPoint3D_Exact");
-      setInfo("✅ Applied 4-point 3D transform — using your input ENH exactly");
-    } catch (err) {
-      setInfo("❌ 3D transform failed: " + err.message);
-    }
+  setTransformed(out);
+  setLastMethod("FourPoint3D");
+  setInfo("✅ Applied 4-point rigid 3D transform (follows your ENH exactly)");
+} catch (err) {
+  setInfo("❌ 3D transform failed: " + err.message);
+}
   }}
 >
   Apply 4-Point 3D Transform
