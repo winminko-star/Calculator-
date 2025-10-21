@@ -29,8 +29,16 @@ function fourPoint3DTransform(srcPts, dstPts) {
 
   const meanA = math.mean(A, 0);
   const meanB = math.mean(B, 0);
-  const Am = math.subtract(A, math.repeat(meanA, n, 1));
-  const Bm = math.subtract(B, math.repeat(meanB, n, 1));
+
+  // ✅ math.repeat() မသုံးဘဲ manual repeat
+  const Am = math.subtract(
+    A,
+    math.matrix(Array(n).fill(meanA.toArray()))
+  );
+  const Bm = math.subtract(
+    B,
+    math.matrix(Array(n).fill(meanB.toArray()))
+  );
 
   const H = math.multiply(math.transpose(Am), Bm);
   const { U, S, V } = math.svd(H);
@@ -38,15 +46,15 @@ function fourPoint3DTransform(srcPts, dstPts) {
   let R = math.multiply(V, math.transpose(U));
   if (math.det(R) < 0) {
     const Vfix = V.clone();
-    Vfix.subset(
-      math.index([0, 1, 2], 2),
-      math.multiply(Vfix.subset(math.index([0, 1, 2], 2)), -1)
+    const col2 = math.multiply(
+      Vfix.subset(math.index([0, 1, 2], 2)),
+      -1
     );
+    Vfix.subset(math.index([0, 1, 2], 2), col2);
     R = math.multiply(Vfix, math.transpose(U));
   }
 
   const T = math.subtract(meanB, math.multiply(R, meanA));
-
   return { R, T };
 }
 
