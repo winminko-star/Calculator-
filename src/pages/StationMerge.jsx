@@ -23,6 +23,21 @@ function fourPoint3DTransform(srcPts, dstPts) {
   return { R, T };
 }
 
+
+// ✅ Replace old solveLinear() function
+function solveLinear(A, b) {
+  const mA = math.matrix(A);
+  const mb = math.matrix(b);
+
+  // pseudo-inverse: (AᵀA)⁻¹Aᵀ
+  const A_T = math.transpose(mA);
+  const pseudoInv = math.multiply(
+    math.inv(math.multiply(A_T, mA)),
+    A_T
+  );
+  return math.multiply(pseudoInv, mb).toArray();
+}
+
 export default function StationMerge() {
   // ===== Core State =====
   const [rawText, setRawText] = useState("");
