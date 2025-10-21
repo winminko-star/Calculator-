@@ -218,6 +218,9 @@ export default function ENHTiePro() {
           Tip: Field ကိုနှိပ်ပြီး အပေါ်ကလေးပြောင်းကာ အောက်က keypad နဲ့သာ ရိုက်ပါ (mobile keyboard မဖွင့်ပါ).
         </div>
       </div>
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
       }
