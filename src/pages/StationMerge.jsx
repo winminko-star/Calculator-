@@ -1,10 +1,9 @@
 // 💡 IDEA by WIN MIN KO
 import React, { useState, useMemo } from "react";
-import "./StationMerge.css";
 // --- StationMega.jsx ---
 import * as math from "mathjs";
 
-// ✅ Safe pseudo-inverse helper (handles singular / near-singular)
+// ✅ Safe pseudo-inverse helper
 function pseudoInverse(A) {
   const AT = math.transpose(A);
   const ATA = math.multiply(AT, A);
@@ -12,7 +11,6 @@ function pseudoInverse(A) {
   try {
     invATA = math.inv(ATA);
   } catch {
-    // fallback using add small diagonal noise
     const eps = 1e-8;
     const I = math.identity(ATA.size()[0]);
     invATA = math.inv(math.add(ATA, math.multiply(I, eps)));
@@ -22,23 +20,24 @@ function pseudoInverse(A) {
 
 // ✅ 3D 4-point transform (no level assumption)
 function fourPoint3DTransform(srcPts, dstPts) {
-  const matA = math.matrix(srcPts.map(p => [...p, 1]));
-  const matB = math.matrix(dstPts);
-  const pseudoInv = pseudoInverse(matA);
-  const X = math.multiply(pseudoInv, matB);
+  // srcPts / dstPts: 4×3 arrays
+  const A = math.matrix(srcPts.map(p => [...p, 1])); // (4×4)
+  const B = math.matrix(dstPts); // (4×3)
 
-  // X = [R | T]  (3x4)
-  const R = X.subset(math.index([0, 1, 2], [0, 1, 2]));
-  const T = X.subset(math.index([0, 1, 2], 3));
+  const A_pinv = pseudoInverse(A); // (4×4)
+  const X = math.multiply(A_pinv, B); // (4×3)
+
+  // ✅ R = top 3×3, T = last row[3] sliced column vector
+  const R = math.subset(X, math.index([0, 1, 2], [0, 1, 2]));
+  const T = math.subset(X, math.index([0, 1, 2], 2)); // fix dimension
+
   return { R, T };
 }
 
-// ✅ Replace old solveLinear() (safe)
+// ✅ linear solver (optional)
 function solveLinear(A, b) {
-  const mA = math.matrix(A);
-  const mb = math.matrix(b);
-  const pseudoInv = pseudoInverse(mA);
-  return math.multiply(pseudoInv, mb).toArray();
+  const A_pinv = pseudoInverse(math.matrix(A));
+  return math.multiply(A_pinv, b).toArray();
 }
 
 export default function StationMerge() {
@@ -520,18 +519,26 @@ export default function StationMerge() {
     const dstArr = basePts.map(p => [parseFloat(p.E), parseFloat(p.N), parseFloat(p.H)]);
 
     // Apply 3D transform
-    try {
-      const { R, T } = fourPoint3DTransform(srcArr, dstArr);
-      const out = staPts.map(p => {
-        const vec = math.multiply([p.E, p.N, p.H, 1], math.concat(R, math.reshape(T, [3, 1]), 1));
-        return { ...p, E: vec[0], N: vec[1], H: vec[2] };
-      });
-      setTransformed(out);
-      setLastMethod("FourPoint3D");
-      setInfo("✅ Applied 4-point 3D transform (no level assumption)");
-    } catch (err) {
-      setInfo("❌ 3D transform failed: " + err.message);
-    }
+try {
+  const { R, T } = fourPoint3DTransform(srcArr, dstArr);
+
+  // ✅ combine R (3×3) with T (3×1) → (4×3) affine
+  const RT = math.concat(R, math.reshape(T, [3, 1]), 1);
+
+  const out = staPts.map(p => {
+    const vec = math.multiply(
+      math.matrix([[p.E, p.N, p.H, 1]]), // (1×4)
+      math.concat(RT, [[0, 0, 0, 1]], 0) // (4×4)
+    ).toArray()[0]; // flatten
+    return { ...p, E: vec[0], N: vec[1], H: vec[2] };
+  });
+
+  setTransformed(out);
+  setLastMethod("FourPoint3D");
+  setInfo("✅ Applied 4-point 3D transform (no level assumption)");
+} catch (err) {
+  setInfo("❌ 3D transform failed: " + err.message);
+}
   }}
 >
   Apply 4-Point 3D Transform
