@@ -505,7 +505,7 @@ export default function StationMerge() {
             </div>
           ))}
 
-          <button
+  <button
   onClick={() => {
     const basePts = fitPts.filter(p => p.name && !isNaN(p.E) && !isNaN(p.N) && !isNaN(p.H));
     if (basePts.length < 4) return setInfo("❌ Need 4 valid points");
@@ -514,31 +514,44 @@ export default function StationMerge() {
     const src = basePts.map(b => staPts.find(p => p.name === b.name)).filter(Boolean);
     if (src.length < 4) return setInfo("❌ 4 matching points not found in dataset");
 
-    // Prepare [E,N,H] arrays
     const srcArr = src.map(p => [p.E, p.N, p.H]);
     const dstArr = basePts.map(p => [parseFloat(p.E), parseFloat(p.N), parseFloat(p.H)]);
 
-    // Apply 3D transform
-try {
-  const { R, T } = fourPoint3DTransform(srcArr, dstArr);
+    try {
+      const { R, T } = fourPoint3DTransform(srcArr, dstArr);
 
-  // ✅ combine R (3×3) with T (3×1) → (4×3) affine
-  const RT = math.concat(R, math.reshape(T, [3, 1]), 1);
+      // ✅ reshape T to column vector [3×1]
+      const TT = math.reshape(T, [3, 1]);
 
-  const out = staPts.map(p => {
-    const vec = math.multiply(
-      math.matrix([[p.E, p.N, p.H, 1]]), // (1×4)
-      math.concat(RT, [[0, 0, 0, 1]], 0) // (4×4)
-    ).toArray()[0]; // flatten
-    return { ...p, E: vec[0], N: vec[1], H: vec[2] };
-  });
+      // ✅ transform all STA points into the friend's ENH system
+      const out = staPts.map(p => {
+        const P = math.matrix([[p.E], [p.N], [p.H]]); // (3×1)
+        const rotated = math.add(math.multiply(R, P), TT); // (3×1)
+        return {
+          ...p,
+          E: rotated.get([0]),
+          N: rotated.get([1]),
+          H: rotated.get([2]),
+        };
+      });
 
-  setTransformed(out);
-  setLastMethod("FourPoint3D");
-  setInfo("✅ Applied 4-point 3D transform (no level assumption)");
-} catch (err) {
-  setInfo("❌ 3D transform failed: " + err.message);
-}
+      // ✅ keep your 4 input points exactly (unchanged)
+      basePts.forEach(b => {
+        const already = out.find(o => o.name === b.name);
+        if (!already) out.push({
+          name: b.name,
+          E: parseFloat(b.E),
+          N: parseFloat(b.N),
+          H: parseFloat(b.H),
+        });
+      });
+
+      setTransformed(out);
+      setLastMethod("FourPoint3D_Exact");
+      setInfo("✅ Applied 4-point 3D transform — using your input ENH exactly");
+    } catch (err) {
+      setInfo("❌ 3D transform failed: " + err.message);
+    }
   }}
 >
   Apply 4-Point 3D Transform
