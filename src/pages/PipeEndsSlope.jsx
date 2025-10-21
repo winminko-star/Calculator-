@@ -283,6 +283,9 @@ export default function PipeEndsSlopePage(){
           {!st.fitA || !st.fitB ? <span className="small" style={{ color:"#ef4444" }}>Need both ends fitted.</span> : null}
         </div>
       </div>
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
   }
