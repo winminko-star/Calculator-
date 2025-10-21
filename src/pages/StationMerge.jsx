@@ -1,7 +1,9 @@
 // 💡 IDEA by WIN MIN KO
 import React, { useState, useMemo } from "react";
 // --- StationMega.jsx ---
-import * as math from "mathjs";
+import { create, all } from "mathjs";
+
+const math = create(all);
 
 // ✅ Safe pseudo-inverse helper
 function pseudoInverse(A) {
@@ -18,32 +20,34 @@ function pseudoInverse(A) {
   return math.multiply(invATA, AT);
 }
 
-// Rigid 3D (no scale) from srcPts -> dstPts
 function fourPoint3DTransform(srcPts, dstPts) {
   const n = srcPts.length;
   if (n < 3) throw new Error("Need at least 3 points");
 
-  const A = math.matrix(srcPts); // nx3
-  const B = math.matrix(dstPts); // nx3
+  const A = math.matrix(srcPts);
+  const B = math.matrix(dstPts);
 
-  const meanA = math.mean(A, 0);        // 1x3
-  const meanB = math.mean(B, 0);        // 1x3
-  const Am = math.subtract(A, math.repeat(meanA, n, 1)); // nx3
-  const Bm = math.subtract(B, math.repeat(meanB, n, 1)); // nx3
+  const meanA = math.mean(A, 0);
+  const meanB = math.mean(B, 0);
+  const Am = math.subtract(A, math.repeat(meanA, n, 1));
+  const Bm = math.subtract(B, math.repeat(meanB, n, 1));
 
-  const H = math.multiply(math.transpose(Am), Bm); // 3x3
+  const H = math.multiply(math.transpose(Am), Bm);
   const { U, S, V } = math.svd(H);
 
-  let R = math.multiply(V, math.transpose(U));     // 3x3
-  if (math.det(R) < 0) {                           // prevent reflection
+  let R = math.multiply(V, math.transpose(U));
+  if (math.det(R) < 0) {
     const Vfix = V.clone();
-    Vfix.subset(math.index([0,1,2], 2),
-      math.multiply(Vfix.subset(math.index([0,1,2], 2)), -1));
+    Vfix.subset(
+      math.index([0, 1, 2], 2),
+      math.multiply(Vfix.subset(math.index([0, 1, 2], 2)), -1)
+    );
     R = math.multiply(Vfix, math.transpose(U));
   }
-  const T = math.subtract(meanB, math.multiply(R, meanA)); // 1x3
 
-  return { R, T }; // R:3x3, T:1x3
+  const T = math.subtract(meanB, math.multiply(R, meanA));
+
+  return { R, T };
 }
 
 // ✅ linear solver (optional)
