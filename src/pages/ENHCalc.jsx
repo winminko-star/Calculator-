@@ -111,6 +111,9 @@ export default function ENHCalc() {
           <button className="btn" onClick={clearAll}>🧹 Clear</button>
         </div>
       </div>
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
         }
