@@ -505,7 +505,7 @@ export default function StationMerge() {
             </div>
           ))}
 
-  <button
+ <button
   onClick={() => {
     const basePts = fitPts.filter(p => p.name && !isNaN(p.E) && !isNaN(p.N) && !isNaN(p.H));
     if (basePts.length < 4) return setInfo("❌ Need 4 valid points");
@@ -520,7 +520,7 @@ export default function StationMerge() {
     try {
       const { R, T } = fourPoint3DTransform(srcArr, dstArr);
 
-      // ✅ reshape T to column vector [3×1]
+      // ✅ reshape T to column vector (3×1)
       const TT = math.reshape(T, [3, 1]);
 
       // ✅ transform all STA points into the friend's ENH system
@@ -529,9 +529,9 @@ export default function StationMerge() {
         const rotated = math.add(math.multiply(R, P), TT); // (3×1)
         return {
           ...p,
-          E: rotated.get([0]),
-          N: rotated.get([1]),
-          H: rotated.get([2]),
+          E: rotated.get([0, 0]),
+          N: rotated.get([1, 0]),
+          H: rotated.get([2, 0]),
         };
       });
 
