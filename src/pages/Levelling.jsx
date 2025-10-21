@@ -221,6 +221,9 @@ export default function Levelling() {
           </div>
         </div>
       </div>
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
         }
