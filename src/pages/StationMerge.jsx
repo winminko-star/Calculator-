@@ -1,40 +1,43 @@
 // 💡 IDEA by WIN MIN KO
 import React, { useState, useMemo } from "react";
 import "./StationMerge.css";
-import * as math from "mathjs";
 // --- StationMega.jsx ---
+import * as math from "mathjs";
 
-// 3D 4-point transform function (no level/unlevel assumption)
+// ✅ Safe pseudo-inverse helper (handles singular / near-singular)
+function pseudoInverse(A) {
+  const AT = math.transpose(A);
+  const ATA = math.multiply(AT, A);
+  let invATA;
+  try {
+    invATA = math.inv(ATA);
+  } catch {
+    // fallback using add small diagonal noise
+    const eps = 1e-8;
+    const I = math.identity(ATA.size()[0]);
+    invATA = math.inv(math.add(ATA, math.multiply(I, eps)));
+  }
+  return math.multiply(invATA, AT);
+}
+
+// ✅ 3D 4-point transform (no level assumption)
 function fourPoint3DTransform(srcPts, dstPts) {
-  // srcPts / dstPts => array of 4 items [E,N,H]
   const matA = math.matrix(srcPts.map(p => [...p, 1]));
   const matB = math.matrix(dstPts);
-
-  // ✅ Use pseudo-inverse instead of direct inverse to fix (3 > 2) error
-  const matA_T = math.transpose(matA);
-  const pseudoInv = math.multiply(
-    math.inv(math.multiply(matA_T, matA)),
-    matA_T
-  );
+  const pseudoInv = pseudoInverse(matA);
   const X = math.multiply(pseudoInv, matB);
 
+  // X = [R | T]  (3x4)
   const R = X.subset(math.index([0, 1, 2], [0, 1, 2]));
   const T = X.subset(math.index([0, 1, 2], 3));
   return { R, T };
 }
 
-
-// ✅ Replace old solveLinear() function
+// ✅ Replace old solveLinear() (safe)
 function solveLinear(A, b) {
   const mA = math.matrix(A);
   const mb = math.matrix(b);
-
-  // pseudo-inverse: (AᵀA)⁻¹Aᵀ
-  const A_T = math.transpose(mA);
-  const pseudoInv = math.multiply(
-    math.inv(math.multiply(A_T, mA)),
-    A_T
-  );
+  const pseudoInv = pseudoInverse(mA);
   return math.multiply(pseudoInv, mb).toArray();
 }
 
