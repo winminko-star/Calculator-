@@ -391,6 +391,9 @@ const levels = useMemo(() => {
           ) : <span key={idx} />)}
         </div>
       )}
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
 }
