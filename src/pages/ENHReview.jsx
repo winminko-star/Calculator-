@@ -121,6 +121,9 @@ export default function ENHReview() {
           ))}
         </div>
       )}
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
     }
