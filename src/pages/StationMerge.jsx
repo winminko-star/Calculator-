@@ -9,7 +9,14 @@ function fourPoint3DTransform(srcPts, dstPts) {
   // srcPts / dstPts => array of 4 items [E,N,H]
   const matA = math.matrix(srcPts.map(p => [...p, 1]));
   const matB = math.matrix(dstPts);
-  const X = math.multiply(math.inv(matA), matB);
+
+  // ✅ Use pseudo-inverse instead of direct inverse to fix (3 > 2) error
+  const matA_T = math.transpose(matA);
+  const pseudoInv = math.multiply(
+    math.inv(math.multiply(matA_T, matA)),
+    matA_T
+  );
+  const X = math.multiply(pseudoInv, matB);
 
   const R = X.subset(math.index([0, 1, 2], [0, 1, 2]));
   const T = X.subset(math.index([0, 1, 2], 3));
