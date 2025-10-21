@@ -337,6 +337,9 @@ export default function FlangeOnAxisPage(){
           </div>
         )}
       </div>
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
 }
