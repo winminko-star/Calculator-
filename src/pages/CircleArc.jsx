@@ -218,6 +218,9 @@ export default function CircleArc() {
           </div>
         )}
       </div>
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
 }
@@ -265,9 +268,7 @@ function Line({ label, value }) {
     <div className="row" style={{ justifyContent: "space-between" }}>
       <div className="small" style={{ color: "#334155" }}>{label}</div>
       <div style={{ fontWeight: 700 }}>{value}</div>
- <footer className="footer">
-        © 2025 WMK Seatrium DC Team
-      </footer>
+ 
     </div>
   );
   }
