@@ -218,6 +218,9 @@ export default function AllReview() {
           </div>
         ))}
       </div>
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
       }
