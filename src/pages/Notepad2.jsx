@@ -99,6 +99,9 @@ export default function Notepad() {
           ))
         )}
       </div>
+ <footer className="footer">
+        © 2025 WMK Seatrium DC Team
+      </footer>
     </div>
   );
 }
