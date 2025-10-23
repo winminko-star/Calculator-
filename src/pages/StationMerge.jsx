@@ -1,9 +1,9 @@
 // 💡 IDEA by WIN MIN KO
 import React, { useState, useMemo } from "react";
-// --- StationMega.jsx ---
+import "./StationMerge.css";
 import { create, all } from "mathjs";
-
 const math = create(all);
+console.log("MathJS version =", math.version);
 
 // ✅ Safe pseudo-inverse helper
 function pseudoInverse(A) {
