@@ -363,7 +363,9 @@ const handleMerge = () => {
   return (
     <div className="sta-merge">
       <h1>💡 SEATRIUM</h1>
-      <h2>📐 Station Merge & Reference Line</h2>
+      <h2>📐 Station Merge & Reference Line
+</h2>
+<h2>Note# Only for Level Stations.3D Stations can not use.</h2>
 
       {/* File upload */}
       <div className="card">
