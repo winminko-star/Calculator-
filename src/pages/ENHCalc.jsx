@@ -58,9 +58,9 @@ export default function ENHCalc() {
     const N1 = parseNum(n1), N2 = parseNum(n2);
     const H1 = parseNum(h1), H2 = parseNum(h2);
     return {
-      E: E1 == null || E2 == null ? null : E1 - E2,
-      N: N1 == null || N2 == null ? null : N1 - N2,
-      H: H1 == null || H2 == null ? null : H1 - H2,
+      E: E1 == null || E2 == null ? null : (E1) - (E2),
+      N: N1 == null || N2 == null ? null : (N1) - (N2),
+      H: H1 == null || H2 == null ? null : (H1) - (H2),
     };
   }, [e1, e2, n1, n2, h1, h2]);
 
