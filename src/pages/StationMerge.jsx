@@ -1,372 +1,584 @@
 // src/pages/StationMerge.jsx
-import React, { useMemo, useRef, useState } from "react";
-
-/**
- * StationMerge.jsx — 4-points input feature removed
- * -------------------------------------------------
- * ✅ Features:
- *  - Upload CSV/JSON or paste text to load station data
- *  - Choose reference group (STA1/STA2/… etc.)
- *  - Per-group chainage shift (e.g., align STA2 to STA1 by +12.345m)
- *  - Live merged preview table (ref-applied chainage)
- *  - Export merged result as CSV (no file-saver dependency)
- *
- * 📄 CSV format (headers optional, auto-detect):
- *    group,station,chainage,x,y
- *    STA1, 1+020.5, 1020.5, 345.123, 67.890
- *    STA2, 0+500,   500,    ,        // x,y optional
- *
- *    - `station` can be free text. `chainage` must be numeric (meters).
- *    - `group` is required (e.g., STA1, STA2…). Case-insensitive.
- *
- * 🧩 JSON format:
- *    [
- *      {"group":"STA1","station":"1+020.5","chainage":1020.5,"x":345.123,"y":67.89},
- *      {"group":"STA2","station":"0+500","chainage":500}
- *    ]
- */
-
-const styles = {
-  page: { padding: 16, maxWidth: 1100, margin: "0 auto", fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" },
-  h1: { fontSize: 24, fontWeight: 800, margin: "8px 0 12px", background: "linear-gradient(90deg,#06b6d4,#818cf8,#f472b6)", WebkitBackgroundClip: "text", color: "transparent" },
-  row: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" },
-  col: (w = 1) => ({ flex: `1 1 ${w * 320}px`, minWidth: 280 }),
-  card: { background: "#ffffff", borderRadius: 14, padding: 14, boxShadow: "0 6px 24px rgba(2,8,23,.06), 0 2px 8px rgba(2,8,23,.08)" },
-  label: { fontSize: 12, fontWeight: 700, color: "#0f172a", opacity: 0.8, marginBottom: 6, display: "block" },
-  input: { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e2e8f0", outline: "none" },
-  area: { width: "100%", minHeight: 140, padding: "10px 12px", borderRadius: 10, border: "1px solid #e2e8f0", outline: "none", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" },
-  btn: { padding: "10px 14px", borderRadius: 9999, background: "#0ea5e9", color: "#fff", border: "none", fontWeight: 700, cursor: "pointer" },
-  btnGhost: { padding: "10px 14px", borderRadius: 9999, background: "transparent", color: "#0ea5e9", border: "1px solid #0ea5e9", fontWeight: 700, cursor: "pointer" },
-  tableWrap: { width: "100%", overflow: "auto", borderRadius: 12, border: "1px solid #e2e8f0" },
-  table: { minWidth: 720, width: "100%", borderCollapse: "collapse" },
-  th: { textAlign: "left", fontSize: 12, color: "#334155", background: "#f8fafc", padding: "10px 8px", borderBottom: "1px solid #e2e8f0", position: "sticky", top: 0 },
-  td: { fontSize: 13, color: "#0f172a", padding: "10px 8px", borderBottom: "1px solid #f1f5f9", whiteSpace: "nowrap" },
-  hint: { fontSize: 12, color: "#64748b" },
-  badge: { display: "inline-block", padding: "2px 8px", fontSize: 11, borderRadius: 999, background: "#e2e8f0", color: "#0f172a", fontWeight: 700, marginLeft: 6 },
-};
-
-function parseCSV(text) {
-  const rows = text
-    .split(/\r?\n/)
-    .map((r) => r.trim())
-    .filter(Boolean);
-  if (!rows.length) return [];
-
-  // Try to detect header
-  const first = rows[0];
-  const hasHeader = /group/i.test(first) && /chainage/i.test(first);
-  const body = hasHeader ? rows.slice(1) : rows;
-
-  return body
-    .map((line) => {
-      // simple CSV split (no quotes escaping). Good enough for this tool.
-      const parts = line.split(",").map((s) => s.trim());
-      const [group, station, chainage, x, y] = parts;
-      const ch = chainage === "" ? NaN : Number(chainage);
-      const xx = x === "" || x === undefined ? undefined : Number(x);
-      const yy = y === "" || y === undefined ? undefined : Number(y);
-      return {
-        group: String(group || "").trim(),
-        station: station ?? "",
-        chainage: Number.isFinite(ch) ? ch : NaN,
-        x: Number.isFinite(xx) ? xx : undefined,
-        y: Number.isFinite(yy) ? yy : undefined,
-        _raw: line,
-      };
-    })
-    .filter((r) => r.group); // require group
-}
-
-function tryParseJSON(text) {
-  try {
-    const arr = JSON.parse(text);
-    if (Array.isArray(arr)) return arr;
-  } catch {}
-  return null;
-}
-
-function toCSV(rows) {
-  const head = ["group", "station", "chainage", "x", "y", "ref_chainage"];
-  const lines = [head.join(",")];
-  for (const r of rows) {
-    const vals = [
-      r.group ?? "",
-      (r.station ?? "").toString().replace(/,/g, " "), // avoid breaking CSV
-      Number.isFinite(r.chainage) ? r.chainage : "",
-      r.x ?? "",
-      r.y ?? "",
-      Number.isFinite(r.ref_chainage) ? r.ref_chainage : "",
-    ];
-    lines.push(vals.join(","));
-  }
-  return lines.join("\n");
-}
-
-function downloadAsCSV(filename, rows) {
-  const blob = new Blob([toCSV(rows)], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+// 💡 IDEA by WIN MIN KO (Reference Line only; 4-point fit removed)
+import React, { useMemo, useState } from "react";
+import "./StationMerge.css";
 
 export default function StationMerge() {
+  // -------------------- States --------------------
   const [rawText, setRawText] = useState("");
-  const [data, setData] = useState([]); // canonical items
-  const [refGroup, setRefGroup] = useState("");
-  const [shifts, setShifts] = useState({}); // per-group chainage shift (meters)
-  const fileRef = useRef(null);
+  const [groups, setGroups] = useState({});                 // {STA1:[{name,E,N,H},...], ...}
+  const [info, setInfo] = useState("");
 
-  const groups = useMemo(() => {
-    const s = new Set(data.map((d) => d.group));
-    return Array.from(s);
-  }, [data]);
+  // Filter (unwanted points)
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [keepMap, setKeepMap] = useState({});               // {STA:{ptName:true/false}}
 
-  // Derived rows with ref-applied chainage
-  const merged = useMemo(() => {
-    if (!data.length) return [];
-    // ensure refGroup
-    const ref = refGroup || (groups.length ? groups[0] : "");
-    const sMap = { ...shifts, [ref]: Number(shifts?.[ref] ?? 0) };
+  // Merge
+  const [fromSta, setFromSta] = useState("");
+  const [toSta, setToSta] = useState("");
+  const [merged, setMerged] = useState([]);                 // last merged points (base content)
+  const [mergeSummaries, setMergeSummaries] = useState([]); // [{group, count, maxmm}]
+  const TOL = 0.003; // 3 mm
 
-    return data
-      .map((r) => {
-        const shift = Number(sMap[r.group] ?? 0);
-        const ref_chainage = Number.isFinite(r.chainage) ? r.chainage + shift : NaN;
-        return { ...r, ref_chainage };
-      })
-      .sort((a, b) => {
-        // sort by ref_chainage then group
-        const ac = Number.isFinite(a.ref_chainage) ? a.ref_chainage : Number.POSITIVE_INFINITY;
-        const bc = Number.isFinite(b.ref_chainage) ? b.ref_chainage : Number.POSITIVE_INFINITY;
-        if (ac !== bc) return ac - bc;
-        if (a.group !== b.group) return (a.group || "").localeCompare(b.group || "");
-        return (a.station || "").toString().localeCompare((b.station || "").toString());
-      });
-  }, [data, shifts, refGroup, groups]);
+  // Geometry diff (1→All) after best-fit
+  const [geomDiff, setGeomDiff] = useState([]);             // [{name, dE1,dE2,de,dn,dh,dmm}]
+  const [geomShow, setGeomShow] = useState(false);
+  const [geomHideSet, setGeomHideSet] = useState(new Set()); // row index hide set
 
-  function handleFile(e) {
+  // Reference line
+  const [refA, setRefA] = useState("");
+  const [refB, setRefB] = useState("");
+
+  // Transform result preview
+  const [transformed, setTransformed] = useState([]);       // preview of transformed points
+  const [lastMethod, setLastMethod] = useState("");         // "Reference Line"
+
+  // -------------------- File Upload & Parse --------------------
+  const onFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = String(reader.result || "");
+    const r = new FileReader();
+    r.onload = (ev) => {
+      const text = String(ev.target.result || "");
       setRawText(text);
-
-      // Try JSON first
-      const maybe = tryParseJSON(text);
-      if (maybe) {
-        const cleaned = maybe
-          .map((r) => ({
-            group: String(r.group || "").trim(),
-            station: r.station ?? "",
-            chainage: Number(r.chainage),
-            x: r.x !== undefined ? Number(r.x) : undefined,
-            y: r.y !== undefined ? Number(r.y) : undefined,
-          }))
-          .filter((r) => r.group);
-        setData(cleaned);
-        setRefGroup(cleaned[0]?.group || "");
-        return;
-      }
-
-      // Fallback CSV
-      const rows = parseCSV(text);
-      setData(rows);
-      setRefGroup(rows[0]?.group || "");
+      const parsed = parseSTAFile(text);
+      setGroups(parsed);
+      setInfo("✅ File loaded successfully");
+      // reset states
+      setKeepMap({});
+      setFromSta("");
+      setToSta("");
+      setMerged([]);
+      setMergeSummaries([]);
+      setGeomDiff([]);
+      setGeomShow(false);
+      setGeomHideSet(new Set());
+      setTransformed([]);
+      setLastMethod("");
+      setRefA("");
+      setRefB("");
     };
-    reader.readAsText(f);
+    r.readAsText(f);
+  };
+
+  function parseSTAFile(text) {
+    const lines = text.split(/\r?\n/);
+    const out = {};
+    let current = null;
+    for (let raw of lines) {
+      if (!raw.trim()) continue;
+      const p = raw.split(",").map((x) => x.trim());
+      if (p.length < 4) continue;
+      const [name, e, n, h] = p;
+      if (/^STA\d+/i.test(name)) {
+        current = name;
+        out[current] = [];
+        continue;
+      }
+      if (current) {
+        const E = +e, N = +n, H = +h;
+        if ([E, N, H].every(Number.isFinite)) out[current].push({ name, E, N, H });
+      }
+    }
+    return out;
   }
 
-  function handlePaste() {
-    const text = rawText.trim();
-    if (!text) {
-      alert("Paste CSV/JSON into the box first.");
+  // -------------------- Filter (Unwanted Points) --------------------
+  const toggleKeep = (sta, pt) => {
+    setKeepMap((prev) => {
+      const s = { ...(prev[sta] || {}) };
+      s[pt] = !(s[pt] === false); // default true; click toggles false/true-> false
+      return { ...prev, [sta]: s };
+    });
+  };
+
+  const applyFilter = () => {
+    const next = {};
+    for (const [sta, pts] of Object.entries(groups)) {
+      const km = keepMap[sta] || {};
+      next[sta] = pts.filter((p) => km[p.name] !== false);
+    }
+    setGroups(next);
+    setFilterOpen(false);
+    setInfo("✅ Filter applied (removed unchecked points).");
+  };
+
+  // -------------------- Helpers --------------------
+  const staNames = Object.keys(groups);
+  const staSortedEntries = useMemo(
+    () =>
+      Object.entries(groups).map(([sta, pts]) => [
+        sta,
+        [...pts].sort((a, b) => a.name.localeCompare(b.name)),
+      ]),
+    [groups]
+  );
+
+  const deleteGroup = (sta) => {
+    const copy = { ...groups };
+    delete copy[sta];
+    setGroups(copy);
+    if (fromSta === sta) setFromSta("");
+    if (toSta === sta) setToSta("");
+    setInfo(`🗑️ Removed ${sta}`);
+  };
+
+  // -------------------- Merge (Pair) --------------------
+  const handleMerge = () => {
+    if (!fromSta || !toSta) return setInfo("⚠️ Choose two STA names first");
+    if (fromSta === toSta) return setInfo("⚠️ Choose different STAs");
+    if (!groups[fromSta] || !groups[toSta]) return setInfo("⚠️ Invalid STA names");
+
+    const base = groups[fromSta];
+    const next = groups[toSta];
+    const baseMap = new Map(base.map((p) => [p.name, p]));
+    const nextMap = new Map(next.map((p) => [p.name, p]));
+    const common = [...baseMap.keys()].filter((k) => nextMap.has(k));
+
+    if (common.length === 0) {
+      const mergedArr = [...base, ...next];
+      const newGroups = { ...groups };
+      delete newGroups[toSta];
+      newGroups[fromSta] = mergedArr;
+      setGroups(newGroups);
+      setMerged(mergedArr);
+      setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
+      setMergeSummaries((prev) => prev.filter((s) => s.group !== toSta));
+      setGeomDiff([]);
+      setGeomShow(false);
+      setTransformed([]);
+      setLastMethod("");
       return;
     }
-    const maybe = tryParseJSON(text);
-    if (maybe) {
-      const cleaned = maybe
-        .map((r) => ({
-          group: String(r.group || "").trim(),
-          station: r.station ?? "",
-          chainage: Number(r.chainage),
-          x: r.x !== undefined ? Number(r.x) : undefined,
-          y: r.y !== undefined ? Number(r.y) : undefined,
-        }))
-        .filter((r) => r.group);
-      setData(cleaned);
-      setRefGroup(cleaned[0]?.group || "");
+
+    // average delta by common
+    let dE = 0, dN = 0, dH = 0;
+    for (const n of common) {
+      const a = baseMap.get(n), b = nextMap.get(n);
+      dE += a.E - b.E;
+      dN += a.N - b.N;
+      dH += a.H - b.H;
+    }
+    dE /= common.length; dN /= common.length; dH /= common.length;
+
+    // tolerance check on references
+    let exceedCount = 0;
+    let maxmm = 0;
+    for (const n of common) {
+      const a = baseMap.get(n), b = nextMap.get(n);
+      const rE = (b.E + dE) - a.E;
+      const rN = (b.N + dN) - a.N;
+      const rH = (b.H + dH) - a.H;
+      const dmm = Math.sqrt(rE * rE + rN * rN + rH * rH);
+      if (dmm > TOL) exceedCount++;
+      if (dmm > maxmm) maxmm = dmm;
+    }
+
+    // apply to non-duplicate
+    const newPts = next
+      .filter((p) => !baseMap.has(p.name))
+      .map((p) => ({ name: p.name, E: p.E + dE, N: p.N + dN, H: p.H + dH }));
+    const mergedArr = [...base, ...newPts];
+
+    const newGroups = { ...groups };
+    delete newGroups[toSta];
+    newGroups[fromSta] = mergedArr;
+    setGroups(newGroups);
+    setMerged(mergedArr);
+    setInfo(`✅ Merged ${toSta} → ${fromSta} (refs=${common.length})`);
+    setTransformed([]);
+    setLastMethod("");
+
+    // update tolerance summary
+    setMergeSummaries((prev) => {
+      const others = prev.filter((s) => s.group !== toSta);
+      return [...others, { group: toSta, count: exceedCount, maxmm }];
+    });
+
+    // auto compute Geometry Difference (best-fit 1→All) for the two input STAs
+    computeGeometryDiff(baseMap, nextMap);
+  };
+
+  // -------------------- Geometry Difference (1→All, best-fit sim2D + H shift) --------------------
+  function fitSimilarity2D(basePts, movePts) {
+    const n = basePts.length;
+    let cEx = 0, cEy = 0, cMx = 0, cMy = 0;
+    for (let i = 0; i < n; i++) {
+      cEx += basePts[i][0]; cEy += basePts[i][1];
+      cMx += movePts[i][0]; cMy += movePts[i][1];
+    }
+    cEx /= n; cEy /= n; cMx /= n; cMy /= n;
+
+    let Sxx = 0, Sxy = 0, normM = 0, normB = 0;
+    for (let i = 0; i < n; i++) {
+      const bx = basePts[i][0] - cEx, by = basePts[i][1] - cEy;
+      const mx = movePts[i][0] - cMx, my = movePts[i][1] - cMy;
+      Sxx += mx * bx + my * by;
+      Sxy += mx * by - my * bx;
+      normM += mx * mx + my * my; normB += bx * bx + by * by;
+    }
+    const scale = Math.sqrt(normB / normM);
+    const r = Math.hypot(Sxx, Sxy) || 1e-12;
+    const cos = Sxx / r, sin = Sxy / r;
+    const tx = cEx - scale * (cos * cMx - sin * cMy);
+    const ty = cEy - scale * (sin * cMx + cos * cMy);
+    return { scale, cos, sin, tx, ty };
+  }
+
+  const computeGeometryDiff = (baseMap, nextMap) => {
+    const names = [...baseMap.keys()].filter((k) => nextMap.has(k));
+    if (names.length < 2) {
+      setGeomDiff([]);
+      setGeomShow(false);
       return;
     }
-    const rows = parseCSV(text);
-    setData(rows);
-    setRefGroup(rows[0]?.group || "");
+
+    // similarity fit in EN; H uses mean shift
+    const B = names.map((n) => [baseMap.get(n).E, baseMap.get(n).N]);
+    const M = names.map((n) => [nextMap.get(n).E, nextMap.get(n).N]);
+    const { scale, cos, sin, tx, ty } = fitSimilarity2D(B, M);
+
+    let dHsum = 0;
+    for (const n of names) dHsum += baseMap.get(n).H - nextMap.get(n).H;
+    const dHavg = dHsum / names.length;
+
+    const ref = names[0];
+    const rB = baseMap.get(ref), rM = nextMap.get(ref);
+    const rMx = scale * (cos * rM.E - sin * rM.N) + tx;
+    const rMy = scale * (sin * rM.E + cos * rM.N) + ty;
+    const rMh = rM.H + dHavg;
+
+    const diffs = [];
+    for (let i = 1; i < names.length; i++) {
+      const nm = names[i];
+      const b = baseMap.get(nm), m = nextMap.get(nm);
+      const mX = scale * (cos * m.E - sin * m.N) + tx;
+      const mY = scale * (sin * m.E + cos * m.N) + ty;
+      const mH = m.H + dHavg;
+
+      const dE1 = b.E - rB.E, dN1 = b.N - rB.N, dH1 = b.H - rB.H;
+      const dE2 = mX - rMx,  dN2 = mY - rMy,  dH2 = mH - rMh;
+
+      const de = dE1 - dE2, dn = dN1 - dN2, dh = dH1 - dH2;
+      const dmm = Math.sqrt(de * de + dn * dn + dh * dh) * 1000; // mm
+      diffs.push({ name: `${ref}→${nm}`, dE1, dE2, de, dn, dh, dmm });
+    }
+    setGeomDiff(diffs);
+    setGeomShow(true);
+    setGeomHideSet(new Set());
+  };
+
+  const hideSelectedDiffRows = () => {
+    if (geomHideSet.size === 0) return;
+    const arr = geomDiff.filter((_, idx) => !geomHideSet.has(idx));
+    setGeomDiff(arr);
+    setGeomHideSet(new Set());
+  };
+
+  const acceptGeom = () => {
+    setGeomShow(false);
+    setGeomDiff([]);
+    setGeomHideSet(new Set());
+    setInfo("✅ Geometry diff accepted. Ready for next merge.");
+  };
+
+  // -------------------- Reference Line (on 'merged') --------------------
+  const applyRefLine = () => {
+    if (!merged.length) return setInfo("⚠️ Merge first.");
+    const map = new Map(merged.map((p) => [p.name, p]));
+    const A = map.get(refA.trim());
+    const Bp = map.get(refB.trim());
+    if (!A || !Bp) return setInfo("⚠️ Invalid reference points.");
+
+    const dE = Bp.E - A.E, dN = Bp.N - A.N, dH = Bp.H - A.H;
+    const dist = Math.hypot(dE, dN);
+    if (dist === 0) return setInfo("⚠️ Reference points are coincident in EN.");
+    // rotate/translate so A→(0,0,0) and B aligns to +N axis
+    const phi = Math.atan2(dE, dN);
+    const c = Math.cos(phi), s = Math.sin(phi);
+
+    const out = merged.map((p) => {
+      const e0 = p.E - A.E, n0 = p.N - A.N, h0 = p.H - A.H;
+      return { name: p.name, E: c * e0 - s * n0, N: s * e0 + c * n0, H: h0 };
+    });
+    setTransformed(out);
+    setLastMethod("Reference Line");
+    setInfo(`✅ Reference line applied — A→(0,0,0)  B→(0,${dist.toFixed(3)},${dH.toFixed(3)})`);
+  };
+
+  // -------------------- Export --------------------
+  const exportMerged = () => {
+    if (!merged.length) return alert("No merged data.");
+    const txt = merged
+      .map((p) => `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`)
+      .join("\n");
+    downloadTxt(txt, "Merged_STA.txt");
+  };
+
+  const exportTransformed = () => {
+    const data = transformed.length ? transformed : merged;
+    if (!data.length) return alert("No data to export.");
+    const name = transformed.length ? `Final_${lastMethod.replace(/\s+/g, "")}.txt` : "Merged_STA.txt";
+    const txt = data
+      .map((p) => `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`)
+      .join("\n");
+    downloadTxt(txt, name);
+  };
+
+  const exportGeometryDiff = () => {
+    if (!geomDiff.length) return alert("No diff data.");
+    const t = geomDiff
+      .map((p) => `${p.name}\t${p.de.toFixed(3)}\t${p.dn.toFixed(3)}\t${p.dh.toFixed(3)}\t${p.dmm.toFixed(1)} mm`)
+      .join("\n");
+    downloadTxt(t, "GeometryDiff_WMK.txt");
+  };
+
+  function downloadTxt(txt, filename) {
+    const blob = new Blob([txt], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
   }
 
-  function changeShift(g, val) {
-    setShifts((prev) => ({ ...prev, [g]: val === "" ? "" : Number(val) }));
-  }
-
-  function clearAll() {
-    setRawText("");
-    setData([]);
-    setRefGroup("");
-    setShifts({});
-    if (fileRef.current) fileRef.current.value = "";
-  }
-
+  // -------------------- UI --------------------
   return (
-    <div style={styles.page}>
-      <h1 style={styles.h1}>Station Merge (Ref Chainage Alignment)</h1>
+    <div className="sta-merge">
+      <h1>💡 IDEA by WIN MIN KO</h1>
+      <h2>📐 Station Merge & Geometry Tools</h2>
 
-      <div style={{ ...styles.card, marginBottom: 12 }}>
-        <div style={styles.hint}>
-          4 points input feature ကိုပြီးပြည့်စုံဖယ်ရှာပြီးပါပြီ ✅ ဤ version မှာ data
-          input (CSV/JSON upload/paste), reference group alignment (per-group shift),
-          merged preview, CSV export တို့ကိုသာထားရှိထားပါတယ်။
-        </div>
+      {/* File upload */}
+      <div className="card">
+        <input type="file" accept=".txt" onChange={onFile} />
+        {info && <div className="msg">{info}</div>}
       </div>
 
-      <div style={styles.row}>
-        <div style={{ ...styles.col(1.1) }}>
-          <div style={styles.card}>
-            <label style={styles.label}>Upload CSV/JSON</label>
-            <input ref={fileRef} type="file" accept=".csv,.txt,.json" style={styles.input} onChange={handleFile} />
-
-            <div style={{ height: 8 }} />
-
-            <label style={styles.label}>Or Paste CSV/JSON</label>
-            <textarea
-              value={rawText}
-              onChange={(e) => setRawText(e.target.value)}
-              placeholder={`CSV example:
-group,station,chainage,x,y
-STA1,1+020.5,1020.5,345.123,67.89
-STA2,0+500,500,,
-`}
-              style={styles.area}
-            />
-
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button style={styles.btn} onClick={handlePaste}>Load from Paste</button>
-              <button style={styles.btnGhost} onClick={clearAll}>Clear</button>
-            </div>
-          </div>
+      {/* Raw preview */}
+      {rawText && (
+        <div className="card">
+          <h3>🧾 Original Upload</h3>
+          <textarea readOnly value={rawText} className="rawbox" />
         </div>
+      )}
 
-        <div style={{ ...styles.col(1) }}>
-          <div style={styles.card}>
-            <label style={styles.label}>Reference Group</label>
-            <select
-              value={refGroup}
-              onChange={(e) => setRefGroup(e.target.value)}
-              style={{ ...styles.input, height: 42 }}
-            >
-              {groups.length === 0 && <option value="">(no data)</option>}
-              {groups.map((g) => (
-                <option key={g} value={g}>{g}</option>
+      {/* Filter panel */}
+      {Object.keys(groups).length > 0 && (
+        <div className="card">
+          <div className="row space-between">
+            <h3>🧹 Remove Unwanted Points</h3>
+            <button onClick={() => setFilterOpen((v) => !v)}>
+              {filterOpen ? "Hide Filter" : "Show Points"}
+            </button>
+          </div>
+
+          {filterOpen && (
+            <>
+              {staSortedEntries.map(([sta, pts]) => (
+                <div key={sta} className="sta-card">
+                  <div className="row space-between">
+                    <h4>{sta}</h4>
+                    <button className="danger" onClick={() => deleteGroup(sta)}>🗑️ Delete Group</button>
+                  </div>
+                  <div className="grid2">
+                    {pts.map((p) => {
+                      const checked = (keepMap[sta]?.[p.name] !== false);
+                      return (
+                        <label key={p.name} className="chk">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleKeep(sta, p.name)}
+                          />
+                          <span>{p.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              <div className="row end">
+                <button onClick={applyFilter}>✔ Apply Filter</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Merge section */}
+      {Object.keys(groups).length > 0 && (
+        <div className="card">
+          <h3>🧩 Choose Two STAs to Merge</h3>
+          <div className="row">
+            <select value={fromSta} onChange={(e) => setFromSta(e.target.value)}>
+              <option value="">-- From (Base) --</option>
+              {staNames.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+            <select value={toSta} onChange={(e) => setToSta(e.target.value)}>
+              <option value="">-- To (Merge Into Base) --</option>
+              {staNames.map((s) => (
+                <option key={s}>{s}</option>
               ))}
             </select>
 
-            <div style={{ height: 12 }} />
+            <button onClick={handleMerge}>🔄 Merge</button>
+            <button onClick={exportMerged}>💾 Export Merged</button>
+          </div>
 
-            <label style={styles.label}>Per-Group Chainage Shift (m)</label>
-            <div style={{ display: "grid", gap: 8 }}>
-              {groups.map((g) => (
-                <div key={g} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ minWidth: 90, fontWeight: 700 }}>{g}
-                    {g === refGroup && <span style={styles.badge}>REF</span>}
+          {/* tolerance summary */}
+          {mergeSummaries.length > 0 && (
+            <div className="summary">
+              <h4>Merge tolerance summary (≤ 3 mm):</h4>
+              {mergeSummaries.map((s, i) =>
+                s.count > 0 ? (
+                  <div key={i} className="line bad">
+                    ⚠ {s.group} → exceeded on {s.count} ref point(s), max={(s.maxmm * 1000).toFixed(1)} mm
                   </div>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={shifts[g] ?? (g === refGroup ? 0 : "")}
-                    onChange={(e) => changeShift(g, e.target.value)}
-                    placeholder={g === refGroup ? "0 (locked as ref)" : "e.g. +12.345"}
-                    disabled={g === refGroup}
-                    style={{ ...styles.input, maxWidth: 220 }}
-                  />
-                  <span style={styles.hint}>add to chainage</span>
-                </div>
-              ))}
-              {!groups.length && <div style={styles.hint}>No groups yet. Upload or paste first.</div>}
-            </div>
-
-            <div style={{ height: 12 }} />
-            <button
-              style={{ ...styles.btn, width: "100%" }}
-              onClick={() => downloadAsCSV("merged_stations.csv", merged)}
-              disabled={!merged.length}
-              title={!merged.length ? "Load data first" : "Export merged CSV"}
-            >
-              ⬇️ Export Merged CSV
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ height: 12 }} />
-
-      <div style={styles.card}>
-        <div style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 800 }}>Merged Preview</div>
-          <div style={styles.hint}>
-            Rows: <b>{merged.length}</b>
-          </div>
-        </div>
-
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>#</th>
-                <th style={styles.th}>Group</th>
-                <th style={styles.th}>Station</th>
-                <th style={styles.th}>Chainage</th>
-                <th style={styles.th}>x</th>
-                <th style={styles.th}>y</th>
-                <th style={styles.th}>Ref Chainage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {merged.map((r, i) => (
-                <tr key={i}>
-                  <td style={styles.td}>{i + 1}</td>
-                  <td style={styles.td}>{r.group}</td>
-                  <td style={styles.td}>{String(r.station ?? "")}</td>
-                  <td style={styles.td}>{Number.isFinite(r.chainage) ? r.chainage.toFixed(3) : ""}</td>
-                  <td style={styles.td}>{r.x !== undefined && Number.isFinite(r.x) ? r.x.toFixed(3) : ""}</td>
-                  <td style={styles.td}>{r.y !== undefined && Number.isFinite(r.y) ? r.y.toFixed(3) : ""}</td>
-                  <td style={{ ...styles.td, fontWeight: 700 }}>
-                    {Number.isFinite(r.ref_chainage) ? r.ref_chainage.toFixed(3) : ""}
-                  </td>
-                </tr>
-              ))}
-              {!merged.length && (
-                <tr>
-                  <td style={styles.td} colSpan={7}>
-                    <div style={styles.hint}>No data loaded yet. Upload CSV/JSON or paste above.</div>
-                  </td>
-                </tr>
+                ) : (
+                  <div key={i} className="line ok">
+                    ✅ {s.group} → within tolerance
+                  </div>
+                )
               )}
-            </tbody>
-          </table>
+            </div>
+          )}
         </div>
+      )}
 
-        <div style={{ marginTop: 10, ...styles.hint }}>
-          Tips:
-          <ul style={{ margin: "6px 0 0 18px" }}>
-            <li>Reference group ကို fix လုပ်ပြီးနောက်၊ အခြား group တွေမှာ shift (m) ကို ဖြည့်သွင်းပါ (e.g., +12.345).</li>
-            <li><b>Ref Chainage</b> = chainage + shift(g). Export CSV ထဲမှာပါ ပါဝင်သွားမည်။</li>
-            <li>x,y မပါလည်းရပါတယ်—optional columnsသာဖြစ်ပါတယ်။</li>
-          </ul>
+      {/* Geometry diff (1→All) */}
+      {geomShow && (
+        <div className="card">
+          <div className="row space-between">
+            <h3>📊 Geometry Difference (1 → Others, best-fit)</h3>
+            <div className="row">
+              <button onClick={hideSelectedDiffRows}>🙈 Hide Selected</button>
+              <button onClick={exportGeometryDiff}>💾 Export Diff</button>
+              <button onClick={acceptGeom}>✔ Accept</button>
+            </div>
+          </div>
+
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Ref→Pt</th>
+                  <th>ΔE₁</th>
+                  <th>ΔE₂</th>
+                  <th>ΔE diff</th>
+                  <th>ΔN diff</th>
+                  <th>ΔH diff</th>
+                  <th>Δmm</th>
+                </tr>
+              </thead>
+              <tbody>
+                {geomDiff.map((p, i) => (
+                  <tr key={i} className={p.dmm > 3 ? "err" : ""}>
+                    <td className="center">
+                      <input
+                        type="checkbox"
+                        checked={geomHideSet.has(i)}
+                        onChange={(e) => {
+                          const ns = new Set(geomHideSet);
+                          if (e.target.checked) ns.add(i);
+                          else ns.delete(i);
+                          setGeomHideSet(ns);
+                        }}
+                      />
+                    </td>
+                    <td>{p.name}</td>
+                    <td>{p.dE1.toFixed(3)}</td>
+                    <td>{p.dE2.toFixed(3)}</td>
+                    <td>{p.de.toFixed(3)}</td>
+                    <td>{p.dn.toFixed(3)}</td>
+                    <td>{p.dh.toFixed(3)}</td>
+                    <td>{p.dmm.toFixed(1)} mm</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-    </div>
-  );
-}
+      )}
+
+      {/* Last merged preview */}
+      {merged.length > 0 && (
+        <div className="card">
+          <h3>✅ Last Merged Result ({merged.length} pts)</h3>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Point</th>
+                  <th>E</th>
+                  <th>N</th>
+                  <th>H</th>
+                </tr>
+              </thead>
+              <tbody>
+                {merged.map((p, i) => (
+                  <tr key={i}>
+                    <td>{p.name}</td>
+                    <td>{p.E.toFixed(3)}</td>
+                    <td>{p.N.toFixed(3)}</td>
+                    <td>{p.H.toFixed(3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Transform tools — Reference Line only */}
+      {merged.length > 0 && (
+        <div className="card">
+          <h3>📏 Transform on Final Merged</h3>
+          <div className="grid2">
+            <div>
+              <h4>Method — Reference Line</h4>
+              <div className="grid2">
+                <input placeholder="Point A" value={refA} onChange={(e) => setRefA(e.target.value)} />
+                <input placeholder="Point B" value={refB} onChange={(e) => setRefB(e.target.value)} />
+              </div>
+              <div className="row">
+                <button onClick={applyRefLine}>▶ Apply Reference Line</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transformed preview + Export */}
+      {transformed.length > 0 && (
+        <div className="card">
+          <h3>🔄 Transformed Result ({lastMethod})</h3>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Point</th>
+                  <th>E</th>
+                  <th>N</th>
+                  <th>H</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transformed.map((p, i) => (
+                  <tr key={i}>
+                    <td>{p.name}</td>
+                    <td>{p.E.toFixed(3)}</td>
+                    <td>{p.N.toFixed(3)}</td>
+                    <td>{p.H.toFixed(3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="row end">
+            <button onClick={exportTransformed}>📄 Final Export TXT</button>
+          </div>
+        </div>
+        
