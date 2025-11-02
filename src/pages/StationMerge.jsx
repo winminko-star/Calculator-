@@ -128,75 +128,75 @@ export default function StationMerge() {
     setInfo(`🗑️ Removed ${sta}`);
   };
 
-  // -------------------- Merge (Pair) --------------------
-  const handleMerge = () => {
-    if (!fromSta || !toSta) return setInfo("⚠️ Choose two STA names first");
-    if (fromSta === toSta)  return setInfo("⚠️ Choose different STAs");
-    if (!groups[fromSta] || !groups[toSta]) return setInfo("⚠️ Invalid STA names");
+  // ✅ Replace your current handleMerge with this best-fit version
+const handleMerge = () => {
+  if (!fromSta || !toSta) return setInfo("⚠️ Choose two STAs first");
+  if (fromSta === toSta)  return setInfo("⚠️ Choose different STAs");
+  const A = groups[fromSta], B = groups[toSta];
+  if (!A || !B) return setInfo("⚠️ Invalid STA names");
 
-    const base = groups[fromSta];
-    const next = groups[toSta];
-    const baseMap = new Map(base.map((p) => [p.name, p]));
-    const nextMap = new Map(next.map((p) => [p.name, p]));
-    const common  = [...baseMap.keys()].filter((k) => nextMap.has(k));
+  // maps & common names
+  const Amap = new Map(A.map(p => [p.name, p]));
+  const Bmap = new Map(B.map(p => [p.name, p]));
+  const common = [...Amap.keys()].filter(k => Bmap.has(k));
 
-    if (common.length === 0) {
-      const mergedArr = [...base, ...next];
-      const newGroups = { ...groups };
-      delete newGroups[toSta];
-      newGroups[fromSta] = mergedArr;
-      setGroups(newGroups);
-      setMerged(mergedArr);
-      setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
-      setMergeSummaries((prev) => prev.filter((s) => s.group !== toSta));
-      setGeomDiff([]); setGeomShow(false); setTransformed([]); setLastMethod("");
-      return;
-    }
+  // if no common, just concatenate (no transform)
+  if (common.length === 0) {
+    const mergedArr = [...A, ...B];
+    const ng = { ...groups }; delete ng[toSta]; ng[fromSta] = mergedArr;
+    setGroups(ng); setMerged(mergedArr);
+    setMergeSummaries(prev => prev.filter(s => s.group !== toSta));
+    setGeomDiff([]); setGeomShow(false); setTransformed([]); setLastMethod("");
+    return setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
+  }
 
-    // average delta by common
-    let dE = 0, dN = 0, dH = 0;
-    for (const n of common) {
-      const a = baseMap.get(n), b = nextMap.get(n);
-      dE += a.E - b.E; dN += a.N - b.N; dH += a.H - b.H;
-    }
-    dE /= common.length; dN /= common.length; dH /= common.length;
+  // ---- Best-fit (EN) + mean H shift using only common points
+  const BaseEN = common.map(n => [Amap.get(n).E, Amap.get(n).N]);
+  const MovEN  = common.map(n => [Bmap.get(n).E, Bmap.get(n).N]);
+  const { scale, cos, sin, tx, ty } = fitSimilarity2D(BaseEN, MovEN);
+  let dHsum = 0; for (const n of common) dHsum += Amap.get(n).H - Bmap.get(n).H;
+  const dHavg = dHsum / common.length;
 
-    // tolerance check on references
-    let exceedCount = 0, maxmm = 0;
-    for (const n of common) {
-      const a = baseMap.get(n), b = nextMap.get(n);
-      const rE = (b.E + dE) - a.E;
-      const rN = (b.N + dN) - a.N;
-      const rH = (b.H + dH) - a.H;
-      const dmm = Math.sqrt(rE*rE + rN*rN + rH*rH);
-      if (dmm > TOL) exceedCount++;
-      if (dmm > maxmm) maxmm = dmm;
-    }
+  // helper: transform a B point into A frame
+  const tfB = (p) => ({
+    name: p.name,
+    E: scale * (cos * p.E - sin * p.N) + tx,
+    N: scale * (sin * p.E + cos * p.N) + ty,
+    H: p.H + dHavg,
+  });
 
-    // apply to non-duplicate
-    const newPts = next
-      .filter((p) => !baseMap.has(p.name))
-      .map((p) => ({ name: p.name, E: p.E + dE, N: p.N + dN, H: p.H + dH }));
-    const mergedArr = [...base, ...newPts];
+  // ---- Tolerance summary on common points (after transform)
+  let exceedCount = 0, maxmm = 0;
+  for (const n of common) {
+    const a = Amap.get(n);
+    const bT = tfB(Bmap.get(n));
+    const rE = bT.E - a.E, rN = bT.N - a.N, rH = bT.H - a.H;
+    const dmm = Math.sqrt(rE*rE + rN*rN + rH*rH);
+    if (dmm > TOL) exceedCount++;
+    if (dmm > maxmm) maxmm = dmm;
+  }
 
-    const newGroups = { ...groups };
-    delete newGroups[toSta];
-    newGroups[fromSta] = mergedArr;
-    setGroups(newGroups);
-    setMerged(mergedArr);
-    setInfo(`✅ Merged ${toSta} → ${fromSta} (refs=${common.length})`);
-    setTransformed([]); setLastMethod("");
+  // ---- Build merged: keep A’s values for duplicates; add transformed B non-duplicates
+  const nonDup = B.filter(p => !Amap.has(p.name)).map(tfB);
+  const mergedArr = [...A, ...nonDup];
 
-    // update tolerance summary
-    setMergeSummaries((prev) => {
-      const others = prev.filter((s) => s.group !== toSta);
-      return [...others, { group: toSta, count: exceedCount, maxmm }];
-    });
+  // commit
+  const ng = { ...groups }; delete ng[toSta]; ng[fromSta] = mergedArr;
+  setGroups(ng); setMerged(mergedArr);
+  setInfo(`✅ Best-fit merged ${toSta} → ${fromSta} (refs=${common.length})`);
+  setTransformed([]); setLastMethod("");
 
-    // geometry diff (best-fit sim2D + H shift)
-    computeGeometryDiff(baseMap, nextMap);
-  };
+  // update tolerance panel (mm shown)
+  setMergeSummaries(prev => {
+    const others = prev.filter(s => s.group !== toSta);
+    return [...others, { group: toSta, count: exceedCount, maxmm }];
+  });
 
+  // keep geometry-diff viewer (between original A and B)
+  const A_only = new Map(A.map(p => [p.name, p]));
+  const B_only = new Map(B.map(p => [p.name, p]));
+  computeGeometryDiff(A_only, B_only);
+};
   // -------------------- Geometry Difference (1→All) --------------------
   function fitSimilarity2D(basePts, movePts) {
     const n = basePts.length;
