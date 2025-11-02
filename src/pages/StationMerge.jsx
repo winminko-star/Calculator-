@@ -362,7 +362,7 @@ export default function StationMerge() {
 // -------------------- UI --------------------
   return (
     <div className="sta-merge">
-      <h1>💡 IDEA by WIN MIN KO</h1>
+      <h1>💡 SEATRIUM</h1>
       <h2>📐 Station Merge & Reference Line</h2>
 
       {/* File upload */}
