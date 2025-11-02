@@ -1,5 +1,6 @@
 // src/pages/StationMerge.jsx
-// 💡 IDEA by WIN MIN KO (Reference Line only; 4-point fit removed)
+// WMK — Station Merge & Reference Line only (no 4-point feature)
+// Uses external CSS (StationMerge.css). No inline styles.
 import React, { useMemo, useState } from "react";
 import "./StationMerge.css";
 
@@ -87,7 +88,7 @@ export default function StationMerge() {
   const toggleKeep = (sta, pt) => {
     setKeepMap((prev) => {
       const s = { ...(prev[sta] || {}) };
-      s[pt] = !(s[pt] === false); // default true; click toggles false/true-> false
+      s[pt] = !(s[pt] === false); // default true; click toggles false
       return { ...prev, [sta]: s };
     });
   };
@@ -186,20 +187,12 @@ export default function StationMerge() {
     setGroups(newGroups);
     setMerged(mergedArr);
     setInfo(`✅ Merged ${toSta} → ${fromSta} (refs=${common.length})`);
-    setTransformed([]);
-    setLastMethod("");
 
-    // update tolerance summary
-    setMergeSummaries((prev) => {
-      const others = prev.filter((s) => s.group !== toSta);
-      return [...others, { group: toSta, count: exceedCount, maxmm }];
-    });
-
-    // auto compute Geometry Difference (best-fit 1→All) for the two input STAs
+    // compute geometry difference for the two STAs (best-fit sim2D + H shift)
     computeGeometryDiff(baseMap, nextMap);
   };
 
-  // -------------------- Geometry Difference (1→All, best-fit sim2D + H shift) --------------------
+  // -------------------- Geometry Difference (1→All) --------------------
   function fitSimilarity2D(basePts, movePts) {
     const n = basePts.length;
     let cEx = 0, cEy = 0, cMx = 0, cMy = 0;
@@ -233,7 +226,6 @@ export default function StationMerge() {
       return;
     }
 
-    // similarity fit in EN; H uses mean shift
     const B = names.map((n) => [baseMap.get(n).E, baseMap.get(n).N]);
     const M = names.map((n) => [nextMap.get(n).E, nextMap.get(n).N]);
     const { scale, cos, sin, tx, ty } = fitSimilarity2D(B, M);
@@ -287,13 +279,12 @@ export default function StationMerge() {
     if (!merged.length) return setInfo("⚠️ Merge first.");
     const map = new Map(merged.map((p) => [p.name, p]));
     const A = map.get(refA.trim());
-    const Bp = map.get(refB.trim());
-    if (!A || !Bp) return setInfo("⚠️ Invalid reference points.");
+    const B = map.get(refB.trim());
+    if (!A || !B) return setInfo("⚠️ Invalid reference points.");
 
-    const dE = Bp.E - A.E, dN = Bp.N - A.N, dH = Bp.H - A.H;
+    const dE = B.E - A.E, dN = B.N - A.N, dH = B.H - A.H;
     const dist = Math.hypot(dE, dN);
     if (dist === 0) return setInfo("⚠️ Reference points are coincident in EN.");
-    // rotate/translate so A→(0,0,0) and B aligns to +N axis
     const phi = Math.atan2(dE, dN);
     const c = Math.cos(phi), s = Math.sin(phi);
 
@@ -306,7 +297,7 @@ export default function StationMerge() {
     setInfo(`✅ Reference line applied — A→(0,0,0)  B→(0,${dist.toFixed(3)},${dH.toFixed(3)})`);
   };
 
-  // -------------------- Export --------------------
+  // -------------------- Export helpers --------------------
   const exportMerged = () => {
     if (!merged.length) return alert("No merged data.");
     const txt = merged
@@ -344,13 +335,14 @@ export default function StationMerge() {
   // -------------------- UI --------------------
   return (
     <div className="sta-merge">
-      <h1>💡 IDEA by WIN MIN KO</h1>
-      <h2>📐 Station Merge & Geometry Tools</h2>
+      <h1>📐 Station Merge & Reference Line (WMK)</h1>
 
       {/* File upload */}
       <div className="card">
-        <input type="file" accept=".txt" onChange={onFile} />
-        {info && <div className="msg">{info}</div>}
+        <div className="row">
+          <input type="file" accept=".txt" onChange={onFile} />
+          {info && <div className="msg">{info}</div>}
+        </div>
       </div>
 
       {/* Raw preview */}
@@ -366,7 +358,7 @@ export default function StationMerge() {
         <div className="card">
           <div className="row space-between">
             <h3>🧹 Remove Unwanted Points</h3>
-            <button onClick={() => setFilterOpen((v) => !v)}>
+            <button className="btn btn-ghost" onClick={() => setFilterOpen((v) => !v)}>
               {filterOpen ? "Hide Filter" : "Show Points"}
             </button>
           </div>
@@ -377,7 +369,7 @@ export default function StationMerge() {
                 <div key={sta} className="sta-card">
                   <div className="row space-between">
                     <h4>{sta}</h4>
-                    <button className="danger" onClick={() => deleteGroup(sta)}>🗑️ Delete Group</button>
+                    <button className="btn btn-danger" onClick={() => deleteGroup(sta)}>🗑️ Delete Group</button>
                   </div>
                   <div className="grid2">
                     {pts.map((p) => {
@@ -398,7 +390,7 @@ export default function StationMerge() {
               ))}
 
               <div className="row end">
-                <button onClick={applyFilter}>✔ Apply Filter</button>
+                <button className="btn" onClick={applyFilter}>✔ Apply Filter</button>
               </div>
             </>
           )}
@@ -410,21 +402,17 @@ export default function StationMerge() {
         <div className="card">
           <h3>🧩 Choose Two STAs to Merge</h3>
           <div className="row">
-            <select value={fromSta} onChange={(e) => setFromSta(e.target.value)}>
+            <select value={fromSta} onChange={(e) => setFromSta(e.target.value)} className="input">
               <option value="">-- From (Base) --</option>
-              {staNames.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
+              {staNames.map((s) => <option key={s}>{s}</option>)}
             </select>
-            <select value={toSta} onChange={(e) => setToSta(e.target.value)}>
+            <select value={toSta} onChange={(e) => setToSta(e.target.value)} className="input">
               <option value="">-- To (Merge Into Base) --</option>
-              {staNames.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
+              {staNames.map((s) => <option key={s}>{s}</option>)}
             </select>
 
-            <button onClick={handleMerge}>🔄 Merge</button>
-            <button onClick={exportMerged}>💾 Export Merged</button>
+            <button className="btn" onClick={handleMerge}>🔄 Merge</button>
+            <button className="btn btn-ghost" onClick={exportMerged}>💾 Export Merged</button>
           </div>
 
           {/* tolerance summary */}
@@ -453,9 +441,9 @@ export default function StationMerge() {
           <div className="row space-between">
             <h3>📊 Geometry Difference (1 → Others, best-fit)</h3>
             <div className="row">
-              <button onClick={hideSelectedDiffRows}>🙈 Hide Selected</button>
-              <button onClick={exportGeometryDiff}>💾 Export Diff</button>
-              <button onClick={acceptGeom}>✔ Accept</button>
+              <button className="btn btn-ghost" onClick={hideSelectedDiffRows}>🙈 Hide Selected</button>
+              <button className="btn btn-ghost" onClick={exportGeometryDiff}>💾 Export Diff</button>
+              <button className="btn" onClick={acceptGeom}>✔ Accept</button>
             </div>
           </div>
 
@@ -532,53 +520,28 @@ export default function StationMerge() {
         </div>
       )}
 
-      {/* Transform tools — Reference Line only */}
+      {/* Transform — Reference Line only */}
       {merged.length > 0 && (
         <div className="card">
           <h3>📏 Transform on Final Merged</h3>
-          <div className="grid2">
-            <div>
-              <h4>Method — Reference Line</h4>
-              <div className="grid2">
-                <input placeholder="Point A" value={refA} onChange={(e) => setRefA(e.target.value)} />
-                <input placeholder="Point B" value={refB} onChange={(e) => setRefB(e.target.value)} />
-              </div>
-              <div className="row">
-                <button onClick={applyRefLine}>▶ Apply Reference Line</button>
-              </div>
-            </div>
+          <div className="row">
+            <input
+              className="input"
+              placeholder="Point A"
+              value={refA}
+              onChange={(e) => setRefA(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Point B"
+              value={refB}
+              onChange={(e) => setRefB(e.target.value)}
+            />
+            <button className="btn" onClick={applyRefLine}>▶ Apply Reference Line</button>
+            <button className="btn btn-ghost" onClick={exportTransformed}>📄 Final Export TXT</button>
           </div>
         </div>
       )}
-
-      {/* Transformed preview + Export */}
-      {transformed.length > 0 && (
-        <div className="card">
-          <h3>🔄 Transformed Result ({lastMethod})</h3>
-          <div className="tablewrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Point</th>
-                  <th>E</th>
-                  <th>N</th>
-                  <th>H</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transformed.map((p, i) => (
-                  <tr key={i}>
-                    <td>{p.name}</td>
-                    <td>{p.E.toFixed(3)}</td>
-                    <td>{p.N.toFixed(3)}</td>
-                    <td>{p.H.toFixed(3)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="row end">
-            <button onClick={exportTransformed}>📄 Final Export TXT</button>
-          </div>
-        </div>
-        
+    </div>
+  );
+    }
