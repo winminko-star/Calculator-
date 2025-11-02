@@ -1,6 +1,6 @@
 // src/pages/StationMerge.jsx
-// WMK — Station Merge & Reference Line only (no 4-point feature)
-// Uses external CSS (StationMerge.css). No inline styles.
+// 💡 IDEA by WIN MIN KO
+// Reference Line only (4-point UI/logic removed), supports single-group files (no merge needed).
 import React, { useMemo, useState } from "react";
 import "./StationMerge.css";
 
@@ -16,23 +16,23 @@ export default function StationMerge() {
 
   // Merge
   const [fromSta, setFromSta] = useState("");
-  const [toSta, setToSta] = useState("");
-  const [merged, setMerged] = useState([]);                 // last merged points (base content)
+  const [toSta,   setToSta]   = useState("");
+  const [merged,  setMerged]  = useState([]);               // last merged (working set when >0)
   const [mergeSummaries, setMergeSummaries] = useState([]); // [{group, count, maxmm}]
   const TOL = 0.003; // 3 mm
 
   // Geometry diff (1→All) after best-fit
-  const [geomDiff, setGeomDiff] = useState([]);             // [{name, dE1,dE2,de,dn,dh,dmm}]
-  const [geomShow, setGeomShow] = useState(false);
-  const [geomHideSet, setGeomHideSet] = useState(new Set()); // row index hide set
+  const [geomDiff,    setGeomDiff]    = useState([]);       // [{name, dE1,dE2,de,dn,dh,dmm}]
+  const [geomShow,    setGeomShow]    = useState(false);
+  const [geomHideSet, setGeomHideSet] = useState(new Set());
 
   // Reference line
   const [refA, setRefA] = useState("");
   const [refB, setRefB] = useState("");
 
-  // Transform result preview
-  const [transformed, setTransformed] = useState([]);       // preview of transformed points
-  const [lastMethod, setLastMethod] = useState("");         // "Reference Line"
+  // Transform preview
+  const [transformed, setTransformed] = useState([]);
+  const [lastMethod,  setLastMethod]  = useState("");       // "Reference Line"
 
   // -------------------- File Upload & Parse --------------------
   const onFile = (e) => {
@@ -45,19 +45,23 @@ export default function StationMerge() {
       const parsed = parseSTAFile(text);
       setGroups(parsed);
       setInfo("✅ File loaded successfully");
-      // reset states
+
+      // reset UI states
       setKeepMap({});
-      setFromSta("");
-      setToSta("");
-      setMerged([]);
-      setMergeSummaries([]);
-      setGeomDiff([]);
-      setGeomShow(false);
-      setGeomHideSet(new Set());
-      setTransformed([]);
-      setLastMethod("");
-      setRefA("");
-      setRefB("");
+      setFromSta(""); setToSta("");
+      setMerged([]); setMergeSummaries([]);
+      setGeomDiff([]); setGeomShow(false); setGeomHideSet(new Set());
+      setTransformed([]); setLastMethod("");
+      setRefA(""); setRefB("");
+
+      // 👉 One-group auto-setup (works without merge)
+      const ks = Object.keys(parsed);
+      if (ks.length === 1) {
+        const only = ks[0];
+        setFromSta(only);
+        setMerged(parsed[only]);   // merged working set ready
+        setInfo("✅ Loaded single group — ready for Reference Line");
+      }
     };
     r.readAsText(f);
   };
@@ -120,21 +124,21 @@ export default function StationMerge() {
     delete copy[sta];
     setGroups(copy);
     if (fromSta === sta) setFromSta("");
-    if (toSta === sta) setToSta("");
+    if (toSta   === sta) setToSta("");
     setInfo(`🗑️ Removed ${sta}`);
   };
 
   // -------------------- Merge (Pair) --------------------
   const handleMerge = () => {
     if (!fromSta || !toSta) return setInfo("⚠️ Choose two STA names first");
-    if (fromSta === toSta) return setInfo("⚠️ Choose different STAs");
+    if (fromSta === toSta)  return setInfo("⚠️ Choose different STAs");
     if (!groups[fromSta] || !groups[toSta]) return setInfo("⚠️ Invalid STA names");
 
     const base = groups[fromSta];
     const next = groups[toSta];
     const baseMap = new Map(base.map((p) => [p.name, p]));
     const nextMap = new Map(next.map((p) => [p.name, p]));
-    const common = [...baseMap.keys()].filter((k) => nextMap.has(k));
+    const common  = [...baseMap.keys()].filter((k) => nextMap.has(k));
 
     if (common.length === 0) {
       const mergedArr = [...base, ...next];
@@ -145,10 +149,7 @@ export default function StationMerge() {
       setMerged(mergedArr);
       setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
       setMergeSummaries((prev) => prev.filter((s) => s.group !== toSta));
-      setGeomDiff([]);
-      setGeomShow(false);
-      setTransformed([]);
-      setLastMethod("");
+      setGeomDiff([]); setGeomShow(false); setTransformed([]); setLastMethod("");
       return;
     }
 
@@ -156,21 +157,18 @@ export default function StationMerge() {
     let dE = 0, dN = 0, dH = 0;
     for (const n of common) {
       const a = baseMap.get(n), b = nextMap.get(n);
-      dE += a.E - b.E;
-      dN += a.N - b.N;
-      dH += a.H - b.H;
+      dE += a.E - b.E; dN += a.N - b.N; dH += a.H - b.H;
     }
     dE /= common.length; dN /= common.length; dH /= common.length;
 
     // tolerance check on references
-    let exceedCount = 0;
-    let maxmm = 0;
+    let exceedCount = 0, maxmm = 0;
     for (const n of common) {
       const a = baseMap.get(n), b = nextMap.get(n);
       const rE = (b.E + dE) - a.E;
       const rN = (b.N + dN) - a.N;
       const rH = (b.H + dH) - a.H;
-      const dmm = Math.sqrt(rE * rE + rN * rN + rH * rH);
+      const dmm = Math.sqrt(rE*rE + rN*rN + rH*rH);
       if (dmm > TOL) exceedCount++;
       if (dmm > maxmm) maxmm = dmm;
     }
@@ -187,8 +185,15 @@ export default function StationMerge() {
     setGroups(newGroups);
     setMerged(mergedArr);
     setInfo(`✅ Merged ${toSta} → ${fromSta} (refs=${common.length})`);
+    setTransformed([]); setLastMethod("");
 
-    // compute geometry difference for the two STAs (best-fit sim2D + H shift)
+    // update tolerance summary
+    setMergeSummaries((prev) => {
+      const others = prev.filter((s) => s.group !== toSta);
+      return [...others, { group: toSta, count: exceedCount, maxmm }];
+    });
+
+    // geometry diff (best-fit sim2D + H shift)
     computeGeometryDiff(baseMap, nextMap);
   };
 
@@ -208,7 +213,8 @@ export default function StationMerge() {
       const mx = movePts[i][0] - cMx, my = movePts[i][1] - cMy;
       Sxx += mx * bx + my * by;
       Sxy += mx * by - my * bx;
-      normM += mx * mx + my * my; normB += bx * bx + by * by;
+      normM += mx*mx + my*my;
+      normB += bx*bx + by*by;
     }
     const scale = Math.sqrt(normB / normM);
     const r = Math.hypot(Sxx, Sxy) || 1e-12;
@@ -221,8 +227,7 @@ export default function StationMerge() {
   const computeGeometryDiff = (baseMap, nextMap) => {
     const names = [...baseMap.keys()].filter((k) => nextMap.has(k));
     if (names.length < 2) {
-      setGeomDiff([]);
-      setGeomShow(false);
+      setGeomDiff([]); setGeomShow(false);
       return;
     }
 
@@ -252,7 +257,7 @@ export default function StationMerge() {
       const dE2 = mX - rMx,  dN2 = mY - rMy,  dH2 = mH - rMh;
 
       const de = dE1 - dE2, dn = dN1 - dN2, dh = dH1 - dH2;
-      const dmm = Math.sqrt(de * de + dn * dn + dh * dh) * 1000; // mm
+      const dmm = Math.sqrt(de*de + dn*dn + dh*dh) * 1000; // mm
       diffs.push({ name: `${ref}→${nm}`, dE1, dE2, de, dn, dh, dmm });
     }
     setGeomDiff(diffs);
@@ -274,24 +279,50 @@ export default function StationMerge() {
     setInfo("✅ Geometry diff accepted. Ready for next merge.");
   };
 
-  // -------------------- Reference Line (on 'merged') --------------------
+  // -------------------- Active-set helpers for Reference Line --------------------
+  const norm = (s) => (s ?? "").toString().trim().replace(/\s+/g, "").toUpperCase();
+
+  const getPointByName = (name, list) => {
+    const key = norm(name);
+    for (const p of list) if (norm(p.name) === key) return p;
+    return null;
+  };
+
+  const getActivePoints = () => {
+    if (merged.length) return merged;
+    const ks = Object.keys(groups);
+    if (ks.length === 1) return groups[ks[0]];
+    return [];
+  };
+
+  const mergedNames = useMemo(() => {
+    const data = merged.length ? merged : (Object.keys(groups).length === 1 ? groups[Object.keys(groups)[0]] : []);
+    return data.map((p) => p.name);
+  }, [merged, groups]);
+
+  // -------------------- Reference Line --------------------
   const applyRefLine = () => {
-    if (!merged.length) return setInfo("⚠️ Merge first.");
-    const map = new Map(merged.map((p) => [p.name, p]));
-    const A = map.get(refA.trim());
-    const B = map.get(refB.trim());
-    if (!A || !B) return setInfo("⚠️ Invalid reference points.");
+    const data = getActivePoints();
+    if (!data.length) return setInfo("⚠️ Provide data (upload or merge).");
+
+    const A = getPointByName(refA, data);
+    const B = getPointByName(refB, data);
+    if (!A || !B) return setInfo("⚠️ Point A / B name not found.");
+    if (norm(refA) === norm(refB)) return setInfo("⚠️ A and B must be different.");
 
     const dE = B.E - A.E, dN = B.N - A.N, dH = B.H - A.H;
     const dist = Math.hypot(dE, dN);
     if (dist === 0) return setInfo("⚠️ Reference points are coincident in EN.");
+
+    // rotate so A→(0,0,0) and AB aligns with +N axis
     const phi = Math.atan2(dE, dN);
     const c = Math.cos(phi), s = Math.sin(phi);
 
-    const out = merged.map((p) => {
+    const out = data.map((p) => {
       const e0 = p.E - A.E, n0 = p.N - A.N, h0 = p.H - A.H;
-      return { name: p.name, E: c * e0 - s * n0, N: s * e0 + c * n0, H: h0 };
+      return { name: p.name, E: c*e0 - s*n0, N: s*e0 + c*n0, H: h0 };
     });
+
     setTransformed(out);
     setLastMethod("Reference Line");
     setInfo(`✅ Reference line applied — A→(0,0,0)  B→(0,${dist.toFixed(3)},${dH.toFixed(3)})`);
@@ -299,20 +330,17 @@ export default function StationMerge() {
 
   // -------------------- Export helpers --------------------
   const exportMerged = () => {
-    if (!merged.length) return alert("No merged data.");
-    const txt = merged
-      .map((p) => `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`)
-      .join("\n");
+    const data = merged.length ? merged : getActivePoints();
+    if (!data.length) return alert("No merged data.");
+    const txt = data.map((p) => `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`).join("\n");
     downloadTxt(txt, "Merged_STA.txt");
   };
 
   const exportTransformed = () => {
-    const data = transformed.length ? transformed : merged;
+    const data = transformed.length ? transformed : getActivePoints();
     if (!data.length) return alert("No data to export.");
     const name = transformed.length ? `Final_${lastMethod.replace(/\s+/g, "")}.txt` : "Merged_STA.txt";
-    const txt = data
-      .map((p) => `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`)
-      .join("\n");
+    const txt = data.map((p) => `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`).join("\n");
     downloadTxt(txt, name);
   };
 
@@ -331,11 +359,11 @@ export default function StationMerge() {
     a.download = filename;
     a.click();
   }
-
-  // -------------------- UI --------------------
+// -------------------- UI --------------------
   return (
     <div className="sta-merge">
-      <h1>📐 Station Merge & Reference Line (WMK)</h1>
+      <h1>💡 IDEA by WIN MIN KO</h1>
+      <h2>📐 Station Merge & Reference Line</h2>
 
       {/* File upload */}
       <div className="card">
@@ -397,8 +425,8 @@ export default function StationMerge() {
         </div>
       )}
 
-      {/* Merge section */}
-      {Object.keys(groups).length > 0 && (
+      {/* Merge section (optional) */}
+      {Object.keys(groups).length > 1 && (
         <div className="card">
           <h3>🧩 Choose Two STAs to Merge</h3>
           <div className="row">
@@ -491,10 +519,10 @@ export default function StationMerge() {
         </div>
       )}
 
-      {/* Last merged preview */}
-      {merged.length > 0 && (
+      {/* Active set preview (merged or single-group) */}
+      {(merged.length || Object.keys(groups).length === 1) && (
         <div className="card">
-          <h3>✅ Last Merged Result ({merged.length} pts)</h3>
+          <h3>✅ Working Set ({(merged.length || (Object.keys(groups).length===1 ? groups[Object.keys(groups)[0]].length : 0))} pts)</h3>
           <div className="tablewrap">
             <table>
               <thead>
@@ -506,7 +534,7 @@ export default function StationMerge() {
                 </tr>
               </thead>
               <tbody>
-                {merged.map((p, i) => (
+                {(merged.length ? merged : groups[Object.keys(groups)[0]]).map((p, i) => (
                   <tr key={i}>
                     <td>{p.name}</td>
                     <td>{p.E.toFixed(3)}</td>
@@ -521,27 +549,65 @@ export default function StationMerge() {
       )}
 
       {/* Transform — Reference Line only */}
-      {merged.length > 0 && (
+      {(merged.length || Object.keys(groups).length === 1) && (
         <div className="card">
-          <h3>📏 Transform on Final Merged</h3>
+          <h3>📏 Transform on Working Set — Reference Line</h3>
           <div className="row">
             <input
               className="input"
+              list="merged-names"
               placeholder="Point A"
               value={refA}
               onChange={(e) => setRefA(e.target.value)}
             />
             <input
               className="input"
+              list="merged-names"
               placeholder="Point B"
               value={refB}
               onChange={(e) => setRefB(e.target.value)}
             />
+            <datalist id="merged-names">
+              {mergedNames.map((n) => <option key={n} value={n} />)}
+            </datalist>
+
             <button className="btn" onClick={applyRefLine}>▶ Apply Reference Line</button>
+            <button className="btn btn-ghost" onClick={exportTransformed}>📄 Final Export TXT</button>
+          </div>
+        </div>
+      )}
+
+      {/* Transformed preview */}
+      {transformed.length > 0 && (
+        <div className="card">
+          <h3>🔄 Transformed Result ({lastMethod})</h3>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Point</th>
+                  <th>E</th>
+                  <th>N</th>
+                  <th>H</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transformed.map((p, i) => (
+                  <tr key={i}>
+                    <td>{p.name}</td>
+                    <td>{p.E.toFixed(3)}</td>
+                    <td>{p.N.toFixed(3)}</td>
+                    <td>{p.H.toFixed(3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="row end">
             <button className="btn btn-ghost" onClick={exportTransformed}>📄 Final Export TXT</button>
           </div>
         </div>
       )}
     </div>
   );
-    }
+}
