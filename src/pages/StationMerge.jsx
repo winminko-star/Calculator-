@@ -1,5 +1,5 @@
 // src/pages/StationMerge.jsx
-// 💡 IDEA by WIN MIN KO
+// 💡 SEATRIUM
 // Reference Line only (4-point UI/logic removed), supports single-group files (no merge needed).
 import React, { useMemo, useState } from "react";
 import "./StationMerge.css";
