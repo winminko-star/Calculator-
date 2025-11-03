@@ -75,11 +75,13 @@ export default function StationMerge() {
       const p = raw.split(",").map((x) => x.trim());
       if (p.length < 4) continue;
       const [name, e, n, h] = p;
-      if (/^STA\d+/i.test(name)) {
-        current = name;
-        out[current] = [];
-        continue;
-      }
+// accept both "STA1" and "STA.1" style headers
+if (/^STA\.?\d+/i.test(name)) {
+  current = name.replace(/\s+/g, "");
+  out[current] = [];
+  continue;
+}
+ 
       if (current) {
         const E = +e, N = +n, H = +h;
         if ([E, N, H].every(Number.isFinite)) out[current].push({ name, E, N, H });
