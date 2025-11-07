@@ -69,7 +69,7 @@ setEditLocked(false); // 👉 upload အသစ်တိုင်း edit ပြ�
     r.readAsText(f);
   };
 // return a unique STA key like "STA1", "STA1_2", ...
-const uniqueStaName = (base, obj) => {
+const uniqueStaKey = (base, obj) => {
   let key = base.replace(/\s+/g, "");
   if (!obj[key]) return key;
   let i = 2;
@@ -94,7 +94,7 @@ const uniqueStaName = (base, obj) => {
     if (m) {
       // normalize header label (remove dot/spaces) then auto-unique
       const base = name.replace(/\./g, "").replace(/\s+/g, "");
-      const key = uniqueStaName(base, out);
+      const key = uniqueStaKey(base, out);
       current = key;
       out[current] = [];
       continue;
