@@ -190,3 +190,14 @@ th:first-child {
   transform: none !important;
   z-index: 9999;
   }
+.ptrow {
+  display: grid;
+  grid-template-columns: 28px 1fr 1fr 1fr 1fr;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.chk {
+  display: flex;
+  align-items: center;
+}
