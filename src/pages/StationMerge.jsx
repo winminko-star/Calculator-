@@ -1,7 +1,7 @@
 // src/pages/StationMerge.jsx
 // 💡 SEATRIUM
 // Reference Line only (4-point UI/logic removed), supports single-group files (no merge needed).
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import "./StationMerge.css";
 
 export default function StationMerge() {
@@ -13,6 +13,8 @@ export default function StationMerge() {
   // Filter (unwanted points)
   const [filterOpen, setFilterOpen] = useState(false);
   const [keepMap, setKeepMap] = useState({});               // {STA:{ptName:true/false}}
+// Edit lock: first merge ဖြစ်သွားရင် Edit မဖြစ်အောင်
+const [editLocked, setEditLocked] = useState(false);
 
   // Merge
   const [fromSta, setFromSta] = useState("");
@@ -53,6 +55,7 @@ export default function StationMerge() {
       setGeomDiff([]); setGeomShow(false); setGeomHideSet(new Set());
       setTransformed([]); setLastMethod("");
       setRefA(""); setRefB("");
+setEditLocked(false); // 👉 upload အသစ်တိုင်း edit ပြန်ဖွင့်
 
       // 👉 One-group auto-setup (works without merge)
       const ks = Object.keys(parsed);
