@@ -118,34 +118,40 @@ useEffect(() => {
     });
   };
 
-  const applyFilter = () => {
-    const next = {};
-    for (const [sta, pts] of Object.entries(groups)) {
-      const km = keepMap[sta] || {};
-      next[sta] = pts.filter((p) => km[p.name] !== false);
-    }
-    setGroups(next);
-    setFilterOpen(false);
-    setInfo("✅ Filter applied (removed unchecked points).");
-  };
+ const applyFilter = () => {
+  const next = {};
+  for (const [sta, pts] of Object.entries(groups)) {
+    const km = keepMap[sta] || {};
+    next[sta] = pts
+      .filter((p) => km[p.name] !== false)
+      .map((p) => ({ ...p, name: (p.name ?? "").toString().trim() }));
+  }
+  setGroups(next);
+  setFilterOpen(false);
+  setInfo("✅ Filter applied (removed unchecked points & trimmed names).");
+};
 // Point field update (name/E/N/H). Locked after first merge.
-const updatePointField = (sta, index, field, value) => {
-  if (editLocked) return;
+// ---- Update a single point field (name/E/N/H) in-place ----
+const updatePointField = (sta, idx, key, val) => {
   setGroups((prev) => {
-    const copy = { ...prev };
-    const arr = [...(copy[sta] || [])];
-    if (!arr[index]) return prev;
+    const list = prev[sta];
+    if (!list) return prev;
 
-    const pt = { ...arr[index] };
-    if (field === "name") {
-      pt.name = (value ?? "").toString();
+    const next = [...list];
+    const p = { ...next[idx] };
+
+    if (key === "name") {
+      // point name: keep raw string; trim later on Apply Filter/merge if you like
+      p.name = (val ?? "").toString();
     } else {
-      const v = parseFloat(value);
-      if (Number.isFinite(v)) pt[field] = v; // invalid input -> ignore
+      // numeric fields: only commit when it's a valid number
+      const num = Number(val);
+      if (!Number.isFinite(num)) return prev; // ignore invalid typing
+      p[key] = num;
     }
-    arr[index] = pt;
-    copy[sta] = arr;
-    return copy;
+
+    next[idx] = p;
+    return { ...prev, [sta]: next };
   });
 };
 
