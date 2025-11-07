@@ -11,3 +11,6 @@
   for = "/manifest.webmanifest"
   [headers.values]
     Content-Type = "application/manifest+json"
+
+[build.environment]
+  NETLIFY_BUILD_DEBUG = "true"
