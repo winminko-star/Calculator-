@@ -128,6 +128,26 @@ useEffect(() => {
     setFilterOpen(false);
     setInfo("✅ Filter applied (removed unchecked points).");
   };
+// Point field update (name/E/N/H). Locked after first merge.
+const updatePointField = (sta, index, field, value) => {
+  if (editLocked) return;
+  setGroups((prev) => {
+    const copy = { ...prev };
+    const arr = [...(copy[sta] || [])];
+    if (!arr[index]) return prev;
+
+    const pt = { ...arr[index] };
+    if (field === "name") {
+      pt.name = (value ?? "").toString();
+    } else {
+      const v = parseFloat(value);
+      if (Number.isFinite(v)) pt[field] = v; // invalid input -> ignore
+    }
+    arr[index] = pt;
+    copy[sta] = arr;
+    return copy;
+  });
+};
 
   // -------------------- Helpers --------------------
   const staNames = Object.keys(groups);
@@ -148,6 +168,34 @@ useEffect(() => {
     if (toSta   === sta) setToSta("");
     setInfo(`🗑️ Removed ${sta}`);
   };
+// STA rename (key change). Merged/locked ဖြစ်ရင် မပြောင်းနိုင်။
+const renameSta = (oldKey, newLabel) => {
+  if (editLocked) return;
+  const base = (newLabel ?? "").toString().trim().replace(/\s+/g, "");
+  if (!base) return;
+
+  // allow same name if unchanged; else make unique
+  let candidate = base;
+  if (candidate !== oldKey && groups[candidate]) {
+    let i = 2;
+    while (groups[`${candidate}_${i}`]) i++;
+    candidate = `${candidate}_${i}`;
+  }
+
+  setGroups((prev) => {
+    if (!prev[oldKey]) return prev;
+    const copy = { ...prev };
+    copy[candidate] = copy[oldKey];
+    delete copy[oldKey];
+    return copy;
+  });
+
+  // keep selections in sync
+  setFromSta((v) => (v === oldKey ? candidate : v));
+  setToSta((v) => (v === oldKey ? candidate : v));
+
+  setInfo(`✏️ Renamed ${oldKey} → ${candidate}`);
+};
 
   // ✅ Replace your current handleMerge with this best-fit version
 const handleMerge = () => {
