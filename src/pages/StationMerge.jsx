@@ -68,6 +68,14 @@ setEditLocked(false); // 👉 upload အသစ်တိုင်း edit ပြ�
     };
     r.readAsText(f);
   };
+// return a unique STA key like "STA1", "STA1_2", ...
+const uniqueStaName = (base, obj) => {
+  let key = base.replace(/\s+/g, "");
+  if (!obj[key]) return key;
+  let i = 2;
+  while (obj[`${key}_${i}`]) i++;
+  return `${key}_${i}`;
+};
 
   function parseSTAFile(text) {
     const lines = text.split(/\r?\n/);
@@ -78,9 +86,11 @@ setEditLocked(false); // 👉 upload အသစ်တိုင်း edit ပြ�
       const p = raw.split(",").map((x) => x.trim());
       if (p.length < 4) continue;
       const [name, e, n, h] = p;
-// accept both "STA1" and "STA.1" style headers
+// accept "STA1" & "STA.1" as headers; duplicate headers get auto-unique keys
 if (/^STA\.?\d+/i.test(name)) {
-  current = name.replace(/\s+/g, "");
+  const clean = name.replace(/\s+/g, "");
+  const key = uniqueStaName(clean, out); // avoid overwriting same header
+  current = key;
   out[current] = [];
   continue;
 }
@@ -92,6 +102,12 @@ if (/^STA\.?\d+/i.test(name)) {
     }
     return out;
   }
+// Single group + not joined yet ⇒ groups → merged auto-sync
+useEffect(() => {
+  if (editLocked) return;                  // once joined, don't touch merged
+  const ks = Object.keys(groups);
+  if (ks.length === 1) setMerged(groups[ks[0]]);
+}, [groups, editLocked]);
 
   // -------------------- Filter (Unwanted Points) --------------------
   const toggleKeep = (sta, pt) => {
@@ -146,14 +162,19 @@ const handleMerge = () => {
   const common = [...Amap.keys()].filter(k => Bmap.has(k));
 
   // if no common, just concatenate (no transform)
-  if (common.length === 0) {
-    const mergedArr = [...A, ...B];
-    const ng = { ...groups }; delete ng[toSta]; ng[fromSta] = mergedArr;
-    setGroups(ng); setMerged(mergedArr);
-    setMergeSummaries(prev => prev.filter(s => s.group !== toSta));
-    setGeomDiff([]); setGeomShow(false); setTransformed([]); setLastMethod("");
-    return setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
-  }
+if (common.length === 0) {
+  const mergedArr = [...A, ...B];
+  const ng = { ...groups }; delete ng[toSta]; ng[fromSta] = mergedArr;
+  setGroups(ng); setMerged(mergedArr);
+  setMergeSummaries(prev => prev.filter(s => s.group !== toSta));
+  setGeomDiff([]); setGeomShow(false);
+  setTransformed([]); setLastMethod("");
+
+  // ✅ lock edits BEFORE returning
+  setEditLocked(true);
+
+  return setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
+}
 
   // ---- Best-fit (EN) + mean H shift using only common points
   const BaseEN = common.map(n => [Amap.get(n).E, Amap.get(n).N]);
@@ -185,12 +206,13 @@ const handleMerge = () => {
   const nonDup = B.filter(p => !Amap.has(p.name)).map(tfB);
   const mergedArr = [...A, ...nonDup];
 
-  // commit
   const ng = { ...groups }; delete ng[toSta]; ng[fromSta] = mergedArr;
-  setGroups(ng); setMerged(mergedArr);
-  setInfo(`✅ Best-fit merged ${toSta} → ${fromSta} (refs=${common.length})`);
-  setTransformed([]); setLastMethod("");
+setGroups(ng); setMerged(mergedArr);
+setInfo(`✅ Best-fit merged ${toSta} → ${fromSta} (refs=${common.length})`);
+setTransformed([]); setLastMethod("");
 
+// ✅ lock here too (no return just after this line)
+setEditLocked(true);
   // update tolerance panel (mm shown)
   setMergeSummaries(prev => {
     const others = prev.filter(s => s.group !== toSta);
