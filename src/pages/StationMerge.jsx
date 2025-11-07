@@ -78,30 +78,35 @@ const uniqueStaName = (base, obj) => {
 };
 
   function parseSTAFile(text) {
-    const lines = text.split(/\r?\n/);
-    const out = {};
-    let current = null;
-    for (let raw of lines) {
-      if (!raw.trim()) continue;
-      const p = raw.split(",").map((x) => x.trim());
-      if (p.length < 4) continue;
-      const [name, e, n, h] = p;
-// accept "STA1" & "STA.1" as headers; duplicate headers get auto-unique keys
-if (/^STA\.?\d+/i.test(name)) {
-  const clean = name.replace(/\s+/g, "");
-  const key = uniqueStaName(clean, out); // avoid overwriting same header
-  current = key;
-  out[current] = [];
-  continue;
-}
- 
-      if (current) {
-        const E = +e, N = +n, H = +h;
-        if ([E, N, H].every(Number.isFinite)) out[current].push({ name, E, N, H });
-      }
+  const lines = text.split(/\r?\n/);
+  const out = {};
+  let current = null;
+
+  for (let raw of lines) {
+    if (!raw.trim()) continue;
+    const p = raw.split(",").map((x) => x.trim());
+    if (p.length < 4) continue;
+
+    const [name, e, n, h] = p;
+
+    // accept "STA1" or "STA.1"
+    const m = /^STA\.?\d+/i.exec(name);
+    if (m) {
+      // normalize header label (remove dot/spaces) then auto-unique
+      const base = name.replace(/\./g, "").replace(/\s+/g, "");
+      const key = uniqueStaKey(base, out);
+      current = key;
+      out[current] = [];
+      continue;
     }
-    return out;
+
+    if (current) {
+      const E = +e, N = +n, H = +h;
+      if ([E, N, H].every(Number.isFinite)) out[current].push({ name, E, N, H });
+    }
   }
+  return out;
+}
 // Single group + not joined yet ⇒ groups → merged auto-sync
 useEffect(() => {
   if (editLocked) return;                  // once joined, don't touch merged
@@ -122,13 +127,16 @@ useEffect(() => {
   const next = {};
   for (const [sta, pts] of Object.entries(groups)) {
     const km = keepMap[sta] || {};
-    next[sta] = pts
+
+    const cleaned = pts
       .filter((p) => km[p.name] !== false)
       .map((p) => ({ ...p, name: (p.name ?? "").toString().trim() }));
+
+    next[sta] = makeUniquePoints(cleaned);
   }
   setGroups(next);
   setFilterOpen(false);
-  setInfo("✅ Filter applied (removed unchecked points & trimmed names).");
+  setInfo("✅ Filter applied (trimmed & de-duplicated point names).");
 };
 // Point field update (name/E/N/H). Locked after first merge.
 // ---- Update a single point field (name/E/N/H) in-place ----
@@ -156,6 +164,19 @@ const updatePointField = (sta, idx, key, val) => {
 };
 
   // -------------------- Helpers --------------------
+// make point names unique inside one STA: A, A_2, A_3...
+const makeUniquePoints = (pts) => {
+  const used = new Map(); // key = uppercased name
+  return pts.map((p) => {
+    let base = (p.name ?? "").toString().trim();
+    if (!base) base = "PT";
+    let key = base.toUpperCase();
+    let i = (used.get(key) || 0) + 1;
+    used.set(key, i);
+    const name = i === 1 ? base : `${base}_${i}`;
+    return { ...p, name };
+  });
+};
   const staNames = Object.keys(groups);
   const staSortedEntries = useMemo(
     () =>
