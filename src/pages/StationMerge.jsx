@@ -473,26 +473,90 @@ setEditLocked(true);
               {staSortedEntries.map(([sta, pts]) => (
                 <div key={sta} className="sta-card">
                   <div className="row space-between">
-                    <h4>{sta}</h4>
-                    <button className="btn btn-danger" onClick={() => deleteGroup(sta)}>🗑️ Delete Group</button>
-                  </div>
-                  <div className="grid2">
-                    {pts.map((p) => {
-                      const checked = (keepMap[sta]?.[p.name] !== false);
-                      return (
-                        <label key={p.name} className="chk">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleKeep(sta, p.name)}
-                          />
-                          <span>{p.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+  <div className="row" style={{ gap: 8 }}>
+    <h4 style={{ margin: 0 }}>{sta}</h4>
+    {!editLocked && (
+      <>
+        <input
+          className="input"
+          style={{ width: 160 }}
+          placeholder="Rename STA..."
+          onKeyDown={(e) => {
+            if (e.key === "Enter") renameSta(sta, e.currentTarget.value);
+          }}
+        />
+        <button
+          className="btn btn-ghost"
+          onClick={(e) => {
+            const box = e.currentTarget.previousSibling;
+            const val = box && box.value ? box.value : "";
+            renameSta(sta, val);
+          }}
+        >
+          ✏️ Rename
+        </button>
+      </>
+    )}
+  </div>
+
+  <button className="btn btn-danger" onClick={() => deleteGroup(sta)} disabled={editLocked}>
+    🗑️ Delete Group
+  </button>
+</div>
+                <div>
+  {pts.map((p, idx) => {
+    const checked = (keepMap[sta]?.[p.name] !== false);
+    return (
+      <div key={`${p.name}-${idx}`} className="ptrow">
+        {/* keep / remove */}
+        <label className="chk">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={() => toggleKeep(sta, p.name)}
+            disabled={editLocked}
+          />
+          <span />
+        </label>
+
+        {/* Name */}
+        <input
+          className="input"
+          placeholder="Point name"
+          value={p.name}
+          onChange={(e) => updatePointField(sta, idx, "name", e.target.value)}
+          disabled={editLocked}
+        />
+
+        {/* E / N / H */}
+        <input
+          className="input"
+          placeholder="E"
+          value={p.E}
+          onChange={(e) => updatePointField(sta, idx, "E", e.target.value)}
+          disabled={editLocked}
+          inputMode="decimal"
+        />
+        <input
+          className="input"
+          placeholder="N"
+          value={p.N}
+          onChange={(e) => updatePointField(sta, idx, "N", e.target.value)}
+          disabled={editLocked}
+          inputMode="decimal"
+        />
+        <input
+          className="input"
+          placeholder="H"
+          value={p.H}
+          onChange={(e) => updatePointField(sta, idx, "H", e.target.value)}
+          disabled={editLocked}
+          inputMode="decimal"
+        />
+      </div>
+    );
+  })}
+</div>
 
               <div className="row end">
                 <button className="btn" onClick={applyFilter}>✔ Apply Filter</button>
