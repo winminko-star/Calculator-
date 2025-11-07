@@ -94,7 +94,7 @@ const uniqueStaName = (base, obj) => {
     if (m) {
       // normalize header label (remove dot/spaces) then auto-unique
       const base = name.replace(/\./g, "").replace(/\s+/g, "");
-      const key = uniqueStaKey(base, out);
+      const key = uniqueStaName(base, out);
       current = key;
       out[current] = [];
       continue;
