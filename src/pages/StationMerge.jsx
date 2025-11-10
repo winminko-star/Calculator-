@@ -839,33 +839,40 @@ return (
 )}
 
 {/* Transformed preview */}
-{transformed.length > 0 && (
-  <div className="card">
-    <h3>🔄 Transformed Result ({lastMethod})</h3>
-    <div className="tablewrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Point</th>
-            <th>E</th>
-            <th>N</th>
-            <th>H</th>
-          </tr>
-        </thead>
-        <tbody>
-          {transformed.map((p, i) => (
-            <tr key={i}>
-              <td>{p.name}</td>
-              <td>{p.E.toFixed(3)}</td>
-              <td>{p.N.toFixed(3)}</td>
-              <td>{p.H.toFixed(3)}</td>
+  {transformed.length > 0 && (
+    <div className="card">
+      <h3>🔄 Transformed Result ({lastMethod})</h3>
+      <div className="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Point</th>
+              <th>E</th>
+              <th>N</th>
+              <th>H</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {transformed.map((p, i) => (
+              <tr key={i}>
+                <td>{p.name}</td>
+                <td>{p.E.toFixed(3)}</td>
+                <td>{p.N.toFixed(3)}</td>
+                <td>{p.H.toFixed(3)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="row end">
+        <button className="btn btn-ghost" onClick={exportTransformed}>
+          📄 Final Export TXT
+        </button>
+      </div>
     </div>
-    <div className="row end">
-      <button className="btn btn-ghost" onClick={exportTransformed}>📄 Final Export TXT</button>
-    </div>
-  </div>
-)}
+  )}
+
+  <footer className="footer">© 2025 WMK Seatrium DC Team</footer>
+</div>   {/* ← closes <div className="sta-merge"> */}
+);       {/* ← closes return ( */}
+}        {/* ← closes function StationMerge */}
