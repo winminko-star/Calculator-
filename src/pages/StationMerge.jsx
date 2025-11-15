@@ -354,6 +354,8 @@ export default function StationMerge() {
 function fitSimilarity2D(basePts, movePts) {
   // basePts = destination (A), movePts = source (B)
   const n = basePts.length;
+
+  // centroids
   let cEx = 0, cEy = 0, cMx = 0, cMy = 0;
   for (let i = 0; i < n; i++) {
     cEx += basePts[i][0]; cEy += basePts[i][1];
@@ -361,18 +363,20 @@ function fitSimilarity2D(basePts, movePts) {
   }
   cEx /= n; cEy /= n; cMx /= n; cMy /= n;
 
-  let Sxx = 0, Sxy = 0, normM = 0;
+  // cross-covariance + norms
+  let Sxx = 0, Sxy = 0, normM = 0, normB = 0;
   for (let i = 0; i < n; i++) {
     const bx = basePts[i][0] - cEx, by = basePts[i][1] - cEy;
     const mx = movePts[i][0] - cMx, my = movePts[i][1] - cMy;
-    Sxx += mx * bx + my * by;      // dot for rotation
-    Sxy += mx * by - my * bx;      // cross for rotation
-    normM += mx*mx + my*my;        // ||M||^2
+    Sxx += mx * bx + my * by;
+    Sxy += mx * by - my * bx;
+    normM += mx*mx + my*my;   // ||M||^2
+    normB += bx*bx + by*by;   // ||B||^2
   }
 
   const r = Math.hypot(Sxx, Sxy) || 1e-12;
-  // ✅ correct Procrustes scale
-  const scale = r / (normM || 1e-12);
+  // ✅ correct Procrustes scale: matches base size to move size
+  const scale = Math.sqrt((normB || 1e-12) / (normM || 1e-12));
   const cos = Sxx / r, sin = Sxy / r;
 
   const tx = cEx - scale * (cos * cMx - sin * cMy);
