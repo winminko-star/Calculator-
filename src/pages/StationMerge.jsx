@@ -365,13 +365,13 @@ function fitSimilarity2D(basePts, movePts) {
   for (let i = 0; i < n; i++) {
     const bx = basePts[i][0] - cEx, by = basePts[i][1] - cEy;
     const mx = movePts[i][0] - cMx, my = movePts[i][1] - cMy;
-    Sxx += mx * bx + my * by;      // dot component
-    Sxy += mx * by - my * bx;      // cross component
+    Sxx += mx * bx + my * by;      // dot for rotation
+    Sxy += mx * by - my * bx;      // cross for rotation
     normM += mx*mx + my*my;        // ||M||^2
   }
 
   const r = Math.hypot(Sxx, Sxy) || 1e-12;
-  // ✅ Correct Procrustes scale:
+  // ✅ correct Procrustes scale
   const scale = r / (normM || 1e-12);
   const cos = Sxx / r, sin = Sxy / r;
 
