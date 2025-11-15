@@ -351,47 +351,35 @@ export default function StationMerge() {
       setInfo(`✅ Best-fit merged ${toSta} → ${fromSta} (all refs ≤ 3.0 mm)`);
     }
   };
-
-  // -------------------- Geometry Difference (1→All) --------------------
-  function fitSimilarity2D(basePts, movePts) {
-    const n = basePts.length;
-    let cEx = 0,
-      cEy = 0,
-      cMx = 0,
-      cMy = 0;
-    for (let i = 0; i < n; i++) {
-      cEx += basePts[i][0];
-      cEy += basePts[i][1];
-      cMx += movePts[i][0];
-      cMy += movePts[i][1];
-    }
-    cEx /= n;
-    cEy /= n;
-    cMx /= n;
-    cMy /= n;
-
-    let Sxx = 0,
-      Sxy = 0,
-      normM = 0,
-      normB = 0;
-    for (let i = 0; i < n; i++) {
-      const bx = basePts[i][0] - cEx,
-        by = basePts[i][1] - cEy;
-      const mx = movePts[i][0] - cMx,
-        my = movePts[i][1] - cMy;
-      Sxx += mx * bx + my * by;
-      Sxy += mx * by - my * bx;
-      normM += mx * mx + my * my;
-      normB += bx * bx + by * by;
-    }
-    const scale = Math.sqrt(normB / normM);
-    const r = Math.hypot(Sxx, Sxy) || 1e-12;
-    const cos = Sxx / r,
-      sin = Sxy / r;
-    const tx = cEx - scale * (cos * cMx - sin * cMy);
-    const ty = cEy - scale * (sin * cMx + cos * cMy);
-    return { scale, cos, sin, tx, ty };
+function fitSimilarity2D(basePts, movePts) {
+  // basePts = destination (A), movePts = source (B)
+  const n = basePts.length;
+  let cEx = 0, cEy = 0, cMx = 0, cMy = 0;
+  for (let i = 0; i < n; i++) {
+    cEx += basePts[i][0]; cEy += basePts[i][1];
+    cMx += movePts[i][0]; cMy += movePts[i][1];
   }
+  cEx /= n; cEy /= n; cMx /= n; cMy /= n;
+
+  let Sxx = 0, Sxy = 0, normM = 0;
+  for (let i = 0; i < n; i++) {
+    const bx = basePts[i][0] - cEx, by = basePts[i][1] - cEy;
+    const mx = movePts[i][0] - cMx, my = movePts[i][1] - cMy;
+    Sxx += mx * bx + my * by;      // dot component
+    Sxy += mx * by - my * bx;      // cross component
+    normM += mx*mx + my*my;        // ||M||^2
+  }
+
+  const r = Math.hypot(Sxx, Sxy) || 1e-12;
+  // ✅ Correct Procrustes scale:
+  const scale = r / (normM || 1e-12);
+  const cos = Sxx / r, sin = Sxy / r;
+
+  const tx = cEx - scale * (cos * cMx - sin * cMy);
+  const ty = cEy - scale * (sin * cMx + cos * cMy);
+
+  return { scale, cos, sin, tx, ty };
+}
 
   const computeGeometryDiff = (baseMap, nextMap) => {
     const names = [...baseMap.keys()].filter((k) => nextMap.has(k));
