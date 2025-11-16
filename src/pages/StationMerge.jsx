@@ -244,50 +244,69 @@ export default function StationMerge() {
 
     setInfo(`✏️ Renamed ${oldKey} → ${candidate}`);
   };
-// ✅ Best-fit merge with 3 mm tolerance check
 const handleMerge = () => {
-  if (!fromSta || !toSta) { setInfo("⚠️ Choose two STAs first"); return; }
-  if (fromSta === toSta)  { setInfo("⚠️ Choose different STAs"); return; }
+  if (!fromSta || !toSta) return setInfo("⚠️ Choose two STAs first");
+  if (fromSta === toSta) return setInfo("⚠️ Choose different STAs");
 
-  const A = groups[fromSta], B = groups[toSta];
-  if (!A || !B) { setInfo("⚠️ Invalid STA names"); return; }
+  const A = groups[fromSta];
+  const B = groups[toSta];
+  if (!A || !B) return setInfo("⚠️ Invalid STA names");
 
-  // maps & common names
+  // ---------------------------
+  //  MAPS + COMMON NAMES
+  // ---------------------------
   const Amap = new Map(A.map(p => [p.name, p]));
   const Bmap = new Map(B.map(p => [p.name, p]));
   const common = [...Amap.keys()].filter(k => Bmap.has(k));
 
-  // ---- no common: just concatenate (no transform)
+  // ---------------------------
+  //  CASE 1 — NO COMMON POINTS
+  // ---------------------------
   if (common.length === 0) {
     const mergedArr = [...A, ...B];
-    const ng = { ...groups }; delete ng[toSta]; ng[fromSta] = mergedArr;
-    setGroups(ng); setMerged(mergedArr);
+    const ng = { ...groups };
+    delete ng[toSta];
+    ng[fromSta] = mergedArr;
+
+    setGroups(ng);
+    setMerged(mergedArr);
     setMergeSummaries(prev => prev.filter(s => s.group !== toSta));
-    setGeomDiff([]); setGeomShow(false);
-    setTransformed([]); setLastMethod("");
-    setEditLocked(true); // lock BEFORE return
-    setInfo(`✅ ${toSta} → ${fromSta} (no common pts)`);
-    return;
+    setGeomDiff([]);
+    setGeomShow(false);
+    setTransformed([]);
+    setLastMethod("");
+    setEditLocked(true);
+
+    return setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
   }
 
-  // ---- need ≥ 2 common for best-fit
+  // ---------------------------
+  //  NEED ≥2 COMMON POINTS
+  // ---------------------------
   if (common.length < 2) {
     setInfo("⚠️ Need ≥2 common points for best-fit.");
     return;
   }
 
-  // ---- first common point 3 mm check (3D distance in ENH)
+  // ---------------------------
+  //  CHECK FIRST COMMON POINT (3mm)
+  // ---------------------------
+  const TOL_FIRST = 0.003;
   {
     const p0 = common[0];
-    const a0 = Amap.get(p0), b0 = Bmap.get(p0);
-    const d0 = Math.hypot(a0.E - b0.E, a0.N - b0.N, a0.H - b0.H); // metres
-    if (d0 > 0.003) {
+    const a0 = Amap.get(p0);
+    const b0 = Bmap.get(p0);
+    const d0 = Math.hypot(a0.E - b0.E, a0.N - b0.N, a0.H - b0.H);
+
+    if (d0 > TOL_FIRST) {
       alert(`⚠ First common point '${p0}' differs by ${(d0 * 1000).toFixed(1)} mm`);
-      // return; // uncomment to abort merge when first point > 3 mm
+      // return; // enable if you want to STOP merge when >3 mm
     }
   }
 
-  // ---- Best-fit (EN) + mean H shift using only common names
+  // ---------------------------
+  //  BEST-FIT (EN), MEAN H SHIFT
+  // ---------------------------
   const BaseEN = common.map(n => [Amap.get(n).E, Amap.get(n).N]);
   const MovEN  = common.map(n => [Bmap.get(n).E, Bmap.get(n).N]);
   const { scale, cos, sin, tx, ty } = fitSimilarity2D(BaseEN, MovEN);
@@ -296,7 +315,6 @@ const handleMerge = () => {
   for (const n of common) dHsum += Amap.get(n).H - Bmap.get(n).H;
   const dHavg = dHsum / common.length;
 
-  // transform B → A frame
   const tfB = (p) => ({
     name: p.name,
     E: scale * (cos * p.E - sin * p.N) + tx,
@@ -304,70 +322,97 @@ const handleMerge = () => {
     H: p.H + dHavg,
   });
 
-  // ---- tolerance summary on common points (after transform)
-  let exceedCount = 0, maxmm = 0;
-  const TOL_M = 0.003; // 3 mm in metres
+  // ---------------------------
+  //  TOLERANCE SUMMARY
+  // ---------------------------
+  const TOL = 0.003;
+  let exceedCount = 0;
+  let maxmm = 0;
+
   for (const n of common) {
     const a = Amap.get(n);
     const bT = tfB(Bmap.get(n));
-    const rE = bT.E - a.E, rN = bT.N - a.N, rH = bT.H - a.H;
-    const d = Math.sqrt(rE*rE + rN*rN + rH*rH); // metres
-    if (d > TOL_M) exceedCount++;
+    const d = Math.sqrt(
+      (bT.E - a.E) ** 2 +
+      (bT.N - a.N) ** 2 +
+      (bT.H - a.H) ** 2
+    );
+
+    if (d > TOL) exceedCount++;
     if (d > maxmm) maxmm = d;
   }
 
-  // ---- Build merged: keep A’s values for duplicates; add transformed B non-duplicates
+  // ---------------------------
+  //  MERGE FINAL
+  // ---------------------------
   const nonDup = B.filter(p => !Amap.has(p.name)).map(tfB);
   const mergedArr = [...A, ...nonDup];
 
-  const ng = { ...groups }; delete ng[toSta]; ng[fromSta] = mergedArr;
-  setGroups(ng); setMerged(mergedArr);
-  setTransformed([]); setLastMethod("");
-  setEditLocked(true); // lock after successful merge
+  const ng = { ...groups };
+  delete ng[toSta];
+  ng[fromSta] = mergedArr;
 
-  // update tolerance panel (maxmm stored in metres)
+  setGroups(ng);
+  setMerged(mergedArr);
+  setTransformed([]);
+  setLastMethod("");
+  setEditLocked(true);
+
+  // ---------------------------
+  //  SUMMARY PANEL UPDATE
+  // ---------------------------
   setMergeSummaries(prev => {
     const others = prev.filter(s => s.group !== toSta);
     return [...others, { group: toSta, count: exceedCount, maxmm }];
   });
 
-  // optional: geometry-diff viewer (original A vs original B)
-  const A_only = new Map(A.map(p => [p.name, p]));
-  const B_only = new Map(B.map(p => [p.name, p]));
-  computeGeometryDiff(A_only, B_only);
+  // ---------------------------
+  // GEOMETRY DIFF VIEWER
+  // ---------------------------
+  computeGeometryDiff(Amap, Bmap);
 
-  // info line with tolerance summary
+  // ---------------------------
+  //  INFO MESSAGE
+  // ---------------------------
   if (exceedCount > 0) {
-    setInfo(`⚠️ Best-fit merged ${toSta} → ${fromSta} — ${exceedCount} pt(s) > 3.0 mm (max ${(maxmm * 1000).toFixed(1)} mm)`);
+    setInfo(
+      `⚠️ Best-fit merged ${toSta} → ${fromSta} — ${exceedCount} pt(s) > 3mm (max ${(maxmm * 1000).toFixed(1)} mm)`
+    );
   } else {
-    setInfo(`✅ Best-fit merged ${toSta} → ${fromSta} (all refs ≤ 3.0 mm)`);
+    setInfo(`✅ Best-fit merged ${toSta} → ${fromSta} (all ≤ 3mm)`);
   }
 };
-
-// ✅ Orthogonal Procrustes (2D similarity: scale + rotation + translation)
 function fitSimilarity2D(basePts, movePts) {
-  // basePts = destination (A), movePts = source (B) — arrays of [E, N]
   const n = basePts.length;
   let cEx = 0, cEy = 0, cMx = 0, cMy = 0;
 
   for (let i = 0; i < n; i++) {
-    cEx += basePts[i][0]; cEy += basePts[i][1];
-    cMx += movePts[i][0]; cMy += movePts[i][1];
+    cEx += basePts[i][0];
+    cEy += basePts[i][1];
+    cMx += movePts[i][0];
+    cMy += movePts[i][1];
   }
-  cEx /= n; cEy /= n; cMx /= n; cMy /= n;
+
+  cEx /= n; cEy /= n;
+  cMx /= n; cMy /= n;
 
   let Sxx = 0, Sxy = 0, normM = 0;
+
   for (let i = 0; i < n; i++) {
-    const bx = basePts[i][0] - cEx, by = basePts[i][1] - cEy;
-    const mx = movePts[i][0] - cMx, my = movePts[i][1] - cMy;
-    Sxx += mx * bx + my * by;      // dot
-    Sxy += mx * by - my * bx;      // cross
-    normM += mx*mx + my*my;        // ||M_c||^2
+    const bx = basePts[i][0] - cEx;
+    const by = basePts[i][1] - cEy;
+    const mx = movePts[i][0] - cMx;
+    const my = movePts[i][1] - cMy;
+
+    Sxx += mx * bx + my * by;
+    Sxy += mx * by - my * bx;
+    normM += mx * mx + my * my;
   }
 
   const r = Math.hypot(Sxx, Sxy) || 1e-12;
-  const scale = r / (normM || 1e-12); // ✅ correct scale
-  const cos = Sxx / r, sin = Sxy / r;
+  const scale = r / (normM || 1e-12);
+  const cos = Sxx / r;
+  const sin = Sxy / r;
 
   const tx = cEx - scale * (cos * cMx - sin * cMy);
   const ty = cEy - scale * (sin * cMx + cos * cMy);
