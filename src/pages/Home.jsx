@@ -93,7 +93,7 @@ export default function Home() {
           <h4>Created by Win Min Ko(Seatrium DC Team).</h4>  
 <button
   onClick={() => {
-    window.location.href = "https://wa.me/959xxxxxxxxx";
+    window.location.href = "https://wa.me/6582833174";
   }}
   style={{ padding: 12, borderRadius: 8 }}
 >
