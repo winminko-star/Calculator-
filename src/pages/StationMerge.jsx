@@ -697,7 +697,7 @@ function fitSimilarity2D(basePts, movePts) {
                               type="checkbox"
                               checked={checked}
                               onChange={() => toggleKeep(sta, p.name)}
-                              disabled={editLocked}
+                              
                             />
                             <span />
                           </label>
