@@ -825,7 +825,7 @@ export default function StationMerge() {
                             ] !== false;
                           return (
                             <div
-                              key={`${p.name}-${idx}`}
+                              key={idx}
                               className="ptrow"
                             >
                               {/* keep / remove */}
@@ -841,10 +841,7 @@ export default function StationMerge() {
                                       p.name
                                     )
                                   }
-                                  disabled={
-                                    editLocked
-                                  }
-                                />
+                                                              />
                                 <span />
                               </label>
 
