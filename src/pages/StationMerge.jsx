@@ -127,14 +127,17 @@ export default function StationMerge() {
     }
   }, [groups]);
 
-  // -------------------- Filter (Unwanted Points) --------------------
   const toggleKeep = (sta, ptName) => {
-    setKeepMap((prev) => {
-      const s = { ...(prev[sta] || {}) };
-      s[ptName] = !(s[ptName] === false); // default true; click → false
-      return { ...prev, [sta]: s };
-    });
-  };
+  setKeepMap((prev) => {
+    const staMap = { ...(prev[sta] || {}) };
+    const current = staMap[ptName];
+    // default = true
+    // undefined / true  ⇒ false  (remove)
+    // false             ⇒ true   (keep back)
+    staMap[ptName] = current === false ? true : false;
+    return { ...prev, [sta]: staMap };
+  });
+};
 
   const applyFilter = () => {
     const next = {};
@@ -685,7 +688,7 @@ export default function StationMerge() {
                       const checked = keepMap[sta]?.[p.name] !== false;
                       return (
                         <div
-                          key={`${p.name}-${idx}`}
+                          key={idx}
                           className="ptrow"
                         >
                           {/* keep / remove */}
