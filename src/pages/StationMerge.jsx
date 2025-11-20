@@ -717,53 +717,22 @@ function fitSimilarity2D(basePts, movePts) {
                             }
                             disabled={editLocked}
                           />
-
-                          {/* E / N / H */}
-                          <input
-                            className="input"
-                            placeholder="E"
-                            value={p.E}
-                            onChange={(e) =>
-                              updatePointField(
-                                sta,
-                                idx,
-                                "E",
-                                e.target.value
-                              )
-                            }
-                            disabled={editLocked}
-                            inputMode="decimal"
-                          />
-                          <input
-                            className="input"
-                            placeholder="N"
-                            value={p.N}
-                            onChange={(e) =>
-                              updatePointField(
-                                sta,
-                                idx,
-                                "N",
-                                e.target.value
-                              )
-                            }
-                            disabled={editLocked}
-                            inputMode="decimal"
-                          />
-                          <input
-                            className="input"
-                            placeholder="H"
-                            value={p.H}
-                            onChange={(e) =>
-                              updatePointField(
-                                sta,
-                                idx,
-                                "H",
-                                e.target.value
-                              )
-                            }
-                            disabled={editLocked}
-                            inputMode="decimal"
-                          />
+{/* E / N / H (read-only – value မပြောင်းနိုင်အောင်) */}
+<input
+  className="input"
+  value={p.E.toFixed(4)}
+  readOnly
+/>
+<input
+  className="input"
+  value={p.N.toFixed(4)}
+  readOnly
+/>
+<input
+  className="input"
+  value={p.H.toFixed(4)}
+  readOnly
+/>
                         </div>
                       );
                     })}
