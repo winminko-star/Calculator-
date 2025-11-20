@@ -72,6 +72,7 @@ export default function StationMerge() {
   const [refA, setRefA] = useState("");
   const [refB, setRefB] = useState("");
   const [transformed, setTransformed] = useState([]);
+  const [mergeErrors, setMergeErrors] = useState([]);
 
   // ===== 1) parse upload =====
   const handleFile = (e) => {
@@ -214,109 +215,159 @@ export default function StationMerge() {
     setTransformed([]);
   };
 
-  // ===== 3) Merge two STAs (3 mm tolerance) =====
-  const handleMerge = () => {
-    if (!fromSta || !toSta) {
-      setInfo("⚠️ Choose two STAs first.");
-      return;
-    }
-    if (fromSta === toSta) {
-      setInfo("⚠️ Choose different STAs.");
-      return;
-    }
-    const A = groups[fromSta];
-    const B = groups[toSta];
-    if (!A || !B) {
-      setInfo("⚠️ Invalid STA names.");
-      return;
-    }
+const handleMerge = () => {
+  if (!fromSta || !toSta) {
+    setInfo("⚠️ Choose two STAs first");
+    return;
+  }
+  if (fromSta === toSta) {
+    setInfo("⚠️ Choose different STAs");
+    return;
+  }
 
-    // build maps and common names
-    const Amap = new Map(A.map((p) => [p.name, p]));
-    const Bmap = new Map(B.map((p) => [p.name, p]));
-    const common = [...Amap.keys()].filter((k) => Bmap.has(k));
+  const A = groups[fromSta];
+  const B = groups[toSta];
+  if (!A || !B) {
+    setInfo("⚠️ Invalid STA names");
+    return;
+  }
 
-    // no common → just join (no transform)
-    if (common.length === 0) {
-      const mergedArr = [...A, ...B];
-      const ng = { ...groups };
-      delete ng[toSta];
-      ng[fromSta] = mergedArr;
-      setGroups(ng);
-      setMerged(mergedArr);
-      setMergeSummaries((prev) => prev.filter((s) => s.group !== toSta));
-      setEditLocked(true);
-      setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts).`);
-      return;
-    }
+  // maps & common names
+  const Amap = new Map(A.map((p) => [p.name, p]));
+  const Bmap = new Map(B.map((p) => [p.name, p]));
+  const common = [...Amap.keys()].filter((k) => Bmap.has(k));
 
-    // need at least 2 common points
-    if (common.length < 2) {
-      setInfo("⚠️ Need ≥2 common points for best-fit.");
-      return;
-    }
-
-    // best-fit EN, mean H shift
-    const baseEN = common.map((n) => [Amap.get(n).E, Amap.get(n).N]);
-    const movEN = common.map((n) => [Bmap.get(n).E, Bmap.get(n).N]);
-    const { scale, cos, sin, tx, ty } = fitSimilarity2D(baseEN, movEN);
-
-    let dHsum = 0;
-    for (const n of common) {
-      dHsum += Amap.get(n).H - Bmap.get(n).H;
-    }
-    const dHavg = dHsum / common.length;
-
-    const transformB = (p) => ({
-      name: p.name,
-      E: scale * (cos * p.E - sin * p.N) + tx,
-      N: scale * (sin * p.E + cos * p.N) + ty,
-      H: p.H + dHavg,
-    });
-
-    // tolerance summary (3 mm)
-    const TOL = 0.003;
-    let exceedCount = 0;
-    let maxmm = 0;
-    for (const n of common) {
-      const a = Amap.get(n);
-      const bt = transformB(Bmap.get(n));
-      const dE = bt.E - a.E;
-      const dN = bt.N - a.N;
-      const dH = bt.H - a.H;
-      const d = Math.sqrt(dE * dE + dN * dN + dH * dH); // m
-      if (d > TOL) exceedCount++;
-      if (d > maxmm) maxmm = d;
-    }
-
-    const nonDup = B.filter((p) => !Amap.has(p.name)).map(transformB);
-    const mergedArr = [...A, ...nonDup];
-
+  // ---- no common: just concat (no transform)
+  if (common.length === 0) {
+    const mergedArr = [...A, ...B];
     const ng = { ...groups };
     delete ng[toSta];
     ng[fromSta] = mergedArr;
-
     setGroups(ng);
     setMerged(mergedArr);
-    setEditLocked(true);
+    setMergeSummaries((prev) => prev.filter((s) => s.group !== toSta));
+    setGeomDiff([]);
+    setGeomShow(false);
     setTransformed([]);
+    setLastMethod("");
+    setEditLocked(true);
+    setMergeErrors([]); // ❗ error listလည်း clear
+    setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
+    return;
+  }
 
-    setMergeSummaries((prev) => {
-      const others = prev.filter((s) => s.group !== toSta);
-      return [
-        ...others,
-        {
-          group: toSta,
-          count: exceedCount,
-          maxmm,
-        },
-      ];
-    });
+  // ---- need ≥ 2 common for best-fit
+  if (common.length < 2) {
+    setInfo("⚠️ Need ≥2 common points for best-fit.");
+    return;
+  }
 
-    setInfo(
-      `✅ Best-fit merged ${toSta} → ${fromSta} (refs=${common.length})`
-    );
-  };
+  // ---- first common point 3 mm check (3D)
+  const TOL_FIRST_PT = 0.003; // 3 mm (m)
+  {
+    const p0 = common[0];
+    const a0 = Amap.get(p0);
+    const b0 = Bmap.get(p0);
+    const d0 = Math.hypot(a0.E - b0.E, a0.N - b0.N, a0.H - b0.H);
+    if (d0 > TOL_FIRST_PT) {
+      alert(
+        `⚠ First common point '${p0}' differs by ${(d0 * 1000).toFixed(
+          1
+        )} mm`
+      );
+      // abort လိုရင် အောက်က return ကို uncomment လုပ်
+      // return;
+    }
+  }
+
+  // ---- Best-fit (EN) + mean H shift using only common names
+  const BaseEN = common.map((n) => [Amap.get(n).E, Amap.get(n).N]);
+  const MovEN = common.map((n) => [Bmap.get(n).E, Bmap.get(n).N]);
+  const { scale, cos, sin, tx, ty } = fitSimilarity2D(BaseEN, MovEN);
+
+  let dHsum = 0;
+  for (const n of common) dHsum += Amap.get(n).H - Bmap.get(n).H;
+  const dHavg = dHsum / common.length;
+
+  const tfB = (p) => ({
+    name: p.name,
+    E: scale * (cos * p.E - sin * p.N) + tx,
+    N: scale * (sin * p.E + cos * p.N) + ty,
+    H: p.H + dHavg,
+  });
+
+  // ---- tolerance summary + ERROR LIST on common points (after transform)
+  const TOL = 0.003; // 3 mm in meters
+  let exceedCount = 0;
+  let maxm = 0;
+  const errList = [];
+
+  for (const n of common) {
+    const a = Amap.get(n);
+    const bT = tfB(Bmap.get(n));
+
+    const rE = bT.E - a.E;
+    const rN = bT.N - a.N;
+    const rH = bT.H - a.H;
+
+    const d = Math.sqrt(rE * rE + rN * rN + rH * rH); // meters
+    if (d > TOL) {
+      exceedCount++;
+      if (d > maxm) maxm = d;
+
+      // ❗ 3mm ကျော်တဲ့ point ကို mm unit နဲ့ error list ထဲသိမ်း
+      errList.push({
+        name: n,
+        dE: rE,
+        dN: rN,
+        dH: rH,
+        dmm: d * 1000, // mm
+        from: fromSta,
+        to: toSta,
+      });
+    }
+  }
+
+  // ---- Build merged: keep A’s values for duplicates; add transformed B non-duplicates
+  const nonDup = B.filter((p) => !Amap.has(p.name)).map(tfB);
+  const mergedArr = [...A, ...nonDup];
+
+  const ng = { ...groups };
+  delete ng[toSta];
+  ng[fromSta] = mergedArr;
+  setGroups(ng);
+  setMerged(mergedArr);
+  setTransformed([]);
+  setLastMethod("");
+  setEditLocked(true);
+
+  // tolerance summary (group-level)
+  setMergeSummaries((prev) => {
+    const others = prev.filter((s) => s.group !== toSta);
+    return [
+      ...others,
+      {
+        group: toSta,
+        count: exceedCount,
+        maxmm: maxm, // m
+      },
+    ];
+  });
+
+  // ❗ point-level error list (3 mm ကျော်တွေ)
+  setMergeErrors(errList);
+
+  // geometry-diff viewer (လိုသလို)
+  const A_only = new Map(A.map((p) => [p.name, p]));
+  const B_only = new Map(B.map((p) => [p.name, p]));
+  computeGeometryDiff(A_only, B_only);
+
+  setInfo(
+    `✅ Best-fit merged ${toSta} → ${fromSta} (refs=${common.length}, errors>${(
+      TOL * 1000
+    ).toFixed(0)}mm = ${errList.length})`
+  );
+};
 
   // Export merged ENH (before reference line)
   const exportMerged = () => {
@@ -609,10 +660,37 @@ export default function StationMerge() {
               💾 Export Merged ENH
             </button>
           </div>
+{renderToleranceSummary()}
 
-          {renderToleranceSummary()}
-        </div>
-      )}
+          {/* 🔻 3 mm ထက် ကျော်တဲ့ common points list 🔻 */}
+          {mergeErrors.length > 0 && (
+            <div className="tablewrap" style={{ marginTop: 12 }}>
+              <h4>⚠ Common points &gt; 3 mm (last merge)</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pt</th>
+                    <th>ΔE (m)</th>
+                    <th>ΔN (m)</th>
+                    <th>ΔH (m)</th>
+                    <th>Δ(mm)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mergeErrors.map((p, i) => (
+                    <tr key={i}>
+                      <td>{p.name}</td>
+                      <td>{p.dE.toFixed(4)}</td>
+                      <td>{p.dN.toFixed(4)}</td>
+                      <td>{p.dH.toFixed(4)}</td>
+                      <td>{p.dmm.toFixed(1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          
 
       {/* 5) Working set preview */}
       {getWorkingSet().length > 0 && (
