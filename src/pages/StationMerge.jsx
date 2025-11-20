@@ -1,6 +1,6 @@
 // ===== StationMerge.jsx — PART 1/3 =====
 import React, { useState } from "react";
-import "../StationMerge.css"; // CSS ရှိသလိုသုံး
+import "./StationMerge.css"; // CSS ရှိသလိုသုံး
 
 // 2D best-fit similarity (scale + rotation + shift)
 function fitSimilarity2D(basePts, movePts) {
