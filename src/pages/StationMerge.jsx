@@ -381,7 +381,7 @@ export default function StationMerge() {
 
     // projection
     const along  = vx * ux + vy * uy;       // N-axis (forward)
-    const across = -vx * uy + vy * ux;      // E-axis (perpendicular)
+    const across = vx * uy - vy * ux;      // E-axis (perpendicular)
 
     return {
       ...p,
