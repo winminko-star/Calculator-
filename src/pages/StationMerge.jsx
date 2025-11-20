@@ -346,53 +346,54 @@ export default function StationMerge() {
     return [];
   };
 
-  // Apply reference line (Point A / Point B)
   const applyRefLine = () => {
-    const ws = getWorkingSet();
-    if (!ws || ws.length === 0) {
-      setInfo("⚠️ No working set. Merge first (or single STA only).");
-      return;
-    }
-    const A = ws.find((p) => p.name === refA);
-    const B = ws.find((p) => p.name === refB);
-    if (!A || !B) {
-      setInfo("⚠️ Choose valid point names for A / B.");
-      return;
-    }
+  const pts = getWorkingSet();
+  if (!refA || !refB) {
+    setInfo("⚠️ Enter reference points A and B");
+    return;
+  }
 
-    const dx = B.E - A.E;
-    const dy = B.N - A.N;
-    const len = Math.hypot(dx, dy);
-    if (!Number.isFinite(len) || len < 1e-6) {
-      setInfo("⚠️ Reference points are too close.");
-      return;
-    }
+  const A = pts.find(p => p.name === refA);
+  const B = pts.find(p => p.name === refB);
 
-    const ux = dx / len;
-const uy = dy / len;
+  if (!A || !B) {
+    setInfo("⚠️ Invalid reference point names");
+    return;
+  }
 
-const refPts = merged.map((p) => {
-  const vx = p.E - A.E;
-  const vy = p.N - A.N;
+  // vector from A → B
+  const dx = B.E - A.E;
+  const dy = B.N - A.N;
 
-  // 👉 East ကို cross-track လိုချင်လို့ အစားဖွင့်လိုက်တယ်
-  const newE = -vx * uy + vy * ux;  // sideways
-  const newN =  vx * ux + vy * uy;  // along ref line
-  const newH = p.H - A.H;           // first ref point H = 0
+  const len = Math.hypot(dx, dy);
+  if (!Number.isFinite(len) || len < 1e-6) {
+    setInfo("⚠️ Reference points are too close.");
+    return;
+  }
 
-  return {
-    ...p,
-    E: newE,
-    N: newN,
-    H: newH,
-  };
-});
+  // unit direction
+  const ux = dx / len;   // along (N direction)
+  const uy = dy / len;
 
-    setTransformed(out);
-    setInfo(
-      `📏 Reference line applied with A='${A.name}' (0,0,0) and B='${B.name}'.`
-    );
-  };
+  const result = pts.map(p => {
+    const vx = p.E - A.E;
+    const vy = p.N - A.N;
+
+    // projection
+    const along  = vx * ux + vy * uy;       // N-axis (forward)
+    const across = -vx * uy + vy * ux;      // E-axis (perpendicular)
+
+    return {
+      ...p,
+      E: across,           // East = across
+      N: along,            // North = along
+      H: p.H - A.H         // A point = 0
+    };
+  });
+
+  setTransformed(result);
+  setInfo(`📏 Reference Line Applied (A=${refA}, B=${refB})`);
+};
 
   // export final (after reference line)
   const exportTransformed = () => {
@@ -691,8 +692,8 @@ const refPts = merged.map((p) => {
               <thead>
                 <tr>
                   <th>Pt</th>
-                  <th>E (along)</th>
-                  <th>N (across)</th>
+                  <th>E (across)</th>
+                  <th>N (along)</th>
                   <th>H (A=0)</th>
                 </tr>
               </thead>
