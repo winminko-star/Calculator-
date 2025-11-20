@@ -369,21 +369,24 @@ export default function StationMerge() {
     }
 
     const ux = dx / len;
-    const uy = dy / len;
+const uy = dy / len;
 
-    const out = ws.map((p) => {
-      const rx = p.E - A.E;
-      const ry = p.N - A.N;
-      const along = rx * ux + ry * uy; // new E (chainage)
-      const across = rx * -uy + ry * ux; // new N (offset)
-      const H = p.H - A.H; // A အမြင့်ကို 0 အဖြစ်ယူ
-      return {
-        name: p.name,
-        E: along,
-        N: across,
-        H,
-      };
-    });
+const refPts = merged.map((p) => {
+  const vx = p.E - A.E;
+  const vy = p.N - A.N;
+
+  // 👉 East ကို cross-track လိုချင်လို့ အစားဖွင့်လိုက်တယ်
+  const newE = -vx * uy + vy * ux;  // sideways
+  const newN =  vx * ux + vy * uy;  // along ref line
+  const newH = p.H - A.H;           // first ref point H = 0
+
+  return {
+    ...p,
+    E: newE,
+    N: newN,
+    H: newH,
+  };
+});
 
     setTransformed(out);
     setInfo(
