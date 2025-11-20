@@ -515,7 +515,7 @@ export default function StationMerge() {
                     (keepMap[sta]?.[p.name] ?? true) !== false;
                   return (
                     <div
-                      key={`${p.name}-${idx}`}
+                      key={idx}
                       className="ptrow"
                     >
                       {/* keep / remove */}
