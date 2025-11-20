@@ -1,6 +1,9 @@
 // src/pages/StationMerge.jsx
-// 💡 SEATRIUM
-// Station merge + Reference Line (ENH). Supports multi-group STA files.
+// 💡 SEATRIUM DC – Station Merge + Reference Line
+// - STA1 / STA.1 / STA 1 headers အလိုအလျောက် group ခွဲ
+// - Unwanted points checkbox နဲ့ remove/edit လုပ်လို့ရ
+// - Best-fit merge (EN) + H shift
+// - Reference line transform
 
 import React, { useMemo, useState, useEffect } from "react";
 import "./StationMerge.css";
@@ -15,17 +18,14 @@ export default function StationMerge() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [keepMap, setKeepMap] = useState({}); // {STA:{ptName:true/false}}
 
-  // Edit lock: first merge ဖြစ်သွားရင် Edit မဖြစ်အောင်
-  const [editLocked, setEditLocked] = useState(false);
-
   // Merge
   const [fromSta, setFromSta] = useState("");
   const [toSta, setToSta] = useState("");
-  const [merged, setMerged] = useState([]); // last merged (working set when >0)
-  const [mergeSummaries, setMergeSummaries] = useState([]); // [{group, count, maxmm}]
-  const TOL = 0.003; // 3 mm (m)
+  const [merged, setMerged] = useState([]); // working set
+  const [mergeSummaries, setMergeSummaries] = useState([]); // [{group, count, maxmm}] (maxmm in m)
+  const TOL = 0.003; // 3 mm (in metres)
 
-  // Geometry diff (1→All) after best-fit
+  // Geometry diff (1→All)
   const [geomDiff, setGeomDiff] = useState([]); // [{name, dE1,dE2,de,dn,dh,dmm}]
   const [geomShow, setGeomShow] = useState(false);
   const [geomHideSet, setGeomHideSet] = useState(new Set());
@@ -63,14 +63,13 @@ export default function StationMerge() {
       setLastMethod("");
       setRefA("");
       setRefB("");
-      setEditLocked(false); // 👉 upload အသစ်တိုင်း edit ပြန်ဖွင့်
 
-      // 👉 One-group auto-setup (works without merge)
+      // 👉 One-group auto-setup
       const ks = Object.keys(parsed);
       if (ks.length === 1) {
         const only = ks[0];
         setFromSta(only);
-        setMerged(parsed[only]); // merged working set ready
+        setMerged(parsed[only]);
         setInfo("✅ Loaded single group — ready for Reference Line");
       }
     };
@@ -98,10 +97,9 @@ export default function StationMerge() {
 
       const [name, e, n, h] = p;
 
-      // accept "STA1" or "STA.1"
+      // header: STA1 / STA.1 / STA 1 / sta.1 ...
       const m = /^STA\.?\d+/i.exec(name);
       if (m) {
-        // normalize header label (remove dot/spaces) then auto-unique
         const base = name.replace(/\./g, "").replace(/\s+/g, "");
         const key = uniqueStaKey(base, out);
         current = key;
@@ -113,27 +111,27 @@ export default function StationMerge() {
         const E = +e,
           N = +n,
           H = +h;
-        if ([E, N, H].every(Number.isFinite))
+        if ([E, N, H].every(Number.isFinite)) {
           out[current].push({ name, E, N, H });
+        }
       }
     }
     return out;
   }
 
-  // Single group + not joined yet ⇒ groups → merged auto-sync
+  // Single group ⇒ keep merged auto-sync
   useEffect(() => {
-    if (editLocked) return; // once joined, don't touch merged
     const ks = Object.keys(groups);
-    if (ks.length === 1) setMerged(groups[ks[0]]);
-  }, [groups, editLocked]);
+    if (ks.length === 1) {
+      setMerged(groups[ks[0]]);
+    }
+  }, [groups]);
 
   // -------------------- Filter (Unwanted Points) --------------------
-  const toggleKeep = (sta, pt) => {
+  const toggleKeep = (sta, ptName) => {
     setKeepMap((prev) => {
       const s = { ...(prev[sta] || {}) };
-      const cur = s[pt]; // undefined or true => checked, false => unchecked
-      // 👉 store only explicit false when user unticks
-      s[pt] = cur === false ? true : false;
+      s[ptName] = !(s[ptName] === false); // default true; click → false
       return { ...prev, [sta]: s };
     });
   };
@@ -152,12 +150,11 @@ export default function StationMerge() {
     setInfo("✅ Filter applied (trimmed & de-duplicated point names).");
   };
 
-  // ---- Update a single point field (name/E/N/H) in-place ----
+  // update a single point field (name/E/N/H)
   const updatePointField = (sta, idx, key, val) => {
     setGroups((prev) => {
       const list = prev[sta];
       if (!list) return prev;
-
       const next = [...list];
       const p = { ...next[idx] };
 
@@ -165,7 +162,7 @@ export default function StationMerge() {
         p.name = (val ?? "").toString();
       } else {
         const num = Number(val);
-        if (!Number.isFinite(num)) return prev; // ignore invalid typing
+        if (!Number.isFinite(num)) return prev; // ignore invalid
         p[key] = num;
       }
 
@@ -190,6 +187,7 @@ export default function StationMerge() {
   };
 
   const staNames = Object.keys(groups);
+
   const staSortedEntries = useMemo(
     () =>
       Object.entries(groups).map(([sta, pts]) => [
@@ -199,22 +197,11 @@ export default function StationMerge() {
     [groups]
   );
 
-  const deleteGroup = (sta) => {
-    const copy = { ...groups };
-    delete copy[sta];
-    setGroups(copy);
-    if (fromSta === sta) setFromSta("");
-    if (toSta === sta) setToSta("");
-    setInfo(`🗑️ Removed ${sta}`);
-  };
-
-  // STA rename (key change). Merged/locked ဖြစ်ရင် မပြောင်းနိုင်။
+  // rename STA key (no lock)
   const renameSta = (oldKey, newLabel) => {
-    if (editLocked) return;
     const base = (newLabel ?? "").toString().trim().replace(/\s+/g, "");
     if (!base) return;
 
-    // allow same name if unchanged; else make unique
     let candidate = base;
     if (candidate !== oldKey && groups[candidate]) {
       let i = 2;
@@ -230,14 +217,12 @@ export default function StationMerge() {
       return copy;
     });
 
-    // keep selections in sync
     setFromSta((v) => (v === oldKey ? candidate : v));
     setToSta((v) => (v === oldKey ? candidate : v));
 
     setInfo(`✏️ Renamed ${oldKey} → ${candidate}`);
   };
-
-  // ==================== Best-fit merge with 3 mm tolerance ====================
+// -------------------- Best-fit merge (EN + H shift) --------------------
   const handleMerge = () => {
     if (!fromSta || !toSta) {
       setInfo("⚠️ Choose two STAs first");
@@ -247,8 +232,9 @@ export default function StationMerge() {
       setInfo("⚠️ Choose different STAs");
       return;
     }
-    const A = groups[fromSta],
-      B = groups[toSta];
+
+    const A = groups[fromSta];
+    const B = groups[toSta];
     if (!A || !B) {
       setInfo("⚠️ Invalid STA names");
       return;
@@ -259,7 +245,7 @@ export default function StationMerge() {
     const Bmap = new Map(B.map((p) => [p.name, p]));
     const common = [...Amap.keys()].filter((k) => Bmap.has(k));
 
-    // ---- no common: just concatenate (no transform)
+    // ---- No common: just concatenate
     if (common.length === 0) {
       const mergedArr = [...A, ...B];
       const ng = { ...groups };
@@ -272,7 +258,6 @@ export default function StationMerge() {
       setGeomShow(false);
       setTransformed([]);
       setLastMethod("");
-      setEditLocked(true);
       setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
       return;
     }
@@ -283,16 +268,34 @@ export default function StationMerge() {
       return;
     }
 
+    // ---- first common point 3 mm check (3D)
+    const TOL_FIRST_PT = 0.003; // 3 mm
+    {
+      const p0 = common[0];
+      const a0 = Amap.get(p0);
+      const b0 = Bmap.get(p0);
+      const d0 = Math.hypot(a0.E - b0.E, a0.N - b0.N, a0.H - b0.H);
+      if (d0 > TOL_FIRST_PT) {
+        alert(
+          `⚠ First common point '${p0}' differs by ${(d0 * 1000).toFixed(
+            1
+          )} mm`
+        );
+        // အပြင်မှာ လုံးဝမပေါင်းချင်ရင် အောက်က return ကို uncomment လုပ်နိုင်
+        // return;
+      }
+    }
+
     // ---- Best-fit (EN) + mean H shift using only common points
-    const BaseEN = common.map((n) => [Amap.get(n).E, Amap.get(n).N]);
-    const MovEN = common.map((n) => [Bmap.get(n).E, Bmap.get(n).N]);
+    const BaseEN = common.map((n) => [Amap.get(n).E, Amap.get(n).N]); // A
+    const MovEN = common.map((n) => [Bmap.get(n).E, Bmap.get(n).N]); // B
     const { scale, cos, sin, tx, ty } = fitSimilarity2D(BaseEN, MovEN);
 
     let dHsum = 0;
     for (const n of common) dHsum += Amap.get(n).H - Bmap.get(n).H;
     const dHavg = dHsum / common.length;
 
-    // helper: transform a B point into A frame
+    // helper: transform B → A frame
     const tfB = (p) => ({
       name: p.name,
       E: scale * (cos * p.E - sin * p.N) + tx,
@@ -301,15 +304,15 @@ export default function StationMerge() {
     });
 
     // ---- Tolerance summary on common points (after transform)
-    let exceedCount = 0,
-      maxmm = 0;
+    let exceedCount = 0;
+    let maxmm = 0; // metres
     for (const n of common) {
       const a = Amap.get(n);
       const bT = tfB(Bmap.get(n));
       const rE = bT.E - a.E;
       const rN = bT.N - a.N;
       const rH = bT.H - a.H;
-      const d = Math.sqrt(rE * rE + rN * rN + rH * rH); // metres (3D)
+      const d = Math.sqrt(rE * rE + rN * rN + rH * rH); // metres
       if (d > TOL) exceedCount++;
       if (d > maxmm) maxmm = d;
     }
@@ -325,9 +328,8 @@ export default function StationMerge() {
     setMerged(mergedArr);
     setTransformed([]);
     setLastMethod("");
-    setEditLocked(true);
 
-    // update tolerance panel (mm shown)
+    // update tolerance panel (maxmm is metres → show mm)
     setMergeSummaries((prev) => {
       const others = prev.filter((s) => s.group !== toSta);
       return [
@@ -340,17 +342,15 @@ export default function StationMerge() {
       ];
     });
 
-    // keep geometry-diff viewer (between original A and B)
+    // geometry-diff (between original A and B)
     const A_only = new Map(A.map((p) => [p.name, p]));
     const B_only = new Map(B.map((p) => [p.name, p]));
     computeGeometryDiff(A_only, B_only);
 
-    // info line with tolerance summary
     if (exceedCount > 0) {
       setInfo(
-        `⚠️ Best-fit merged ${toSta} → ${fromSta} — ${exceedCount} pt(s) > 3.0 mm (max ${(maxmm * 1000).toFixed(
-          1
-        )} mm)`
+        `⚠️ Best-fit merged ${toSta} → ${fromSta} — ${exceedCount} pt(s) > 3.0 mm (max ${(maxmm *
+          1000).toFixed(1)} mm)`
       );
     } else {
       setInfo(
@@ -359,7 +359,7 @@ export default function StationMerge() {
     }
   };
 
-  // -------- Procrustes best-fit (EN only) --------
+  // 2D similarity best-fit (Procrustes)
   function fitSimilarity2D(basePts, movePts) {
     // basePts = destination (A), movePts = source (B)
     const n = basePts.length;
@@ -417,13 +417,12 @@ export default function StationMerge() {
     const { scale, cos, sin, tx, ty } = fitSimilarity2D(B, M);
 
     let dHsum = 0;
-    for (const n of names)
-      dHsum += baseMap.get(n).H - nextMap.get(n).H;
+    for (const n of names) dHsum += baseMap.get(n).H - nextMap.get(n).H;
     const dHavg = dHsum / names.length;
 
     const ref = names[0];
-    const rB = baseMap.get(ref),
-      rM = nextMap.get(ref);
+    const rB = baseMap.get(ref);
+    const rM = nextMap.get(ref);
     const rMx = scale * (cos * rM.E - sin * rM.N) + tx;
     const rMy = scale * (sin * rM.E + cos * rM.N) + ty;
     const rMh = rM.H + dHavg;
@@ -431,25 +430,28 @@ export default function StationMerge() {
     const diffs = [];
     for (let i = 1; i < names.length; i++) {
       const nm = names[i];
-      const b = baseMap.get(nm),
-        m = nextMap.get(nm);
+      const b = baseMap.get(nm);
+      const m = nextMap.get(nm);
       const mX = scale * (cos * m.E - sin * m.N) + tx;
       const mY = scale * (sin * m.E + cos * m.N) + ty;
       const mH = m.H + dHavg;
 
-      const dE1 = b.E - rB.E,
-        dN1 = b.N - rB.N,
-        dH1 = b.H - rB.H;
-      const dE2 = mX - rMx,
-        dN2 = mY - rMy,
-        dH2 = mH - rMh;
+      const dE1 = b.E - rB.E;
+      const dN1 = b.N - rB.N;
+      const dH1 = b.H - rB.H;
+
+      const dE2 = mX - rMx;
+      const dN2 = mY - rMy;
+      const dH2 = mH - rMh;
 
       const de = dE1 - dE2;
       const dn = dN1 - dN2;
       const dh = dH1 - dH2;
       const dmm = Math.sqrt(de * de + dn * dn + dh * dh) * 1000; // mm
+
       diffs.push({ name: `${ref}→${nm}`, dE1, dE2, de, dn, dh, dmm });
     }
+
     setGeomDiff(diffs);
     setGeomShow(true);
     setGeomHideSet(new Set());
@@ -469,7 +471,7 @@ export default function StationMerge() {
     setInfo("✅ Geometry diff accepted. Ready for next merge.");
   };
 
-  // -------------------- Active-set helpers for Reference Line --------------------
+  // -------------------- Reference Line helpers --------------------
   const norm = (s) =>
     (s ?? "").toString().trim().replace(/\s+/g, "").toUpperCase();
 
@@ -488,42 +490,54 @@ export default function StationMerge() {
 
   const mergedNames = useMemo(() => {
     const data =
-      merged.length
-        ? merged
-        : Object.keys(groups).length === 1
+      merged.length ||
+      (Object.keys(groups).length === 1
         ? groups[Object.keys(groups)[0]]
-        : [];
-    return data.map((p) => p.name);
+        : []);
+    const arr = merged.length
+      ? merged
+      : Object.keys(groups).length === 1
+      ? groups[Object.keys(groups)[0]]
+      : [];
+    return arr.map((p) => p.name);
   }, [merged, groups]);
-// -------------------- Reference Line --------------------
+
   const applyRefLine = () => {
     const data = getActivePoints();
-    if (!data.length)
-      return setInfo("⚠️ Provide data (upload or merge).");
+    if (!data.length) {
+      setInfo("⚠️ Provide data (upload or merge).");
+      return;
+    }
 
     const A = getPointByName(refA, data);
     const B = getPointByName(refB, data);
-    if (!A || !B)
-      return setInfo("⚠️ Point A / B name not found.");
-    if (norm(refA) === norm(refB))
-      return setInfo("⚠️ A and B must be different.");
+    if (!A || !B) {
+      setInfo("⚠️ Point A / B name not found.");
+      return;
+    }
+    if (norm(refA) === norm(refB)) {
+      setInfo("⚠️ A and B must be different.");
+      return;
+    }
 
-    const dE = B.E - A.E,
-      dN = B.N - A.N,
-      dH = B.H - A.H;
+    const dE = B.E - A.E;
+    const dN = B.N - A.N;
+    const dH = B.H - A.H;
     const dist = Math.hypot(dE, dN);
-    if (dist === 0)
-      return setInfo("⚠️ Reference points are coincident in EN.");
+    if (dist === 0) {
+      setInfo("⚠️ Reference points are coincident in EN.");
+      return;
+    }
 
-    // rotate so A→(0,0,0) and AB aligns with +N axis
+    // rotate A→(0,0,0), AB → +N
     const phi = Math.atan2(dE, dN);
-    const c = Math.cos(phi),
-      s = Math.sin(phi);
+    const c = Math.cos(phi);
+    const s = Math.sin(phi);
 
     const out = data.map((p) => {
-      const e0 = p.E - A.E,
-        n0 = p.N - A.N,
-        h0 = p.H - A.H;
+      const e0 = p.E - A.E;
+      const n0 = p.N - A.N;
+      const h0 = p.H - A.H;
       return {
         name: p.name,
         E: c * e0 - s * n0,
@@ -544,13 +558,14 @@ export default function StationMerge() {
   // -------------------- Export helpers --------------------
   const exportMerged = () => {
     const data = merged.length ? merged : getActivePoints();
-    if (!data.length) return alert("No merged data.");
+    if (!data.length) {
+      alert("No merged data.");
+      return;
+    }
     const txt = data
       .map(
         (p) =>
-          `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(
-            3
-          )}\t${p.H.toFixed(3)}`
+          `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`
       )
       .join("\n");
     downloadTxt(txt, "Merged_STA.txt");
@@ -558,29 +573,33 @@ export default function StationMerge() {
 
   const exportTransformed = () => {
     const data = transformed.length ? transformed : getActivePoints();
-    if (!data.length) return alert("No data to export.");
+    if (!data.length) {
+      alert("No data to export.");
+      return;
+    }
     const name = transformed.length
       ? `Final_${lastMethod.replace(/\s+/g, "")}.txt`
       : "Merged_STA.txt";
     const txt = data
       .map(
         (p) =>
-          `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(
-            3
-          )}\t${p.H.toFixed(3)}`
+          `${p.name}\t${p.E.toFixed(3)}\t${p.N.toFixed(3)}\t${p.H.toFixed(3)}`
       )
       .join("\n");
     downloadTxt(txt, name);
   };
 
   const exportGeometryDiff = () => {
-    if (!geomDiff.length) return alert("No diff data.");
+    if (!geomDiff.length) {
+      alert("No diff data.");
+      return;
+    }
     const t = geomDiff
       .map(
         (p) =>
-          `${p.name}\t${p.de.toFixed(3)}\t${p.dn.toFixed(
+          `${p.name}\t${p.de.toFixed(3)}\t${p.dn.toFixed(3)}\t${p.dh.toFixed(
             3
-          )}\t${p.dh.toFixed(3)}\t${p.dmm.toFixed(1)} mm`
+          )}\t${p.dmm.toFixed(1)} mm`
       )
       .join("\n");
     downloadTxt(t, "GeometryDiff_WMK.txt");
@@ -593,13 +612,12 @@ export default function StationMerge() {
     a.download = filename;
     a.click();
   }
-
-  // -------------------- UI --------------------
+// -------------------- UI --------------------
   return (
     <div className="sta-merge">
       <h1>💡 SEATRIUM</h1>
       <h2>📐 Station Merge & Reference Line</h2>
-      <h2>Note# Only for Level Stations. 3D Stations can not use.</h2>
+      <h2>Note# Only for Level Stations. 3D Stations cannot use.</h2>
 
       {/* File upload */}
       <div className="card">
@@ -617,7 +635,7 @@ export default function StationMerge() {
         </div>
       )}
 
-      {/* Filter header */}
+      {/* Filter panel */}
       {Object.keys(groups).length > 0 && (
         <div className="card">
           <div className="row space-between">
@@ -629,130 +647,133 @@ export default function StationMerge() {
               {filterOpen ? "Hide Filter" : "Show Points"}
             </button>
           </div>
-        </div>
-      )}
 
-      {/* Show / Edit / Remove points */}
-      {filterOpen && (
-        <div className="card">
-          {staSortedEntries.map(([sta, pts]) => (
-            <div key={sta} className="sta-card">
-              <div className="row space-between">
-                <div className="row" style={{ gap: 8 }}>
-                  <h4 style={{ margin: 0 }}>{sta}</h4>
-                  {!editLocked && (
-                    <>
-                      <input
-                        className="input"
-                        style={{ width: 160 }}
-                        placeholder="Rename STA..."
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter")
-                            renameSta(sta, e.currentTarget.value);
-                        }}
-                      />
-                      <button
-                        className="btn btn-ghost"
-                        onClick={(e) => {
-                          const box = e.currentTarget.previousSibling;
-                          const val = box && box.value ? box.value : "";
-                          renameSta(sta, val);
-                        }}
-                      >
-                        ✏️ Rename
-                      </button>
-                    </>
-                  )}
+          {/* Show / Edit / Remove points */}
+          {filterOpen && (
+            <div className="card">
+              {staSortedEntries.map(([sta, pts]) => (
+                <div key={sta} className="sta-card">
+                  <div className="row space-between">
+                    <div className="row" style={{ gap: 8 }}>
+                      <h4 style={{ margin: 0 }}>{sta}</h4>
+                      <>
+                        <input
+                          className="input"
+                          style={{ width: 160 }}
+                          placeholder="Rename STA..."
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter")
+                              renameSta(sta, e.currentTarget.value);
+                          }}
+                        />
+                        <button
+                          className="btn btn-ghost"
+                          onClick={(e) => {
+                            const box = e.currentTarget.previousSibling;
+                            const val = box && box.value ? box.value : "";
+                            renameSta(sta, val);
+                          }}
+                        >
+                          ✏️ Rename
+                        </button>
+                      </>
+                    </div>
+                  </div>
+
+                  <div>
+                    {pts.map((p, idx) => {
+                      const checked = keepMap[sta]?.[p.name] !== false;
+                      return (
+                        <div
+                          key={`${p.name}-${idx}`}
+                          className="ptrow"
+                        >
+                          {/* keep / remove */}
+                          <label className="chk">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleKeep(sta, p.name)}
+                            />
+                            <span />
+                          </label>
+
+                          {/* Name */}
+                          <input
+                            className="input"
+                            placeholder="Point name"
+                            value={p.name}
+                            onChange={(e) =>
+                              updatePointField(
+                                sta,
+                                idx,
+                                "name",
+                                e.target.value
+                              )
+                            }
+                          />
+
+                          {/* E / N / H */}
+                          <input
+                            className="input"
+                            placeholder="E"
+                            value={p.E}
+                            onChange={(e) =>
+                              updatePointField(
+                                sta,
+                                idx,
+                                "E",
+                                e.target.value
+                              )
+                            }
+                            inputMode="decimal"
+                          />
+                          <input
+                            className="input"
+                            placeholder="N"
+                            value={p.N}
+                            onChange={(e) =>
+                              updatePointField(
+                                sta,
+                                idx,
+                                "N",
+                                e.target.value
+                              )
+                            }
+                            inputMode="decimal"
+                          />
+                          <input
+                            className="input"
+                            placeholder="H"
+                            value={p.H}
+                            onChange={(e) =>
+                              updatePointField(
+                                sta,
+                                idx,
+                                "H",
+                                e.target.value
+                              )
+                            }
+                            inputMode="decimal"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+              ))}
 
-                <button
-                  className="btn btn-danger"
-                  onClick={() => deleteGroup(sta)}
-                  disabled={editLocked}
-                >
-                  🗑️ Delete Group
+              <div className="row end">
+                <button className="btn" onClick={applyFilter}>
+                  ✔ Apply Filter
                 </button>
               </div>
-
-              <div>
-                {pts.map((p, idx) => {
-                  const checked = keepMap[sta]?.[p.name] !== false;
-                  return (
-                    <div key={`${p.name}-${idx}`} className="ptrow">
-                      {/* keep / remove */}
-                      <label className="chk">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleKeep(sta, p.name)}
-                          disabled={editLocked}
-                        />
-                        <span />
-                      </label>
-
-                      {/* Name */}
-                      <input
-                        className="input"
-                        placeholder="Point name"
-                        value={p.name}
-                        onChange={(e) =>
-                          updatePointField(
-                            sta,
-                            idx,
-                            "name",
-                            e.target.value
-                          )
-                        }
-                        disabled={editLocked}
-                      />
-
-                      {/* E / N / H */}
-                      <input
-                        className="input"
-                        placeholder="E"
-                        value={p.E}
-                        onChange={(e) =>
-                          updatePointField(sta, idx, "E", e.target.value)
-                        }
-                        disabled={editLocked}
-                        inputMode="decimal"
-                      />
-                      <input
-                        className="input"
-                        placeholder="N"
-                        value={p.N}
-                        onChange={(e) =>
-                          updatePointField(sta, idx, "N", e.target.value)
-                        }
-                        disabled={editLocked}
-                        inputMode="decimal"
-                      />
-                      <input
-                        className="input"
-                        placeholder="H"
-                        value={p.H}
-                        onChange={(e) =>
-                          updatePointField(sta, idx, "H", e.target.value)
-                        }
-                        disabled={editLocked}
-                        inputMode="decimal"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
             </div>
-          ))}
-
-          <div className="row end">
-            <button className="btn" onClick={applyFilter}>
-              ✔ Apply Filter
-            </button>
-          </div>
+          )}
         </div>
       )}
 
-      {/* Merge section (optional) */}
+      {/* Merge section */}
       {Object.keys(groups).length > 1 && (
         <div className="card">
           <h3>🧩 Choose Two STAs to Merge</h3>
@@ -764,7 +785,9 @@ export default function StationMerge() {
             >
               <option value="">-- From (Base) --</option>
               {staNames.map((s) => (
-                <option key={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
             <select
@@ -774,7 +797,9 @@ export default function StationMerge() {
             >
               <option value="">-- To (Merge Into Base) --</option>
               {staNames.map((s) => (
-                <option key={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
 
@@ -786,7 +811,6 @@ export default function StationMerge() {
             </button>
           </div>
 
-          {/* tolerance summary */}
           {mergeSummaries.length > 0 && (
             <div className="summary">
               <h4>Merge tolerance summary (≤ 3 mm):</h4>
@@ -807,7 +831,7 @@ export default function StationMerge() {
         </div>
       )}
 
-      {/* Geometry diff (1→All) */}
+      {/* Geometry diff */}
       {geomShow && (
         <div className="card">
           <div className="row space-between">
@@ -875,7 +899,7 @@ export default function StationMerge() {
         </div>
       )}
 
-      {/* Active set preview (merged or single-group) */}
+      {/* Working set preview */}
       {(merged.length || Object.keys(groups).length === 1) && (
         <div className="card">
           <h3>
@@ -883,7 +907,8 @@ export default function StationMerge() {
             {merged.length ||
               (Object.keys(groups).length === 1
                 ? groups[Object.keys(groups)[0]].length
-                : 0)}{" "}
+                : 0)}
+            {" "}
             pts)
           </h3>
           <div className="tablewrap">
@@ -913,7 +938,8 @@ export default function StationMerge() {
           </div>
         </div>
       )}
-{/* Transform — Reference Line only */}
+
+      {/* Reference line */}
       {(merged.length || Object.keys(groups).length === 1) && (
         <div className="card">
           <h3>📏 Transform on Working Set — Reference Line</h3>
@@ -941,10 +967,7 @@ export default function StationMerge() {
             <button className="btn" onClick={applyRefLine}>
               ▶ Apply Reference Line
             </button>
-            <button
-              className="btn btn-ghost"
-              onClick={exportTransformed}
-            >
+            <button className="btn btn-ghost" onClick={exportTransformed}>
               📄 Final Export TXT
             </button>
           </div>
@@ -978,19 +1001,14 @@ export default function StationMerge() {
             </table>
           </div>
           <div className="row end">
-            <button
-              className="btn btn-ghost"
-              onClick={exportTransformed}
-            >
+            <button className="btn btn-ghost" onClick={exportTransformed}>
               📄 Final Export TXT
             </button>
           </div>
         </div>
       )}
 
-      <footer className="footer">
-        © 2025 WMK Seatrium DC Team
-      </footer>
+      <footer className="footer">© 2025 WMK Seatrium DC Team</footer>
     </div>
   );
 }
