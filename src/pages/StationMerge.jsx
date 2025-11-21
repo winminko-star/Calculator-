@@ -295,6 +295,50 @@ export default function StationMerge() {
       N: scale * (sin * p.E + cos * p.N) + ty,
       H: p.H + dHavg,
     });
+    // ------------ PAIRWISE distances from first-common to other common points ------------
+const pairErrs = []; // temp
+if (common.length >= 2) {
+  const refName = common[0];               // first common point (use as origin)
+  const a_ref = Amap.get(refName);         // A reference point
+  // compute transformed positions for B common points (map name -> transformed point)
+  const Btrans = new Map();
+  for (const n of common) {
+    Btrans.set(n, tfB(Bmap.get(n)));
+  }
+
+  // For each other common point, compute 3D distance from ref in A and in transformed B
+  for (let i = 1; i < common.length; i++) {
+    const nm = common[i];
+    const a_pt = Amap.get(nm);
+    const b_pt = Btrans.get(nm);
+
+    // distance A : between a_ref and a_pt (3D)
+    const dAx = a_pt.E - a_ref.E;
+    const dAy = a_pt.N - a_ref.N;
+    const dAz = a_pt.H - a_ref.H;
+    const dA = Math.hypot(dAx, dAy, dAz); // meters
+
+    // distance B (after transforming B into A frame): b_pt vs b_ref
+    const b_ref = Btrans.get(refName);
+    const dBx = b_pt.E - b_ref.E;
+    const dBy = b_pt.N - b_ref.N;
+    const dBz = b_pt.H - b_ref.H;
+    const dB = Math.hypot(dBx, dBy, dBz); // meters
+
+    const dd = Math.abs(dA - dB); // difference in meters
+
+    pairErrs.push({
+      fromRef: refName,
+      toName: nm,
+      dA, // meters
+      dB, // meters
+      dd, // meters
+      dd_mm: dd * 1000,
+    });
+  }
+} // end pairwise
+// store pairwise errors (you can later filter by >TOL)
+setMergePairErrors(pairErrs);
 
     // ---- tolerance summary + ERROR LIST on common points (after transform)
     const TOL = 0.003; // 3 mm in meters
@@ -657,6 +701,34 @@ export default function StationMerge() {
           </div>
 
           {renderToleranceSummary()}
+          {/* 🔻 Pairwise distances from first-common → others (last merge) */}
+{mergePairErrors.length > 0 && (
+  <div className="tablewrap" style={{ marginTop: 12 }}>
+    <h4>⚠ Pairwise Δ from first-common (A vs B) — Δ (mm)</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>Ref</th>
+          <th>To</th>
+          <th>dA (m)</th>
+          <th>dB (m)</th>
+          <th>|Δ| (mm)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {mergePairErrors.map((r, i) => (
+          <tr key={i} className={r.dd > TOL ? "err" : ""}>
+            <td>{r.fromRef}</td>
+            <td>{r.toName}</td>
+            <td>{r.dA.toFixed(4)}</td>
+            <td>{r.dB.toFixed(4)}</td>
+            <td>{r.dd_mm.toFixed(1)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
 
           
         </div>
