@@ -657,34 +657,8 @@ export default function StationMerge() {
           </div>
 
           {renderToleranceSummary()}
-{/* 🔻 3 mm ထက် ကျော်တဲ့ common points list 🔻 */}
-          {mergeErrors.length > 0 && (
-            <div className="tablewrap" style={{ marginTop: 12 }}>
-              <h4>⚠ Common points &gt; 3 mm (last merge)</h4>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Pt</th>
-                    <th>ΔE (m)</th>
-                    <th>ΔN (m)</th>
-                    <th>ΔH (m)</th>
-                    <th>Δ(mm)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mergeErrors.map((p, i) => (
-                    <tr key={i}>
-                      <td>{p.name}</td>
-                      <td>{p.dE.toFixed(4)}</td>
-                      <td>{p.dN.toFixed(4)}</td>
-                      <td>{p.dH.toFixed(4)}</td>
-                      <td>{p.dmm.toFixed(1)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+
+          
         </div>
       )}
 
