@@ -563,7 +563,7 @@ export default function StationMerge() {
                   const checked =
                     (keepMap[sta]?.[p.name] ?? true) !== false;
                   return (
-                    <div key={`${p.name}-${idx}`} className="ptrow">
+                    <div key={idx} className="ptrow">
                       {/* keep / remove */}
                       <label className="chk">
                         <input
