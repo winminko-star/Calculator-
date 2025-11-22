@@ -328,6 +328,7 @@ const [heightSummary, setHeightSummary] = useState(null);
     }
     setMergePairErrors(pairErrs);
 
+
     // tolerance summary + error list (point-wise after transform)
     let exceedCount = 0;
     let maxm = 0;
@@ -353,7 +354,34 @@ const [heightSummary, setHeightSummary] = useState(null);
         });
       }
     }
+// --- set point-wise merge errors (existing)
+    setMergeErrors(errList);
 
+    // --- NEW: compute height errors per common point (after transforming B)
+    const hList = [];
+    for (const n of common) {
+      const a = Amap.get(n);
+      const bT = tfB(Bmap.get(n)); // transformed B point
+      const dH = bT.H - a.H; // signed in meters
+      hList.push({
+        name: n,
+        aH: a.H,
+        bH_transformed: bT.H,
+        dH, // meters signed
+        dH_mm: Math.abs(dH) * 1000, // absolute mm
+      });
+    }
+    setHeightErrors(hList);
+
+    // --- NEW: height summary (mean, max) in mm (persistent)
+    if (hList.length > 0) {
+      const sum_mm = hList.reduce((s, x) => s + x.dH_mm, 0);
+      const mean_mm = sum_mm / hList.length;
+      const max_mm = Math.max(...hList.map((x) => x.dH_mm));
+      setHeightSummary({ count: hList.length, mean_mm, max_mm });
+    } else {
+      setHeightSummary(null);
+    }
     // build merged: keep A's values for duplicates; add transformed B non-duplicates
     const nonDup = B.filter((p) => !Amap.has(p.name)).map(tfB);
     const mergedArr = [...A, ...nonDup];
