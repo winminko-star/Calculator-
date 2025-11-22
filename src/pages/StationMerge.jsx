@@ -591,9 +591,9 @@ const MergeHeightBox = () => {
 
   return (
     <div className="page station-merge">
-      <h2>📐 StationMerge – WMK / Seatrium DC
-</h2>
-<h2> *Levelling Stations Only Can Calculate.3D Not Support*</h2>
+      <h3>📐 StationMerge – WMK / Seatrium DC
+</h3>
+<h4> *Levelling Stations Only Can Calculate.3D Not Support*</h4>
 <div style={{ marginBottom: 12 }}>
   <button
     className="btn btn-ghost"
