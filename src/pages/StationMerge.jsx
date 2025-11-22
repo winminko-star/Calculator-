@@ -524,6 +524,57 @@ export default function StationMerge() {
       {/* STA summary */}
       {renderStaSummary()}
 
+
+{/* --- keep last-merge summaries visible even if groups reduced to 1 --- */}
+{mergeSummaries && mergeSummaries.length > 0 && (
+  <div style={{ marginTop: 12 }}>
+    {renderToleranceSummary()}
+
+    {/* point-level errors (3 mm+ list) */}
+    {mergeErrors && mergeErrors.length > 0 && (
+      <div className="card" style={{ marginTop: 8 }}>
+        <h4>⚠ Points exceeding {(TOL * 1000).toFixed(0)} mm (last merge)</h4>
+        <ul>
+          {mergeErrors.map((e, i) => (
+            <li key={i}>
+              {e.name}: {e.dmm.toFixed(1)} mm (ΔE={e.dE.toFixed(3)}, ΔN={e.dN.toFixed(3)}, ΔH={e.dH.toFixed(3)})
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+
+    {/* pairwise diagnostics table (first-common → others) */}
+    {mergePairErrors && mergePairErrors.length > 0 && (
+      <div className="tablewrap" style={{ marginTop: 12 }}>
+        <h4>Pairwise Δ from first-common (last merge)</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>Ref</th>
+              <th>To</th>
+              <th>dA (m)</th>
+              <th>dB (m)</th>
+              <th>|Δ| (mm)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {mergePairErrors.map((r, i) => (
+              <tr key={i} className={r.dd_mm > (TOL * 1000) ? "err" : ""}>
+                <td>{r.fromRef}</td>
+                <td>{r.toName}</td>
+                <td>{r.dA.toFixed(4)}</td>
+                <td>{r.dB.toFixed(4)}</td>
+                <td>{r.dd_mm.toFixed(1)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+)}
+
       {/* Edit / Remove points */}
       {staSortedEntries.length > 0 && (
         <div className="card">
