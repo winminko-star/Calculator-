@@ -247,23 +247,12 @@ export default function StationMerge() {
     const Bmap = new Map(B.map((p) => [p.name, p]));
     const common = [...Amap.keys()].filter((k) => Bmap.has(k));
 
-    // if no common, just concat (no transform)
     if (common.length === 0) {
-      const mergedArr = [...A, ...B];
-      const ng = { ...groups };
-      delete ng[toSta];
-      ng[fromSta] = mergedArr;
-      setGroups(ng);
-      setMerged(mergedArr);
-      setMergeSummaries((prev) => prev.filter((s) => s.group !== toSta));
-      setTransformed([]);
-      setMergeErrors([]);
-      setMergePairErrors([]);
-      setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
-      return;
-    }
+  setInfo("⚠️ Cannot merge: no common points!");
+  return; // <-- calculation / merge ကို skip
+}
 
-    // need >=2 common to compute similarity properly
+    // need >=7 common to compute similarity properly
     if (common.length < 7) {
       setInfo("⚠️ Need ≥7 common points for best-fit.");
       return;
