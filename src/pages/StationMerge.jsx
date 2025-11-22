@@ -85,6 +85,11 @@ const [heightSummary, setHeightSummary] = useState(null);
   const [transformed, setTransformed] = useState([]); // after reference line
   const [refA, setRefA] = useState("");
   const [refB, setRefB] = useState("");
+// restore previous uploaded text on mount
+useEffect(() => {
+  const saved = localStorage.getItem("stationMergeRaw");
+  if (saved) setRawText(saved);
+}, []);
 // --- PLACE THIS ABOVE return(...) ---
 const MergeHeightBox = () => {
   if (!heightErrors || heightErrors.length === 0) return null;
@@ -162,6 +167,7 @@ const MergeHeightBox = () => {
   };
 
   const parseTextToGroups = (txt) => {
+  localStorage.setItem("stationMergeRaw", txt); 
     const lines = txt.split(/\r?\n/);
     const next = {};
     const used = {}; // baseName -> count
@@ -589,9 +595,22 @@ const MergeHeightBox = () => {
 <div style={{ marginBottom: 12 }}>
   <button
     className="btn btn-ghost"
-    onClick={() => window.location.reload()}
+    onClick={() => {
+      setFromSta("");
+      setToSta("");
+      setMerged([]);
+      setTransformed([]);
+      setMergeErrors([]);
+      setMergePairErrors([]);
+      setMergeSummaries([]);
+      setRefA("");
+      setRefB("");
+      setInfo("🌀 Ready to process uploaded data.");
+      // rawText နဲ့ groups ကို reset / reparse လုပ်ချင်ရင်
+      parseTextToGroups(rawText);
+    }}
   >
-    🔄 Retry / Reupload
+    🔄 Retry / Reprocess
   </button>
 </div>
 
