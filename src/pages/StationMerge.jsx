@@ -552,6 +552,68 @@ const [heightSummary, setHeightSummary] = useState(null);
 
       {/* STA summary */}
       {renderStaSummary()}
+// --- PLACE THIS BEFORE `return ( ... )` ---
+const MergeHeightBox = () => {
+  if (!heightErrors || heightErrors.length === 0) return null;
+
+  return (
+    <div
+      className="card merge-height-box"
+      style={{
+        border: "1px solid #cc9",
+        background: "#fffaf0",
+        padding: 10,
+        marginTop: 10,
+        position: "relative",
+      }}
+    >
+      <button
+        className="btn btn-ghost"
+        style={{ position: "absolute", right: 8, top: 8 }}
+        onClick={() => { setHeightErrors([]); setHeightSummary(null); }}
+        title="Clear height errors"
+      >
+        ✖
+      </button>
+
+      <h4 style={{ marginTop: 0 }}>⛰️ Height differences (after transform)</h4>
+
+      <div style={{ marginBottom: 8 }}>
+        <strong>Summary:</strong>{" "}
+        {heightSummary ? (
+          <span>
+            {heightSummary.count} pt(s) — mean {heightSummary.mean_mm.toFixed(2)} mm, max {heightSummary.max_mm.toFixed(2)} mm
+          </span>
+        ) : (
+          <span>-</span>
+        )}
+      </div>
+
+      <div style={{ maxHeight: 180, overflowY: "auto", padding: "6px 0" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
+              <th style={{ padding: "4px 6px" }}>Pt</th>
+              <th style={{ padding: "4px 6px" }}>A H</th>
+              <th style={{ padding: "4px 6px" }}>B (transf.) H</th>
+              <th style={{ padding: "4px 6px" }}>ΔH (mm)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {heightErrors.map((h, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #fafafa" }}>
+                <td style={{ padding: "4px 6px" }}>{h.name}</td>
+                <td style={{ padding: "4px 6px" }}>{h.aH.toFixed(3)}</td>
+                <td style={{ padding: "4px 6px" }}>{h.bH_transformed.toFixed(3)}</td>
+                <td style={{ padding: "4px 6px" }}>{h.dH_mm.toFixed(1)} mm</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 
 {/* Show last-merge tolerance summary even after groups reduced to 1 */}
