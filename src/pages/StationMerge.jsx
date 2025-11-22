@@ -400,84 +400,65 @@ setMergeWarnings([]);
     const lines = ws.map((p) => `${p.name},${p.E.toFixed(4)},${p.N.toFixed(4)},${p.H.toFixed(4)}`);
     downloadTextFile("StationMerge_merged.txt", lines.join("\n"));
   };
-// src/pages/StationMerge.jsx  — PART 3/3 (continue & render)
 
-  // working set helper
-  const getWorkingSet = () => {
-    if (merged && merged.length > 0) return merged;
-    if (staNames.length === 1) return groups[staNames[0]] || [];
-    return [];
-  };
+// src/pages/StationMerge.jsx — PART 3/3 (render & helpers)
 
-  // Reference line: N = along A→B, E = across (right = +, left = -), H(A)=0
-  const applyRefLine = () => {
-    const pts = getWorkingSet();
-    if (!pts || pts.length === 0) {
-      setInfo("⚠️ No working set available (upload or merge first).");
-      return;
-    }
-    if (!refA || !refB) {
-      setInfo("⚠️ Enter reference points A and B.");
-      return;
-    }
+const getWorkingSet = () => {
+  if (merged && merged.length > 0) return merged;
+  if (staNames.length === 1) return groups[staNames[0]] || [];
+  return [];
+};
 
-    const A = pts.find((p) => p.name === refA);
-    const B = pts.find((p) => p.name === refB);
-    if (!A || !B) {
-      setInfo("⚠️ Reference point names not found in working set.");
-      return;
-    }
+const applyRefLine = () => {
+  const pts = getWorkingSet();
+  if (!pts.length) return setInfo("⚠️ No working set available (upload or merge first).");
+  if (!refA || !refB) return setInfo("⚠️ Enter reference points A and B.");
 
-    const dx = B.E - A.E;
-    const dy = B.N - A.N;
-    const len = Math.hypot(dx, dy);
-    if (!(len > 1e-9)) {
-      setInfo("⚠️ Reference points are coincident or too close.");
-      return;
-    }
+  const A = pts.find((p) => p.name === refA);
+  const B = pts.find((p) => p.name === refB);
+  if (!A || !B) return setInfo("⚠ Reference point names not found in working set.");
 
-    // unit along (N axis)
-    const ux = dx / len;
-    const uy = dy / len;
+  const dx = B.E - A.E;
+  const dy = B.N - A.N;
+  const len = Math.hypot(dx, dy);
+  if (!(len > 1e-9)) return setInfo("⚠ Reference points are coincident or too close.");
 
-    const out = pts.map((p) => {
-      const vx = p.E - A.E;
-      const vy = p.N - A.N;
-      const along = vx * ux + vy * uy; // new N (along)
-      const across = vx * uy - vy * ux; // new E (across), right positive
-      return {
-        name: p.name,
-        E: across, // across (right +)
-        N: along,  // along
-        H: p.H - A.H, // A becomes H=0
-      };
-    });
+  const ux = dx / len;
+  const uy = dy / len;
 
-    setTransformed(out);
-    setInfo(`📏 Reference line applied — A=${refA}, B=${refB} (A→(0,0,0))`);
-  };
+  const out = pts.map((p) => {
+    const vx = p.E - A.E;
+    const vy = p.N - A.N;
+    return {
+      name: p.name,
+      E: vx * uy - vy * ux,
+      N: vx * ux + vy * uy,
+      H: p.H - A.H,
+    };
+  });
 
-  // export transformed (final)
-  const exportTransformed = () => {
-    const arr = transformed.length > 0 ? transformed : getWorkingSet();
-    if (!arr || arr.length === 0) {
-      setInfo("⚠️ Nothing to export. Apply Reference Line or merge first.");
-      return;
-    }
-    const lines = arr.map((p) => `${p.name},${p.E.toFixed(4)},${p.N.toFixed(4)},${p.H.toFixed(4)}`);
-    downloadTextFile("StationMerge_final_refline.txt", lines.join("\n"));
-  };
+  setTransformed(out);
+  setInfo(`📏 Reference line applied — A=${refA}, B=${refB} (A→(0,0,0))`);
+};
 
-// render helpers
+const exportTransformed = () => {
+  const arr = transformed.length ? transformed : getWorkingSet();
+  if (!arr.length) return setInfo("⚠️ Nothing to export. Apply Reference Line or merge first.");
+
+  const lines = arr.map((p) => `${p.name},${p.E.toFixed(4)},${p.N.toFixed(4)},${p.H.toFixed(4)}`);
+  downloadTextFile("StationMerge_final_refline.txt", lines.join("\n"));
+};
+
+// Helpers for rendering
 const renderStaSummary = () => {
-  if (staNames.length === 0) return null;
+  if (!staNames.length) return null;
   return (
     <div className="card">
       <h3>📂 STA Groups</h3>
       <ul>
         {staNames.map((s) => (
           <li key={s}>
-            <strong>{s}</strong> – {groups[s].length} pts
+            <strong>{s}</strong> – {groups[s]?.length || 0} pts
           </li>
         ))}
       </ul>
@@ -486,37 +467,31 @@ const renderStaSummary = () => {
 };
 
 const renderToleranceSummary = () => {
-  if (!mergeSummaries || mergeSummaries.length === 0) return null;
+  if (!mergeSummaries?.length) return null;
   return (
     <div className="card">
       <h3>📏 Merge tolerance summary (≤ 3 mm)</h3>
       {mergeSummaries.map((s, i) =>
         s.count > 0 ? (
           <div key={i} className="line bad">
-            ⚠ {s.group} → exceeded on {s.count} ref point(s), max=
-            {(s.maxmm * 1000).toFixed(1)} mm
+            ⚠ {s.group} → exceeded on {s.count} ref point(s), max={(s.maxmm * 1000).toFixed(1)} mm
           </div>
         ) : (
-          <div key={i} className="line ok">✅ {s.group} → within tolerance</div>
+          <div key={i} className="line ok">
+            ✅ {s.group} → within tolerance
+          </div>
         )
       )}
     </div>
   );
 };
 
-// Move this outside JSX return
 const MergeWarningBox = () => {
-  if (!mergeWarnings || mergeWarnings.length === 0) return null;
-
+  if (!mergeWarnings?.length) return null;
   return (
     <div
       className="merge-warning-box"
-      style={{
-        border: "1px solid orange",
-        padding: "10px",
-        marginTop: "10px",
-        backgroundColor: "#fff4e5",
-      }}
+      style={{ border: "1px solid orange", padding: "10px", marginTop: 10, backgroundColor: "#fff4e5" }}
     >
       <h4 style={{ color: "orange" }}>⚠ Merge Warning</h4>
       <ul>
@@ -533,11 +508,9 @@ return (
     <h2>📐 StationMerge – WMK / Seatrium DC</h2>
 
     {info && <div className="info">{info}</div>}
-
-    {/* Render warning box */}
     <MergeWarningBox />
 
-    {/* Upload / paste */}
+    {/* Upload / Paste */}
     <div className="card">
       <h3>📥 Upload TXT / CSV</h3>
       <input type="file" accept=".txt,.csv" onChange={handleFile} />
@@ -553,19 +526,13 @@ return (
       />
     </div>
 
-    {/* STA summary */}
     {renderStaSummary()}
-
-    {/* Merge tolerance summary */}
     {renderToleranceSummary()}
 
-    {/* --- keep last-merge summaries visible even if groups reduced to 1 --- */}
-    {mergeSummaries && mergeSummaries.length > 0 && (
+    {/* Last merge summaries */}
+    {mergeSummaries?.length > 0 && (
       <div style={{ marginTop: 12 }}>
-        {renderToleranceSummary()}
-
-        {/* point-level errors (3 mm+ list) */}
-        {mergeErrors && mergeErrors.length > 0 && (
+        {mergeErrors?.length > 0 && (
           <div className="card" style={{ marginTop: 8 }}>
             <h4>⚠ Points exceeding {(TOL * 1000).toFixed(0)} mm (last merge)</h4>
             <ul>
@@ -578,8 +545,7 @@ return (
           </div>
         )}
 
-        {/* pairwise diagnostics table (first-common → others) */}
-        {mergePairErrors && mergePairErrors.length > 0 && (
+        {mergePairErrors?.length > 0 && (
           <div className="tablewrap" style={{ marginTop: 12 }}>
             <h4>Pairwise Δ from first-common (last merge)</h4>
             <table>
@@ -608,223 +574,198 @@ return (
         )}
       </div>
     )}
+
+    {/* Edit / Remove points */}
+    {staSortedEntries?.length > 0 && (
+      <div className="card">
+        <h3>✏️ Edit / Remove points</h3>
+        {staSortedEntries.map(([sta, pts]) => (
+          <div key={sta} className="sta-card">
+            <div className="row space-between" style={{ alignItems: "center" }}>
+              <div className="row" style={{ gap: 8 }}>
+                <h4 style={{ margin: 0 }}>{sta}</h4>
+                <input
+                  className="input"
+                  style={{ width: 160 }}
+                  placeholder="Rename STA..."
+                  onKeyDown={(e) => e.key === "Enter" && renameSta(sta, e.currentTarget.value)}
+                />
+                <button
+                  className="btn btn-ghost"
+                  onClick={(e) => {
+                    const box = e.currentTarget.previousSibling;
+                    renameSta(sta, box?.value || "");
+                  }}
+                >
+                  ✏️ Rename
+                </button>
+              </div>
+            </div>
+
+            <div>
+              {pts.map((p, idx) => {
+                const checked = (keepMap[sta]?.[p.name] ?? true) !== false;
+                return (
+                  <div key={idx} className="ptrow">
+                    <label className="chk">
+                      <input type="checkbox" checked={checked} onChange={() => toggleKeep(sta, p.name)} />
+                      <span />
+                    </label>
+                    <input className="input" placeholder="Point name" value={p.name} onChange={(e) => updatePointName(sta, idx, e.target.value)} />
+                    <input className="input" value={p.E} readOnly />
+                    <input className="input" value={p.N} readOnly />
+                    <input className="input" value={p.H} readOnly />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <div className="row end" style={{ marginTop: 8 }}>
+          <button className="btn" onClick={applyFilter}>✔ Apply Remove (unchecked)</button>
+        </div>
+      </div>
+    )}
+
+    {/* Merge two STA groups */}
+    {staNames.length > 1 && (
+      <div className="card">
+        <h3>🧩 Merge two STA groups (Best-fit)</h3>
+        <div className="row" style={{ gap: 8 }}>
+          <select value={fromSta} onChange={(e) => setFromSta(e.target.value)} className="input">
+            <option value="">-- Base (keep) --</option>
+            {staNames.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={toSta} onChange={(e) => setToSta(e.target.value)} className="input">
+            <option value="">-- Merge Into Base --</option>
+            {staNames.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <button className="btn" onClick={handleMerge}>🔄 Merge</button>
+          <button className="btn btn-ghost" onClick={exportMerged}>💾 Export Merged ENH</button>
+        </div>
+
+        {renderToleranceSummary()}
+        <MergeWarningBox />
+
+        {mergePairErrors?.length > 0 && (
+          <div className="tablewrap" style={{ marginTop: 12 }}>
+            <h4>⚠ Pairwise Δ from first-common (A vs B) — |Δ| (mm)</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th>Ref</th>
+                  <th>To</th>
+                  <th>dA (m)</th>
+                  <th>dB (m)</th>
+                  <th>|Δ| (mm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mergePairErrors.map((r, i) => (
+                  <tr key={i} className={r.dd_mm > (TOL * 1000) ? "err" : ""}>
+                    <td>{r.fromRef}</td>
+                    <td>{r.toName}</td>
+                    <td>{r.dA.toFixed(4)}</td>
+                    <td>{r.dB.toFixed(4)}</td>
+                    <td>{r.dd_mm.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {mergeErrors?.length > 0 && (
+          <div className="card" style={{ marginTop: 12 }}>
+            <h4>⚠ Points exceeding {(TOL * 1000).toFixed(0)} mm</h4>
+            <ul>
+              {mergeErrors.map((e, i) => (
+                <li key={i}>
+                  {e.name}: {e.dmm.toFixed(1)} mm (ΔE={e.dE.toFixed(3)}, ΔN={e.dN.toFixed(3)}, ΔH={e.dH.toFixed(3)})
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* Working set preview */}
+    {getWorkingSet().length > 0 && (
+      <div className="card">
+        <h3>✅ Working Set ({getWorkingSet().length} pts)</h3>
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Pt</th>
+                <th>E</th>
+                <th>N</th>
+                <th>H</th>
+              </tr>
+            </thead>
+            <tbody>
+              {getWorkingSet().map((p, i) => (
+                <tr key={i}>
+                  <td>{p.name}</td>
+                  <td>{p.E.toFixed(4)}</td>
+                  <td>{p.N.toFixed(4)}</td>
+                  <td>{p.H.toFixed(4)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
+    {/* Reference line */}
+    {getWorkingSet().length > 0 && (
+      <div className="card">
+        <h3>📏 Reference line on Working Set</h3>
+        <div className="row" style={{ gap: 8 }}>
+          <input className="input" placeholder="Point A (start)" value={refA} onChange={(e) => setRefA(e.target.value)} list="ptnames" />
+          <input className="input" placeholder="Point B (direction)" value={refB} onChange={(e) => setRefB(e.target.value)} list="ptnames" />
+          <datalist id="ptnames">{getWorkingSet().map((p) => <option key={p.name} value={p.name} />)}</datalist>
+
+          <button className="btn" onClick={applyRefLine}>▶ Apply Reference Line</button>
+          <button className="btn btn-ghost" onClick={exportTransformed}>📄 Final Export TXT</button>
+        </div>
+      </div>
+    )}
+
+    {/* Transformed preview */}
+    {transformed.length > 0 && (
+      <div className="card">
+        <h3>🔄 Transformed Result (Ref Line)</h3>
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Pt</th>
+                <th>E (across)</th>
+                <th>N (along)</th>
+                <th>H (A=0)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transformed.map((p, i) => (
+                <tr key={i}>
+                  <td>{p.name}</td>
+                  <td>{p.E.toFixed(4)}</td>
+                  <td>{p.N.toFixed(4)}</td>
+                  <td>{p.H.toFixed(4)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="row end" style={{ marginTop: 8 }}>
+          <button className="btn btn-ghost" onClick={exportTransformed}>📄 Final Export TXT</button>
+        </div>
+      </div>
+    )}
+
+    <footer className="footer">© 2025 WMK Seatrium DC Team</footer>
   </div>
 );
-
-      {/* Edit / Remove points */}
-      {staSortedEntries.length > 0 && (
-        <div className="card">
-          <h3>✏️ Edit / Remove points</h3>
-          {staSortedEntries.map(([sta, pts]) => (
-            <div key={sta} className="sta-card">
-              <div className="row space-between" style={{ alignItems: "center" }}>
-                <div className="row" style={{ gap: 8 }}>
-                  <h4 style={{ margin: 0 }}>{sta}</h4>
-                  <input
-                    className="input"
-                    style={{ width: 160 }}
-                    placeholder="Rename STA..."
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") renameSta(sta, e.currentTarget.value);
-                    }}
-                  />
-                  <button
-                    className="btn btn-ghost"
-                    onClick={(e) => {
-                      const box = e.currentTarget.previousSibling;
-                      const val = box && box.value ? box.value : "";
-                      renameSta(sta, val);
-                    }}
-                  >
-                    ✏️ Rename
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                {pts.map((p, idx) => {
-                  const checked = (keepMap[sta]?.[p.name] ?? true) !== false;
-                  return (
-                    <div key={idx} className="ptrow">
-                      <label className="chk">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleKeep(sta, p.name)}
-                        />
-                        <span />
-                      </label>
-
-                      <input
-                        className="input"
-                        placeholder="Point name"
-                        value={p.name}
-                        onChange={(e) => updatePointName(sta, idx, e.target.value)}
-                      />
-
-                      <input className="input" value={p.E} readOnly />
-                      <input className="input" value={p.N} readOnly />
-                      <input className="input" value={p.H} readOnly />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          <div className="row end" style={{ marginTop: 8 }}>
-            <button className="btn" onClick={applyFilter}>
-              ✔ Apply Remove (unchecked)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Merge */}
-      {staNames.length > 1 && (
-        <div className="card">
-          <h3>🧩 Merge two STA groups (Best-fit)</h3>
-          <div className="row" style={{ gap: 8 }}>
-            <select value={fromSta} onChange={(e) => setFromSta(e.target.value)} className="input">
-              <option value="">-- Base (keep) --</option>
-              {staNames.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-
-            <select value={toSta} onChange={(e) => setToSta(e.target.value)} className="input">
-              <option value="">-- Merge Into Base --</option>
-              {staNames.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-
-            <button className="btn" onClick={handleMerge}>🔄 Merge</button>
-            <button className="btn btn-ghost" onClick={exportMerged}>💾 Export Merged ENH</button>
-          </div>
-
-          {renderToleranceSummary()}
-           <MergeWarningBox />
-
-          {/* Pairwise diff table */}
-          {mergePairErrors.length > 0 && (
-            <div className="tablewrap" style={{ marginTop: 12 }}>
-              <h4>⚠ Pairwise Δ from first-common (A vs B) — |Δ| (mm)</h4>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Ref</th>
-                    <th>To</th>
-                    <th>dA (m)</th>
-                    <th>dB (m)</th>
-                    <th>|Δ| (mm)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mergePairErrors.map((r, i) => (
-                    <tr key={i} className={r.dd_mm > (TOL * 1000) ? "err" : ""}>
-                      <td>{r.fromRef}</td>
-                      <td>{r.toName}</td>
-                      <td>{r.dA.toFixed(4)}</td>
-                      <td>{r.dB.toFixed(4)}</td>
-                      <td>{r.dd_mm.toFixed(1)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* point-level error list */}
-          {mergeErrors.length > 0 && (
-            <div className="card" style={{ marginTop: 12 }}>
-              <h4>⚠ Points exceeding { (TOL*1000).toFixed(0) } mm</h4>
-              <ul>
-                {mergeErrors.map((e, i) => (
-                  <li key={i}>
-                    {e.name}: {e.dmm.toFixed(1)} mm (ΔE={e.dE.toFixed(3)}, ΔN={e.dN.toFixed(3)}, ΔH={e.dH.toFixed(3)})
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Working set preview */}
-      {getWorkingSet().length > 0 && (
-        <div className="card">
-          <h3>✅ Working Set ({getWorkingSet().length} pts)</h3>
-          <div className="tablewrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pt</th>
-                  <th>E</th>
-                  <th>N</th>
-                  <th>H</th>
-                </tr>
-              </thead>
-              <tbody>
-                {getWorkingSet().map((p, i) => (
-                  <tr key={i}>
-                    <td>{p.name}</td>
-                    <td>{p.E.toFixed(4)}</td>
-                    <td>{p.N.toFixed(4)}</td>
-                    <td>{p.H.toFixed(4)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Reference line */}
-      {getWorkingSet().length > 0 && (
-        <div className="card">
-          <h3>📏 Reference line on Working Set</h3>
-          <div className="row" style={{ gap: 8 }}>
-            <input className="input" placeholder="Point A (start)" value={refA} onChange={(e) => setRefA(e.target.value)} list="ptnames" />
-            <input className="input" placeholder="Point B (direction)" value={refB} onChange={(e) => setRefB(e.target.value)} list="ptnames" />
-            <datalist id="ptnames">{getWorkingSet().map((p) => <option key={p.name} value={p.name} />)}</datalist>
-
-            <button className="btn" onClick={applyRefLine}>▶ Apply Reference Line</button>
-            <button className="btn btn-ghost" onClick={exportTransformed}>📄 Final Export TXT</button>
-          </div>
-        </div>
-      )}
-
-      {/* Transformed preview */}
-      {transformed.length > 0 && (
-        <div className="card">
-          <h3>🔄 Transformed Result (Ref Line)</h3>
-          <div className="tablewrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pt</th>
-                  <th>E (across)</th>
-                  <th>N (along)</th>
-                  <th>H (A=0)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transformed.map((p, i) => (
-                  <tr key={i}>
-                    <td>{p.name}</td>
-                    <td>{p.E.toFixed(4)}</td>
-                    <td>{p.N.toFixed(4)}</td>
-                    <td>{p.H.toFixed(4)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="row end" style={{ marginTop: 8 }}>
-            <button className="btn btn-ghost" onClick={exportTransformed}>📄 Final Export TXT</button>
-          </div>
-        </div>
-      )}
-
-      <footer className="footer">© 2025 WMK Seatrium DC Team</footer>
-    </div>
-  );
-}
