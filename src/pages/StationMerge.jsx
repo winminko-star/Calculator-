@@ -78,6 +78,9 @@ export default function StationMerge() {
   const [mergeSummaries, setMergeSummaries] = useState([]); // {group,count,maxmm}
   const [mergeErrors, setMergeErrors] = useState([]); // point-level errors > TOL
   const [mergePairErrors, setMergePairErrors] = useState([]); // pairwise (first-common -> others)
+// STEP 1 — Height error states
+const [heightErrors, setHeightErrors] = useState([]); 
+const [heightSummary, setHeightSummary] = useState(null);
   const [transformed, setTransformed] = useState([]); // after reference line
   const [refA, setRefA] = useState("");
   const [refB, setRefB] = useState("");
