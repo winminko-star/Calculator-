@@ -225,149 +225,165 @@ export default function StationMerge() {
     setMergeSummaries([]);
   };
 
-  // replace your existing handleMerge with this function
-const handleMerge = () => {
-  const MIN_COMMON = 7; // <-- change this if you want another threshold
-
-  if (!fromSta || !toSta) {
-    setInfo("⚠️ Choose two STAs first");
-    return;
-  }
-  if (fromSta === toSta) {
-    setInfo("⚠️ Choose different STAs");
-    return;
-  }
-
-  const A = groups[fromSta];
-  const B = groups[toSta];
-  if (!A || !B) {
-    setInfo("⚠️ Invalid STA names");
-    return;
-  }
-
-  // maps & common names (by exact name)
-  const Amap = new Map(A.map((p) => [p.name, p]));
-  const Bmap = new Map(B.map((p) => [p.name, p]));
-  const common = [...Amap.keys()].filter((k) => Bmap.has(k));
-
-  // If zero common -> block (per your requirement)
-  if (common.length === 0) {
-    setInfo("⚠️ No common points found — cannot merge.");
-    return;
-  }
-
-  // Enforce minimum common points (e.g., 7)
-  if (common.length < MIN_COMMON) {
-    setInfo(
-      `⚠️ Need at least ${MIN_COMMON} common points for reliable best-fit. Found ${common.length}.`
-    );
-    return;
-  }
-
-  // Optional: first-common point quick 3mm check (uncomment return if you want abort on big difference)
-  const TOL_FIRST_PT = 0.003; // 3 mm (meters)
-  {
-    const p0 = common[0];
-    const a0 = Amap.get(p0), b0 = Bmap.get(p0);
-    const d0 = Math.hypot(a0.E - b0.E, a0.N - b0.N, a0.H - b0.H);
-    if (d0 > TOL_FIRST_PT) {
-      // warn user (not aborting by default)
-      alert(`⚠ First common point '${p0}' differs by ${(d0 * 1000).toFixed(1)} mm`);
-      // If you prefer to abort when first point mismatches, uncomment next line:
-      // return;
+    // ===== Merge (best-fit) =====
+  const handleMerge = () => {
+    if (!fromSta || !toSta) {
+      setInfo("⚠️ Choose two STAs first");
+      return;
     }
-  }
-
-  // ---- Best-fit (2D similarity on EN) + mean H shift using only common names
-  const BaseEN = common.map((n) => [Amap.get(n).E, Amap.get(n).N]);
-  const MovEN = common.map((n) => [Bmap.get(n).E, Bmap.get(n).N]);
-  const { scale, cos, sin, tx, ty } = fitSimilarity2D(BaseEN, MovEN);
-
-  // mean H shift
-  let dHsum = 0;
-  for (const n of common) dHsum += Amap.get(n).H - Bmap.get(n).H;
-  const dHavg = dHsum / common.length;
-
-  // transform helper for B -> A frame
-  const tfB = (p) => ({
-    name: p.name,
-    E: scale * (cos * p.E - sin * p.N) + tx,
-    N: scale * (sin * p.E + cos * p.N) + ty,
-    H: p.H + dHavg,
-  });
-
-  // ---- tolerance summary on common points (after transform)
-  const TOL = 0.003; // 3 mm in meters
-  let exceedCount = 0;
-  let maxm = 0;
-  const errList = [];
-
-  for (const n of common) {
-    const a = Amap.get(n);
-    const bT = tfB(Bmap.get(n));
-
-    const rE = bT.E - a.E;
-    const rN = bT.N - a.N;
-    const rH = bT.H - a.H;
-
-    const d = Math.hypot(rE, rN, rH); // meters
-    if (d > TOL) {
-      exceedCount++;
-      if (d > maxm) maxm = d;
-      errList.push({
-        name: n,
-        dE: rE,
-        dN: rN,
-        dH: rH,
-        dmm: d * 1000,
-        from: fromSta,
-        to: toSta,
-      });
+    if (fromSta === toSta) {
+      setInfo("⚠️ Choose different STAs");
+      return;
     }
-  }
+    const A = groups[fromSta];
+    const B = groups[toSta];
+    if (!A || !B) {
+      setInfo("⚠️ Invalid STA names");
+      return;
+    }
 
-  // ---- Build merged: keep A’s values for duplicates; add transformed B non-duplicates
-  const nonDup = B.filter((p) => !Amap.has(p.name)).map(tfB);
-  const mergedArr = [...A, ...nonDup];
+    // maps & common names
+    const Amap = new Map(A.map((p) => [p.name, p]));
+    const Bmap = new Map(B.map((p) => [p.name, p]));
+    const common = [...Amap.keys()].filter((k) => Bmap.has(k));
 
-  const ng = { ...groups };
-  delete ng[toSta];
-  ng[fromSta] = mergedArr;
-  setGroups(ng);
-  setMerged(mergedArr);
-  setTransformed([]); // clear any previous refline
-  setEditLocked(true); // lock if you still want lock — remove this line if you don't want editLock
+    // if no common, just concat (no transform)
+    if (common.length === 0) {
+      const mergedArr = [...A, ...B];
+      const ng = { ...groups };
+      delete ng[toSta];
+      ng[fromSta] = mergedArr;
+      setGroups(ng);
+      setMerged(mergedArr);
+      setMergeSummaries((prev) => prev.filter((s) => s.group !== toSta));
+      setTransformed([]);
+      setMergeErrors([]);
+      setMergePairErrors([]);
+      setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
+      return;
+    }
 
-  // update tolerance panel (group-level)
-  setMergeSummaries((prev) => {
-    const others = prev.filter((s) => s.group !== toSta);
-    return [
-      ...others,
-      {
-        group: toSta,
-        count: exceedCount,
-        maxmm: maxm, // metres
-      },
-    ];
-  });
+    // need >=2 common to compute similarity properly
+    if (common.length < 7) {
+      setInfo("⚠️ Need ≥7 common points for best-fit.");
+      return;
+    }
 
-  // point-level error list (store 3mm+ points)
-  setMergeErrors(errList || []);
+    // first-common point check (3D) — alert only (optional abort commented)
+    {
+      const p0 = common[0];
+      const a0 = Amap.get(p0);
+      const b0 = Bmap.get(p0);
+      const d0 = Math.hypot(a0.E - b0.E, a0.N - b0.N, a0.H - b0.H);
+      if (d0 > TOL) {
+        alert(`⚠ First common point '${p0}' differs by ${(d0 * 1000).toFixed(1)} mm`);
+        // If you want to abort when first point differs, uncomment next line:
+        // return;
+      }
+    }
 
-  // optionally compute geometry diff viewer (between original A and B)
-  const A_only = new Map(A.map((p) => [p.name, p]));
-  const B_only = new Map(B.map((p) => [p.name, p]));
-  computeGeometryDiff(A_only, B_only);
+    // Best-fit 2D (EN) + mean H shift
+    const BaseEN = common.map((n) => [Amap.get(n).E, Amap.get(n).N]);
+    const MovEN = common.map((n) => [Bmap.get(n).E, Bmap.get(n).N]);
+    const { scale, cos, sin, tx, ty } = fitSimilarity2D(BaseEN, MovEN);
 
-  // final info
-  if (exceedCount > 0) {
+    let dHsum = 0;
+    for (const n of common) dHsum += Amap.get(n).H - Bmap.get(n).H;
+    const dHavg = dHsum / common.length;
+
+    const tfB = (p) => ({
+      name: p.name,
+      E: scale * (cos * p.E - sin * p.N) + tx,
+      N: scale * (sin * p.E + cos * p.N) + ty,
+      H: p.H + dHavg,
+    });
+
+    // compute pairwise differences relative to first-common (for diagnostics)
+    const pairErrs = [];
+    if (common.length >= 2) {
+      const refName = common[0];
+      const a_ref = Amap.get(refName);
+      const Btrans = new Map();
+      for (const n of common) Btrans.set(n, tfB(Bmap.get(n)));
+
+      for (let i = 1; i < common.length; i++) {
+        const nm = common[i];
+        const a_pt = Amap.get(nm);
+        const b_pt = Btrans.get(nm);
+
+        const dAx = a_pt.E - a_ref.E;
+        const dAy = a_pt.N - a_ref.N;
+        const dAz = a_pt.H - a_ref.H;
+        const dA = Math.hypot(dAx, dAy, dAz); // m
+
+        const b_ref = Btrans.get(refName);
+        const dBx = b_pt.E - b_ref.E;
+        const dBy = b_pt.N - b_ref.N;
+        const dBz = b_pt.H - b_ref.H;
+        const dB = Math.hypot(dBx, dBy, dBz); // m
+
+        const dd = Math.abs(dA - dB);
+        pairErrs.push({
+          fromRef: refName,
+          toName: nm,
+          dA,
+          dB,
+          dd,
+          dd_mm: dd * 1000,
+        });
+      }
+    }
+    setMergePairErrors(pairErrs);
+
+    // tolerance summary + error list (point-wise after transform)
+    let exceedCount = 0;
+    let maxm = 0;
+    const errList = [];
+    for (const n of common) {
+      const a = Amap.get(n);
+      const bT = tfB(Bmap.get(n));
+      const rE = bT.E - a.E;
+      const rN = bT.N - a.N;
+      const rH = bT.H - a.H;
+      const d = Math.hypot(rE, rN, rH); // meters
+      if (d > TOL) {
+        exceedCount++;
+        if (d > maxm) maxm = d;
+        errList.push({
+          name: n,
+          dE: rE,
+          dN: rN,
+          dH: rH,
+          dmm: d * 1000,
+          from: fromSta,
+          to: toSta,
+        });
+      }
+    }
+
+    // build merged: keep A's values for duplicates; add transformed B non-duplicates
+    const nonDup = B.filter((p) => !Amap.has(p.name)).map(tfB);
+    const mergedArr = [...A, ...nonDup];
+
+    const ng = { ...groups };
+    delete ng[toSta];
+    ng[fromSta] = mergedArr;
+
+    setGroups(ng);
+    setMerged(mergedArr);
+    setTransformed([]);
+    setMergeErrors(errList);
+    setMergeSummaries((prev) => {
+      const others = prev.filter((s) => s.group !== toSta);
+      return [...others, { group: toSta, count: exceedCount, maxmm: maxm }];
+    });
+
     setInfo(
-      `⚠️ Best-fit merged ${toSta} → ${fromSta} — ${exceedCount} pt(s) > ${(TOL*1000).toFixed(0)} mm (max ${(maxm*1000).toFixed(1)} mm)`
+      exceedCount > 0
+        ? `⚠️ Best-fit merged ${toSta} → ${fromSta} — ${exceedCount} pt(s) > ${(TOL * 1000).toFixed(0)} mm (max ${(maxm * 1000).toFixed(1)} mm)`
+        : `✅ Best-fit merged ${toSta} → ${fromSta} (all refs ≤ ${(TOL * 1000).toFixed(0)} mm)`
     );
-  } else {
-    setInfo(`✅ Best-fit merged ${toSta} → ${fromSta} (all refs ≤ ${(TOL*1000).toFixed(0)} mm)`);
-  }
-};
+  };
 
   // export merged ENH
   const exportMerged = () => {
