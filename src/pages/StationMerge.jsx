@@ -490,12 +490,7 @@ setMergeWarnings([]);
     return (
       <div className="card">
         <h3>📏 Merge tolerance summary (≤ 3 mm)</h3>
-  {/* warning messages */}
-  {mergeWarnings.length > 0 && (
-    <ul>
-      {mergeWarnings.map((w, i) => <li key={i} style={{ color: 'red' }}>{w}</li>)}
-    </ul>
-  )}
+  
         {mergeSummaries.map((s, i) =>
           s.count > 0 ? (
             <div key={i} className="line bad">
@@ -515,6 +510,23 @@ setMergeWarnings([]);
       <h2>📐 StationMerge – WMK / Seatrium DC</h2>
 
       {info && <div className="info">{info}</div>}
+const MergeWarningBox = () => {
+  if (!mergeWarnings || mergeWarnings.length === 0) return null;
+
+  return (
+    <div className="merge-warning-box" style={{
+      border: "1px solid orange",
+      padding: "10px",
+      marginTop: "10px",
+      backgroundColor: "#fff4e5"
+    }}>
+      <h4 style={{color: "orange"}}>⚠ Merge Warning</h4>
+      <ul>
+        {mergeWarnings.map((w, i) => <li key={i}>{w}</li>)}
+      </ul>
+    </div>
+  );
+};
 
       {/* Upload / paste */}
       <div className="card">
@@ -675,6 +687,7 @@ setMergeWarnings([]);
           </div>
 
           {renderToleranceSummary()}
+           <MergeWarningBox />
 
           {/* Pairwise diff table */}
           {mergePairErrors.length > 0 && (
