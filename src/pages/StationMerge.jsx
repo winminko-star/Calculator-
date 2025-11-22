@@ -667,73 +667,73 @@ const MergeHeightBox = () => {
 )}
 
       {/* Edit / Remove points */}
-      {staSortedEntries.length > 0 && (
-        <div className="card">
-          <h3>✏️ Edit / Remove points</h3>
-          {staSortedEntries.map(([sta, pts]) => (
-            <div key={sta} className="sta-card">
-              <div className="row space-between" style={{ alignItems: "center" }}>
-                <div className="row" style={{ gap: 8 }}>
-                  <h4 style={{ margin: 0 }}>{sta}</h4>
-                  <input
-                    className="input"
-                    style={{ width: 160 }}
-                    placeholder="Rename STA..."
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") renameSta(sta, e.currentTarget.value);
-                    }}
-                  />
-                  <button
-                    className="btn btn-ghost"
-                    onClick={(e) => {
-                      const box = e.currentTarget.previousSibling;
-                      const val = box && box.value ? box.value : "";
-                      renameSta(sta, val);
-                    }}
-                  >
-                    ✏️ Rename
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                {pts.map((p, idx) => {
-                  const checked = (keepMap[sta]?.[p.name] ?? true) !== false;
-                  return (
-                    <div key={idx} className="ptrow">
-                      <label className="chk">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleKeep(sta, p.name)}
-                        />
-                        <span />
-                      </label>
-
-                      <input
-                        className="input"
-                        placeholder="Point name"
-                        value={p.name}
-                        onChange={(e) => updatePointName(sta, idx, e.target.value)}
-                      />
-
-                      <input className="input" value={p.E} readOnly />
-                      <input className="input" value={p.N} readOnly />
-                      <input className="input" value={p.H} readOnly />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          <div className="row end" style={{ marginTop: 8 }}>
-            <button className="btn" onClick={applyFilter}>
-              ✔ Apply Remove (unchecked)
+{showEditPoints && staSortedEntries.length > 0 && (
+  <div className="card">
+    <h3>✏️ Edit / Remove points</h3>
+    {staSortedEntries.map(([sta, pts]) => (
+      <div key={sta} className="sta-card">
+        <div className="row space-between" style={{ alignItems: "center" }}>
+          <div className="row" style={{ gap: 8 }}>
+            <h4 style={{ margin: 0 }}>{sta}</h4>
+            <input
+              className="input"
+              style={{ width: 160 }}
+              placeholder="Rename STA..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter") renameSta(sta, e.currentTarget.value);
+              }}
+            />
+            <button
+              className="btn btn-ghost"
+              onClick={(e) => {
+                const box = e.currentTarget.previousSibling;
+                const val = box && box.value ? box.value : "";
+                renameSta(sta, val);
+              }}
+            >
+              ✏️ Rename
             </button>
           </div>
         </div>
-      )}
+
+        <div>
+          {pts.map((p, idx) => {
+            const checked = (keepMap[sta]?.[p.name] ?? true) !== false;
+            return (
+              <div key={idx} className="ptrow">
+                <label className="chk">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleKeep(sta, p.name)}
+                  />
+                  <span />
+                </label>
+
+                <input
+                  className="input"
+                  placeholder="Point name"
+                  value={p.name}
+                  onChange={(e) => updatePointName(sta, idx, e.target.value)}
+                />
+
+                <input className="input" value={p.E} readOnly />
+                <input className="input" value={p.N} readOnly />
+                <input className="input" value={p.H} readOnly />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ))}
+
+    <div className="row end" style={{ marginTop: 8 }}>
+      <button className="btn" onClick={applyFilter}>
+        ✔ Apply Remove (unchecked)
+      </button>
+    </div>
+  </div>
+)}
 
       {/* Merge */}
       {staNames.length > 1 && (
