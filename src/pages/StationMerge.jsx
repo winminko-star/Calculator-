@@ -657,6 +657,8 @@ const MergeHeightBox = () => {
         </table>
       </div>
     )}
+{ /* Show height differences box */ }
+<MergeHeightBox />
   </div>
 )}
 
