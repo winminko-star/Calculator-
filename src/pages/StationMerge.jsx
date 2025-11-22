@@ -78,6 +78,7 @@ export default function StationMerge() {
   const [mergeSummaries, setMergeSummaries] = useState([]); // {group,count,maxmm}
   const [mergeErrors, setMergeErrors] = useState([]); // point-level errors > TOL
   const [mergePairErrors, setMergePairErrors] = useState([]); // pairwise (first-common -> others)
+const [mergeWarnings, setMergeWarnings] = useState([]);
   const [transformed, setTransformed] = useState([]); // after reference line
   const [refA, setRefA] = useState("");
   const [refB, setRefB] = useState("");
@@ -257,6 +258,21 @@ export default function StationMerge() {
       setInfo("⚠️ Need ≥7 common points for best-fit.");
       return;
     }
+
+// merge success message
+setMergeInfo(`✅ ${fromSta} merged with ${toSta}`);
+if (common.length === 0) {
+  setMergeWarnings([`⚠️ Cannot merge: no common points!`]);
+  return; // skip merge
+}
+
+if (common.length < 7) {
+  setMergeWarnings([`⚠️ Cannot merge: less than 7 common points!`]);
+  return; // skip merge or allow
+}
+
+
+setMergeWarnings([]);
 
     // first-common point check (3D) — alert only (optional abort commented)
     {
@@ -474,6 +490,12 @@ export default function StationMerge() {
     return (
       <div className="card">
         <h3>📏 Merge tolerance summary (≤ 3 mm)</h3>
+  {/* warning messages */}
+  {mergeWarnings.length > 0 && (
+    <ul>
+      {mergeWarnings.map((w, i) => <li key={i} style={{ color: 'red' }}>{w}</li>)}
+    </ul>
+  )}
         {mergeSummaries.map((s, i) =>
           s.count > 0 ? (
             <div key={i} className="line bad">
