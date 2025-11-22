@@ -70,6 +70,7 @@ export default function StationMerge() {
   const [groups, setGroups] = useState({}); // { STAname: [{name,E,N,H}, ...] }
   const [keepMap, setKeepMap] = useState({}); // { STAname: { pointName: false } } false -> remove
   const [info, setInfo] = useState("");
+const [showEditPoints, setShowEditPoints] = useState(true);
 
   // merge / working set / UI
   const [fromSta, setFromSta] = useState("");
@@ -614,6 +615,9 @@ const MergeHeightBox = () => {
 
       {/* STA summary */}
       {renderStaSummary()}
+<button className="btn btn-ghost" onClick={() => setShowEditPoints(prev => !prev)}>
+  {showEditPoints ? "🔽 Hide Point Edit" : "🔼 Show Point Edit"}
+</button>
 
 
 
