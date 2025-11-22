@@ -642,7 +642,7 @@ const MergeHeightBox = () => {
     {/* show pairwise diagnostics (if any) */}
     {mergePairErrors && mergePairErrors.length > 0 && (
       <div className="tablewrap" style={{ marginTop: 8 }}>
-        <h4>Pairwise Δ from first-common (last merge)</h4>
+        <h4>Pairwise Δ from first-common (last merge)*Memories# Double Showing List</h4>
         <table>
           <thead>
             <tr><th>Ref</th><th>To</th><th>dA (m)</th><th>dB (m)</th><th>|Δ| (mm)</th></tr>
