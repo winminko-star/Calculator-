@@ -768,4 +768,8 @@ return (
 
     <footer className="footer">© 2025 WMK Seatrium DC Team</footer>
   </div>
-);
+);  // return statement ပိတ်
+
+}  // function ပိတ်
+
+export default StationMerge;  // export
