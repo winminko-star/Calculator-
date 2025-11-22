@@ -492,6 +492,14 @@ export default function StationMerge() {
   return (
     <div className="page station-merge">
       <h2>📐 StationMerge – WMK / Seatrium DC</h2>
+<div style={{ marginBottom: 12 }}>
+  <button
+    className="btn btn-ghost"
+    onClick={() => window.location.reload()}
+  >
+    🔄 Retry / Reupload
+  </button>
+</div>
 
       {info && <div className="info">{info}</div>}
 
