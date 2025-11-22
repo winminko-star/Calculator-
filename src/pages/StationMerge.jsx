@@ -1,5 +1,5 @@
 // src/pages/StationMerge.jsx  — PART 1/3
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo,useEffect } from "react";
 import "./StationMerge.css";
 
 // component-level tolerance (meters)
