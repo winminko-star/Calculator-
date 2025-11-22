@@ -249,23 +249,13 @@ export default function StationMerge() {
 
     // if no common, just concat (no transform)
     if (common.length === 0) {
-      const mergedArr = [...A, ...B];
-      const ng = { ...groups };
-      delete ng[toSta];
-      ng[fromSta] = mergedArr;
-      setGroups(ng);
-      setMerged(mergedArr);
-      setMergeSummaries((prev) => prev.filter((s) => s.group !== toSta));
-      setTransformed([]);
-      setMergeErrors([]);
-      setMergePairErrors([]);
-      setInfo(`✅ ${fromSta} merged with ${toSta} (no common pts)`);
+ setInfo("⚠️ Need Minimum (7) common points for best-fit.No Common Points Found.");
       return;
     }
 
-    // need >=2 common to compute similarity properly
-    if (common.length < 2) {
-      setInfo("⚠️ Need ≥2 common points for best-fit.");
+    // need >=7 common to compute similarity properly
+    if (common.length < 7) {
+      setInfo("⚠️ Need Minimum (7) common points for best-fit.");
       return;
     }
 
