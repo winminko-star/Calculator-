@@ -468,85 +468,99 @@ setMergeWarnings([]);
     downloadTextFile("StationMerge_final_refline.txt", lines.join("\n"));
   };
 
-  // render helpers
-  const renderStaSummary = () => {
-    if (staNames.length === 0) return null;
-    return (
-      <div className="card">
-        <h3>📂 STA Groups</h3>
-        <ul>
-          {staNames.map((s) => (
-            <li key={s}>
-              <strong>{s}</strong> – {groups[s].length} pts
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  };
-
-  const renderToleranceSummary = () => {
-    if (!mergeSummaries || mergeSummaries.length === 0) return null;
-    return (
-      <div className="card">
-        <h3>📏 Merge tolerance summary (≤ 3 mm)</h3>
-  
-        {mergeSummaries.map((s, i) =>
-          s.count > 0 ? (
-            <div key={i} className="line bad">
-              ⚠ {s.group} → exceeded on {s.count} ref point(s), max=
-              {(s.maxmm * 1000).toFixed(1)} mm
-            </div>
-          ) : (
-            <div key={i} className="line ok">✅ {s.group} → within tolerance</div>
-          )
-        )}
-      </div>
-    );
-  };
-
+// render helpers
+const renderStaSummary = () => {
+  if (staNames.length === 0) return null;
   return (
-    <div className="page station-merge">
-      <h2>📐 StationMerge – WMK / Seatrium DC</h2>
-
-      {info && <div className="info">{info}</div>}
-const MergeWarningBox = () => {
-  if (!mergeWarnings || mergeWarnings.length === 0) return null;
-
-  return (
-    <div className="merge-warning-box" style={{
-      border: "1px solid orange",
-      padding: "10px",
-      marginTop: "10px",
-      backgroundColor: "#fff4e5"
-    }}>
-      <h4 style={{color: "orange"}}>⚠ Merge Warning</h4>
+    <div className="card">
+      <h3>📂 STA Groups</h3>
       <ul>
-        {mergeWarnings.map((w, i) => <li key={i}>{w}</li>)}
+        {staNames.map((s) => (
+          <li key={s}>
+            <strong>{s}</strong> – {groups[s].length} pts
+          </li>
+        ))}
       </ul>
     </div>
   );
 };
 
-      {/* Upload / paste */}
-      <div className="card">
-        <h3>📥 Upload TXT / CSV</h3>
-        <input type="file" accept=".txt,.csv" onChange={handleFile} />
-        <textarea
-          className="textarea"
-          rows={6}
-          value={rawText}
-          onChange={(e) => {
-            setRawText(e.target.value);
-            parseTextToGroups(e.target.value);
-          }}
-          placeholder="Paste lines: STA..., PointName, E, N, H  (comma/tab/semicolon separated)"
-        />
-      </div>
+const renderToleranceSummary = () => {
+  if (!mergeSummaries || mergeSummaries.length === 0) return null;
+  return (
+    <div className="card">
+      <h3>📏 Merge tolerance summary (≤ 3 mm)</h3>
 
-      {/* STA summary */}
-      {renderStaSummary()}
+      {mergeSummaries.map((s, i) =>
+        s.count > 0 ? (
+          <div key={i} className="line bad">
+            ⚠ {s.group} → exceeded on {s.count} ref point(s), max=
+            {(s.maxmm * 1000).toFixed(1)} mm
+          </div>
+        ) : (
+          <div key={i} className="line ok">✅ {s.group} → within tolerance</div>
+        )
+      )}
+    </div>
+  );
+};
 
+// ✅ Move this outside JSX return
+const MergeWarningBox = () => {
+  if (!mergeWarnings || mergeWarnings.length === 0) return null;
+
+  return (
+    <div
+      className="merge-warning-box"
+      style={{
+        border: "1px solid orange",
+        padding: "10px",
+        marginTop: "10px",
+        backgroundColor: "#fff4e5",
+      }}
+    >
+      <h4 style={{ color: "orange" }}>⚠ Merge Warning</h4>
+      <ul>
+        {mergeWarnings.map((w, i) => (
+          <li key={i}>{w}</li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+return (
+  <div className="page station-merge">
+    <h2>📐 StationMerge – WMK / Seatrium DC</h2>
+
+    {info && <div className="info">{info}</div>}
+
+    {/* Render warning box */}
+    <MergeWarningBox />
+
+    {/* Upload / paste */}
+    <div className="card">
+      <h3>📥 Upload TXT / CSV</h3>
+      <input type="file" accept=".txt,.csv" onChange={handleFile} />
+      <textarea
+        className="textarea"
+        rows={6}
+        value={rawText}
+        onChange={(e) => {
+          setRawText(e.target.value);
+          parseTextToGroups(e.target.value);
+        }}
+        placeholder="Paste lines: STA..., PointName, E, N, H  (comma/tab/semicolon separated)"
+      />
+    </div>
+
+    {/* STA summary */}
+    {renderStaSummary()}
+
+    {/* Merge tolerance summary */}
+    {renderToleranceSummary()}
+  </div>
+);
 
 {/* --- keep last-merge summaries visible even if groups reduced to 1 --- */}
 {mergeSummaries && mergeSummaries.length > 0 && (
