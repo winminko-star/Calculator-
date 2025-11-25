@@ -3,7 +3,7 @@ import React, { useRef, useState } from "react";
 import "./Videopage.css";
 
 const videos = [
-  { id: 1, src: "/Right Triangle.mp4", poster: "/videos/Right Triangle.jpg", title: "Right Triangle" },
+  { id: 1, src: "/videos/Right Triangle.mp4", poster: "/videos/Right Triangle.jpg", title: "Right Triangle" },
   { id: 2, src: "/videos/video2.mp4", poster: "/videos/video2.jpg", title: "Amazing Video 2" },
   { id: 3, src: "/videos/video3.mp4", poster: "/videos/video3.jpg", title: "Amazing Video 3" },
   { id: 4, src: "/videos/video4.mp4", poster: "/videos/video4.jpg", title: "Amazing Video 4" },
