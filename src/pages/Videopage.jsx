@@ -4,7 +4,7 @@ import "./Videopage.css";
 
 const videos = [
   { id: 1, src: "/videos/Right Triangle.mp4", poster: "/videos/Right Triangle.jpg", title: "Right Triangle" },
-  { id: 2, src: "/videos/video2.mp4", poster: "/videos/video2.jpg", title: "Amazing Video 2" },
+  { id: 2, src: "/videos/Circle Calculate.mp4", poster: "/videos/Circle Calculate.jpg", title: "Circle Calculate" },
   { id: 3, src: "/videos/video3.mp4", poster: "/videos/video3.jpg", title: "Amazing Video 3" },
   { id: 4, src: "/videos/video4.mp4", poster: "/videos/video4.jpg", title: "Amazing Video 4" },
   { id: 5, src: "/videos/video5.mp4", poster: "/videos/video5.jpg", title: "Amazing Video 5" },
@@ -46,7 +46,7 @@ export default function Videopage() {
 
   return (
     <div className="video-page">
-      <h1 className="video-page-title">🎬 Our Special Videos</h1>
+      <h1 className="video-page-title">🎬 DC New Worker Basics</h1>
 
       <div className="video-search">
         <input
