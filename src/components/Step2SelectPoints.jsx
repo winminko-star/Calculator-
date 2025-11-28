@@ -1,193 +1,184 @@
 // src/components/Step2SelectPoints.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./workflow.css";
 
-// helper functions
-const dist2 = (a, b) => Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2);
+/* Helpers */
+const dist2 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const gaussianKernel = (r, eps) => Math.exp(-(r * r) / (eps * eps));
 
+// Simple linear solver for small systems
 function solveLinear(A, b) {
   const n = A.length;
-  const M = A.map((row, i) => [...row, b[i]]);
+  const M = new Array(n);
+  for (let i = 0; i < n; i++) {
+    M[i] = [...A[i], b[i]];
+  }
+
   for (let k = 0; k < n; k++) {
-    let iMax = k,
-      maxV = Math.abs(M[k][k]);
-    for (let i = k + 1; i < n; i++)
+    let iMax = k;
+    let maxV = Math.abs(M[k][k]);
+    for (let i = k + 1; i < n; i++) {
       if (Math.abs(M[i][k]) > maxV) {
         maxV = Math.abs(M[i][k]);
         iMax = i;
       }
-    if (maxV < 1e-12) throw new Error("Matrix singular");
+    }
+    if (maxV < 1e-12) throw new Error("Matrix is singular");
     if (iMax !== k) [M[k], M[iMax]] = [M[iMax], M[k]];
-    let pivot = M[k][k];
+    const pivot = M[k][k];
     for (let j = k; j <= n; j++) M[k][j] /= pivot;
     for (let i = 0; i < n; i++) {
       if (i === k) continue;
-      let factor = M[i][k];
-      for (let j = 0; j <= n; j++) M[i][j] -= factor * M[k][j];
+      const factor = M[i][k];
+      for (let j = k; j <= n; j++) M[i][j] -= factor * M[k][j];
     }
   }
-  return M.map((row) => row[n]);
+
+  return M.map(row => row[n]);
 }
 
-export default function Step2SelectPoints({ points, onApply }) {
-  const [selected, setSelected] = useState([]);
-  const [targetXYZ, setTargetXYZ] = useState({});
-  const [eps, setEps] = useState(500);
-  const [lambda, setLambda] = useState(1e-3);
+/* Utility: parse number but allow empty string for user editing */
+function parseNumberOrEmpty(v) {
+  if (v === "" || v === null || v === undefined) return "";
+  const n = Number(v);
+  return Number.isFinite(n) ? n : "";
+}
 
-  const toggle = (i) => {
-    setSelected((s) =>
-      s.includes(i) ? s.filter((x) => x !== i) : [...s, i]
-    );
-    setTargetXYZ((t) =>
-      t[i] !== undefined
-        ? t
-        : { ...t, [i]: { x: points[i].x, y: points[i].y, z: points[i].z } }
-    );
+export default function Step2SelectPoints({ points = [], onApply }) {
+  const [selectedIdx, setSelectedIdx] = useState([]);
+  const [targets, setTargets] = useState({});
+  const [eps, setEps] = useState(100);
+  const [lambda, setLambda] = useState(0.001);
+  const [filter, setFilter] = useState("");
+
+  useEffect(() => {
+    setSelectedIdx([]);
+    setTargets({});
+  }, [points]);
+
+  const toggleSelect = (i) => {
+    setSelectedIdx(s => s.includes(i) ? s.filter(x => x !== i) : [...s, i]);
+    setTargets(t => (t[i] !== undefined ? t : { ...t, [i]: points[i]?.z }));
   };
 
-  const handleTargetChange = (i, axis, value) => {
-    // Remove leading zeros unless value is exactly "0"
-    let val = value;
-    if (val.length > 1) val = val.replace(/^0+/, "");
-    let num = parseFloat(val);
-    setTargetXYZ((t) => ({
-      ...t,
-      [i]: { ...t[i], [axis]: Number.isNaN(num) ? val : num },
-    }));
+  const handleTargetChange = (i, v) => {
+    // Prevent leading zeros
+    const clean = v.replace(/^0+(\d)/, '$1');
+    setTargets(t => ({ ...t, [i]: clean === "" ? "" : Number(clean) }));
   };
 
-  const applyENH = () => {
-    if (selected.length < 4) {
-      alert("အနည်းဆုံး 4 control points ရွေးပါ");
+  const handleEpsChange = (v) => setEps(parseNumberOrEmpty(v));
+  const handleLambdaChange = (v) => setLambda(parseNumberOrEmpty(v));
+
+  const applyRBF = () => {
+    if (selectedIdx.length < 4) {
+      alert("ကျေးဇူးပြု၍ အနည်းဆုံး 4 control points ရွေးပါ");
       return;
     }
 
-    const controls = selected.map((i) => ({
-      idx: i,
-      x: points[i].x,
-      y: points[i].y,
-      z: points[i].z,
-      target: targetXYZ[i],
-    }));
+    const epsN = Number(eps), lambdaN = Number(lambda);
+    if (!Number.isFinite(epsN) || epsN <= 0) { alert("Kernel width must be positive"); return; }
+    if (!Number.isFinite(lambdaN) || lambdaN < 0) { alert("Regularization must be non-negative"); return; }
+
+    const controls = selectedIdx.map(i => ({ idx: i, x: points[i].x, y: points[i].y, target: Number(targets[i]) }));
+    for (const c of controls) if (!Number.isFinite(c.target)) { alert("Control targets must be numeric"); return; }
 
     const n = controls.length;
-
-    // Build RBF matrix for each axis separately
-    const axes = ["x", "y", "z"];
-    const weights = {};
-
-    for (let axis of axes) {
-      const K = Array.from({ length: n }, (_, i) =>
-        Array.from({ length: n }, (_, j) =>
-          gaussianKernel(
-            dist2([controls[i].x, controls[i].y], [controls[j].x, controls[j].y]),
-            eps
-          )
-        )
-      );
-      for (let i = 0; i < n; i++) K[i][i] += lambda;
-      const d = controls.map((c) => c.target[axis]);
-      try {
-        weights[axis] = solveLinear(K, d);
-      } catch (err) {
-        alert("Linear solve failed for " + axis);
-        return;
+    const K = Array.from({ length: n }, (_, i) => Array(n).fill(0));
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        K[i][j] = gaussianKernel(dist2([controls[i].x, controls[i].y], [controls[j].x, controls[j].y]), epsN);
       }
+      K[i][i] += lambdaN;
     }
 
-    const newPoints = points.map((p) => {
-      let newP = { ...p };
-      for (let axis of axes) {
-        let val = 0;
-        for (let i = 0; i < n; i++) {
-          val +=
-            weights[axis][i] *
-            gaussianKernel(
-              dist2([p.x, p.y], [controls[i].x, controls[i].y]),
-              eps
-            );
-        }
-        newP[axis] = val;
+    const d = controls.map(c => c.target);
+    let w;
+    try { w = solveLinear(K, d); } catch(err) { alert("Solver failed: "+err.message); return; }
+
+    const newPoints = points.map(p => {
+      let zPred = 0;
+      for (let i = 0; i < n; i++) {
+        zPred += w[i] * gaussianKernel([p.x, p.y], [controls[i].x, controls[i].y], epsN);
       }
-      return newP;
+      return { ...p, z: zPred };
     });
 
-    // Override selected control points with exact target
-    controls.forEach((c) => {
-      newPoints[c.idx] = { ...c.target };
-    });
+    controls.forEach(c => { newPoints[c.idx] = { ...newPoints[c.idx], z: c.target }; });
 
-    onApply(newPoints);
+    if (typeof onApply === "function") onApply(newPoints);
   };
+
+  const visible = points
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => !filter || String(p.id).toLowerCase().includes(filter.toLowerCase()));
 
   return (
     <div className="step-container">
-      <h2>Step 2: Select Control Points & Apply ENH</h2>
+      <h2>Step 2 — Select Control Points & Apply ENH</h2>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {points.map((p, i) => (
-          <button
-            key={p.id}
-            className={`point-btn ${selected.includes(i) ? "selected" : ""}`}
-            onClick={() => toggle(i)}
-            title={p.id}
-          >
-            {p.id}
-            <div style={{ fontSize: 11 }}>
-              x:{Math.round(p.x)} y:{Math.round(p.y)} z:{Math.round(p.z)}
-            </div>
-          </button>
-        ))}
+      <div style={{ marginBottom: 8 }}>
+        <label>Search ID:</label>
+        <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="filter by ID/name" />
+        <button onClick={() => {
+          const first4 = visible.slice(0,4).map(v=>v.i);
+          setSelectedIdx(first4);
+          const t = {}; first4.forEach(i => t[i] = points[i].z);
+          setTargets(t);
+        }}>Select first 4</button>
       </div>
 
-      {selected.length > 0 && (
-        <div className="selected-grid">
-          {selected.map((i) => (
-            <div key={i}>
-              <div>#{i} ({points[i].id})</div>
-              {["x", "y", "z"].map((axis) => (
-                <div key={axis}>
-                  {axis.toUpperCase()}:
-                  <input
-                    value={targetXYZ[i][axis]}
-                    onChange={(e) =>
-                      handleTargetChange(i, axis, e.target.value)
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          ))}
+      <div style={{ maxHeight: 260, overflow: "auto", border: "1px solid #eee", padding: 8, marginBottom: 8 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid #ddd" }}>
+              <th>Sel</th><th>ID</th><th>X</th><th>Y</th><th>Z</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map(({ p, i }) => (
+              <tr key={p.id + "-" + i}>
+                <td><input type="checkbox" checked={selectedIdx.includes(i)} onChange={() => toggleSelect(i)} /></td>
+                <td>{p.id}</td>
+                <td style={{ textAlign:"right" }}>{Number(p.x).toFixed(4)}</td>
+                <td style={{ textAlign:"right" }}>{Number(p.y).toFixed(4)}</td>
+                <td style={{ textAlign:"right" }}>{Number(p.z).toFixed(3)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {selectedIdx.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <strong>Selected controls — enter target Z:</strong>
+          <div className="selected-grid" style={{ marginTop: 8 }}>
+            {selectedIdx.map(i => (
+              <div key={i} style={{ padding: 8, border: "1px solid #eee", borderRadius: 6 }}>
+                <div style={{ fontSize: 13, marginBottom: 6 }}>{points[i].id} — x:{points[i].x}, y:{points[i].y}</div>
+                <input
+                  type="number"
+                  value={targets[i] === undefined ? points[i].z : targets[i]}
+                  onChange={e => handleTargetChange(i, e.target.value)}
+                  style={{ width: "100%", padding: 6 }}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      <div
-        style={{
-          marginTop: 12,
-          display: "flex",
-          gap: 12,
-          alignItems: "center",
-        }}
-      >
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
         <label>Kernel width (eps):</label>
-        <input
-          type="number"
-          value={eps}
-          onChange={(e) => setEps(Number(e.target.value))}
-        />
+        <input type="number" value={eps} onChange={e => handleEpsChange(e.target.value)} style={{ width: 120, padding: 6 }} />
         <label>Regularization (lambda):</label>
-        <input
-          type="number"
-          value={lambda}
-          onChange={(e) => setLambda(Number(e.target.value))}
-        />
+        <input type="number" value={lambda} onChange={e => handleLambdaChange(e.target.value)} style={{ width: 120, padding: 6 }} />
       </div>
 
-      <button onClick={applyENH} style={{ marginTop: 12 }}>
-        Apply ENH to all points (XYZ)
-      </button>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={applyRBF} style={{ padding: "8px 14px", background: "#0b74de", color: "#fff", borderRadius: 6 }}>Apply ENH (RBF)</button>
+        <button onClick={() => { setSelectedIdx([]); setTargets({}); }} style={{ padding: "8px 14px", borderRadius: 6 }}>Clear selection</button>
+      </div>
     </div>
   );
 }
