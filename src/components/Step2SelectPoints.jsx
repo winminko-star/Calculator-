@@ -1,4 +1,4 @@
-// src/components/Step2SelectPoints.jsx
+// Step2SelectPoints.jsx
 import React, { useState } from "react";
 import './workflow.css';
 
@@ -14,7 +14,7 @@ function solveLinear(A, b) {
     for(let i=k+1;i<n;i++) if(Math.abs(M[i][k])>maxV){maxV=Math.abs(M[i][k]); iMax=i;}
     if(maxV<1e-12) throw new Error("Matrix singular");
     if(iMax!==k){[M[k],M[iMax]]=[M[iMax],M[k]];}
-    let pivot=M[k][k]; for(let j=k;j<=n;j++) M[k][j]/=pivot;
+    let pivot=M[k][k]; for(let j=0;j<=n;j++) M[k][j]/=pivot;
     for(let i=0;i<n;i++){if(i===k) continue; let factor=M[i][k]; for(let j=0;j<=n;j++) M[i][j]-=factor*M[k][j];}
   }
   return M.map(row=>row[n]);
@@ -37,7 +37,7 @@ export default function Step2SelectPoints({ points, onApply }) {
     const n = Number(value);
     setTargetPoints(t=>({
       ...t,
-      [i]: {...t[i], [axis]: Number.isNaN(n)?value:n}
+      [i]: {...t[i], [axis]: Number.isNaN(n)?t[i][axis]:n}
     }));
   };
 
@@ -50,7 +50,6 @@ export default function Step2SelectPoints({ points, onApply }) {
     }));
 
     const n = controls.length;
-    // Compute Gaussian kernel matrix
     const K = Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>gaussianKernel(dist3([controls[i].x,controls[i].y,controls[i].z],[controls[j].x,controls[j].y,controls[j].z]), eps)));
     for(let i=0;i<n;i++) K[i][i] += lambda;
 
@@ -77,12 +76,11 @@ export default function Step2SelectPoints({ points, onApply }) {
         yPred += wY[i]*k;
         zPred += wZ[i]*k;
       }
-      return {x:xPred, y:yPred, z:zPred};
+      return {x:xPred, y:yPred, z:zPred, id:p.id};
     });
 
-    // Enforce exact targets on control points
     controls.forEach(c=>{
-      newPoints[c.idx] = {...c.target};
+      newPoints[c.idx] = {...c.target, id: points[c.idx].id};
     });
 
     onApply(newPoints);
@@ -93,8 +91,8 @@ export default function Step2SelectPoints({ points, onApply }) {
       <h2>Step 2: Select Control Points & Apply ENH (X/Y/Z)</h2>
       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
         {points.map((p,i)=>(
-          <button key={i} className={`point-btn ${selected.includes(i)?'selected':''}`} onClick={()=>toggle(i)} title={`#${i}`}>
-            #{i}
+          <button key={i} className={`point-btn ${selected.includes(i)?'selected':''}`} onClick={()=>toggle(i)} title={`#${p.id}`}>
+            #{p.id}
             <div style={{fontSize:11}}>x:{p.x.toFixed(2)} y:{p.y.toFixed(2)} z:{p.z.toFixed(2)}</div>
           </button>
         ))}
@@ -103,14 +101,11 @@ export default function Step2SelectPoints({ points, onApply }) {
       {selected.length>0 && (
         <div className="selected-grid">
           {selected.map(i=>(
-            <div key={i}>
-              <div>#{i}</div>
-              <label>X:</label>
-              <input value={targetPoints[i]?.x} onChange={e=>handleTargetChange(i,'x',e.target.value)} />
-              <label>Y:</label>
-              <input value={targetPoints[i]?.y} onChange={e=>handleTargetChange(i,'y',e.target.value)} />
-              <label>Z:</label>
-              <input value={targetPoints[i]?.z} onChange={e=>handleTargetChange(i,'z',e.target.value)} />
+            <div key={i} style={{display:'flex',gap:6,alignItems:'center'}}>
+              <div>#{points[i].id}:</div>
+              <input type="number" value={targetPoints[i]?.x} onChange={e=>handleTargetChange(i,'x',e.target.value)} placeholder="X" />
+              <input type="number" value={targetPoints[i]?.y} onChange={e=>handleTargetChange(i,'y',e.target.value)} placeholder="Y" />
+              <input type="number" value={targetPoints[i]?.z} onChange={e=>handleTargetChange(i,'z',e.target.value)} placeholder="Z" />
             </div>
           ))}
         </div>
