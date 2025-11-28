@@ -46,7 +46,7 @@ function parseNumberOrEmpty(v) {
 
 export default function Step2SelectPoints({ points = [], onApply }) {
   const [selectedIdx, setSelectedIdx] = useState([]);
-  const [targets, setTargets] = useState({});
+  const [targets, setTargets] = useState({}); // idx -> {x, y, z}
   const [eps, setEps] = useState(100);
   const [lambda, setLambda] = useState(0.001);
   const [filter, setFilter] = useState("");
@@ -58,13 +58,18 @@ export default function Step2SelectPoints({ points = [], onApply }) {
 
   const toggleSelect = (i) => {
     setSelectedIdx(s => s.includes(i) ? s.filter(x => x !== i) : [...s, i]);
-    setTargets(t => (t[i] !== undefined ? t : { ...t, [i]: points[i]?.z }));
+    setTargets(t => (t[i] !== undefined ? t : { ...t, [i]: { ...points[i] } }));
   };
 
-  const handleTargetChange = (i, v) => {
-    // Prevent leading zeros
-    const clean = v.replace(/^0+(\d)/, '$1');
-    setTargets(t => ({ ...t, [i]: clean === "" ? "" : Number(clean) }));
+  const handleTargetChange = (i, axis, v) => {
+    const clean = v.replace(/^0+(\d)/, '$1'); // prevent leading zero
+    setTargets(t => ({
+      ...t,
+      [i]: {
+        ...t[i],
+        [axis]: clean === "" ? "" : Number(clean)
+      }
+    }));
   };
 
   const handleEpsChange = (v) => setEps(parseNumberOrEmpty(v));
@@ -80,8 +85,13 @@ export default function Step2SelectPoints({ points = [], onApply }) {
     if (!Number.isFinite(epsN) || epsN <= 0) { alert("Kernel width must be positive"); return; }
     if (!Number.isFinite(lambdaN) || lambdaN < 0) { alert("Regularization must be non-negative"); return; }
 
-    const controls = selectedIdx.map(i => ({ idx: i, x: points[i].x, y: points[i].y, target: Number(targets[i]) }));
-    for (const c of controls) if (!Number.isFinite(c.target)) { alert("Control targets must be numeric"); return; }
+    const controls = selectedIdx.map(i => ({ idx: i, ...targets[i] }));
+    for (const c of controls) {
+      if (!["x","y","z"].every(axis => Number.isFinite(c[axis]))) {
+        alert("All control targets must be numeric");
+        return;
+      }
+    }
 
     const n = controls.length;
     const K = Array.from({ length: n }, (_, i) => Array(n).fill(0));
@@ -92,19 +102,32 @@ export default function Step2SelectPoints({ points = [], onApply }) {
       K[i][i] += lambdaN;
     }
 
-    const d = controls.map(c => c.target);
-    let w;
-    try { w = solveLinear(K, d); } catch(err) { alert("Solver failed: "+err.message); return; }
+    const applyAxisRBF = (axis) => {
+      const d = controls.map(c => c[axis]);
+      let w;
+      try { w = solveLinear(K, d); } catch(err) { alert("Solver failed: "+err.message); return null; }
 
-    const newPoints = points.map(p => {
-      let zPred = 0;
-      for (let i = 0; i < n; i++) {
-        zPred += w[i] * gaussianKernel([p.x, p.y], [controls[i].x, controls[i].y], epsN);
-      }
-      return { ...p, z: zPred };
-    });
+      return points.map(p => {
+        let pred = 0;
+        for (let i = 0; i < n; i++) {
+          pred += w[i] * gaussianKernel(dist2([p.x, p.y], [controls[i].x, controls[i].y]), epsN);
+        }
+        return pred;
+      });
+    };
 
-    controls.forEach(c => { newPoints[c.idx] = { ...newPoints[c.idx], z: c.target }; });
+    const xPreds = applyAxisRBF("x");
+    const yPreds = applyAxisRBF("y");
+    const zPreds = applyAxisRBF("z");
+
+    const newPoints = points.map((p, idx) => ({
+      x: xPreds[idx],
+      y: yPreds[idx],
+      z: zPreds[idx]
+    }));
+
+    // enforce exact control targets
+    controls.forEach(c => { newPoints[c.idx] = { ...c }; });
 
     if (typeof onApply === "function") onApply(newPoints);
   };
@@ -123,7 +146,7 @@ export default function Step2SelectPoints({ points = [], onApply }) {
         <button onClick={() => {
           const first4 = visible.slice(0,4).map(v=>v.i);
           setSelectedIdx(first4);
-          const t = {}; first4.forEach(i => t[i] = points[i].z);
+          const t = {}; first4.forEach(i => t[i] = { ...points[i] });
           setTargets(t);
         }}>Select first 4</button>
       </div>
@@ -151,17 +174,21 @@ export default function Step2SelectPoints({ points = [], onApply }) {
 
       {selectedIdx.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <strong>Selected controls — enter target Z:</strong>
+          <strong>Selected controls — enter target X/Y/Z:</strong>
           <div className="selected-grid" style={{ marginTop: 8 }}>
             {selectedIdx.map(i => (
               <div key={i} style={{ padding: 8, border: "1px solid #eee", borderRadius: 6 }}>
-                <div style={{ fontSize: 13, marginBottom: 6 }}>{points[i].id} — x:{points[i].x}, y:{points[i].y}</div>
-                <input
-                  type="number"
-                  value={targets[i] === undefined ? points[i].z : targets[i]}
-                  onChange={e => handleTargetChange(i, e.target.value)}
-                  style={{ width: "100%", padding: 6 }}
-                />
+                <div style={{ fontSize: 13, marginBottom: 6 }}>{points[i].id} — current: x:{points[i].x}, y:{points[i].y}, z:{points[i].z}</div>
+                {["x","y","z"].map(axis => (
+                  <input
+                    key={axis}
+                    type="number"
+                    value={targets[i]?.[axis] ?? points[i][axis]}
+                    onChange={e => handleTargetChange(i, axis, e.target.value)}
+                    style={{ width: "32%", marginRight: 4, padding: 6 }}
+                    placeholder={axis.toUpperCase()}
+                  />
+                ))}
               </div>
             ))}
           </div>
