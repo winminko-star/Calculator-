@@ -73,6 +73,7 @@ export default function Home() {
           object-fit: cover;
         }
       `}</style>
+      <Btn icon="🗽" label="STA 3D"           desc="Station 3D Style" to="/enh-workflow" />  
 
       <Btn icon="🧭" label="2D Drawing (E,N)" desc="Points • Lines (length) • Angle" to="/drawing2d" />  
       <Btn icon="📂" label="2D Review" desc="Saved drawings • dates • auto cleanup" to="/review" />  
