@@ -42,6 +42,13 @@ function solveLinear(A, b) {
   return M.map(row => row[n]);
 }
 
+/* Utility: parse number but allow empty string as user deletes */
+function parseNumberOrEmpty(v) {
+  if (v === "" || v === null || v === undefined) return "";
+  const n = Number(v);
+  return Number.isFinite(n) ? n : "";
+}
+
 /*
 Props:
 - points: [{id, x, y, z}, ...]
@@ -49,9 +56,9 @@ Props:
 */
 export default function Step2SelectPoints({ points = [], onApply }) {
   const [selectedIdx, setSelectedIdx] = useState([]); // indices of selected controls
-  const [targets, setTargets] = useState({}); // idx -> target z
-  const [eps, setEps] = useState(500); // kernel width (adjust for your XY unit)
-  const [lambda, setLambda] = useState(1e-3); // regularization
+  const [targets, setTargets] = useState({}); // idx -> target z (number or "")
+  const [eps, setEps] = useState(100); // kernel width (adjust for your XY unit)
+  const [lambda, setLambda] = useState(0.001); // regularization
   const [filter, setFilter] = useState(""); // search filter for id
 
   useEffect(() => {
@@ -66,8 +73,14 @@ export default function Step2SelectPoints({ points = [], onApply }) {
   };
 
   const handleTargetChange = (i, v) => {
-    const n = Number(v);
-    setTargets(t => ({ ...t, [i]: Number.isNaN(n) ? v : n }));
+    setTargets(t => ({ ...t, [i]: parseNumberOrEmpty(v) }));
+  };
+
+  const handleEpsChange = (v) => {
+    setEps(parseNumberOrEmpty(v) === "" ? "" : parseNumberOrEmpty(v));
+  };
+  const handleLambdaChange = (v) => {
+    setLambda(parseNumberOrEmpty(v) === "" ? "" : parseNumberOrEmpty(v));
   };
 
   const applyRBF = () => {
@@ -75,6 +88,12 @@ export default function Step2SelectPoints({ points = [], onApply }) {
       alert("ကျေးဇူးပြု၍ အနည်းဆုံး 4 control points ရွေးပါ (select at least 4).");
       return;
     }
+
+    // ensure eps and lambda are numbers
+    const epsN = Number(eps);
+    const lambdaN = Number(lambda);
+    if (!Number.isFinite(epsN) || epsN <= 0) { alert("Kernel width (eps) must be a positive number."); return; }
+    if (!Number.isFinite(lambdaN) || lambdaN < 0) { alert("Regularization (lambda) must be a non-negative number."); return; }
 
     // build control list
     const controls = selectedIdx.map(i => {
@@ -84,7 +103,7 @@ export default function Step2SelectPoints({ points = [], onApply }) {
 
     // validate numeric targets
     for (const c of controls) {
-      if (typeof c.target !== "number" || Number.isNaN(c.target)) {
+      if (!Number.isFinite(c.target)) {
         alert("Control point target values must be numeric.");
         return;
       }
@@ -96,9 +115,9 @@ export default function Step2SelectPoints({ points = [], onApply }) {
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const r = dist2([controls[i].x, controls[i].y], [controls[j].x, controls[j].y]);
-        K[i][j] = gaussianKernel(r, eps);
+        K[i][j] = gaussianKernel(r, epsN);
       }
-      K[i][i] += lambda;
+      K[i][i] += lambdaN;
     }
 
     const d = controls.map(c => c.target);
@@ -116,7 +135,7 @@ export default function Step2SelectPoints({ points = [], onApply }) {
       let zPred = 0;
       for (let i = 0; i < n; i++) {
         const r = dist2([p.x, p.y], [controls[i].x, controls[i].y]);
-        zPred += w[i] * gaussianKernel(r, eps);
+        zPred += w[i] * gaussianKernel(r, epsN);
       }
       return { ...p, z: zPred };
     });
@@ -133,7 +152,7 @@ export default function Step2SelectPoints({ points = [], onApply }) {
   // filtered indices by id/name if filter provided
   const visible = points
     .map((p, i) => ({ p, i }))
-    .filter(({ p }) => !filter || p.id.toLowerCase().includes(filter.toLowerCase()));
+    .filter(({ p }) => !filter || String(p.id).toLowerCase().includes(filter.toLowerCase()));
 
   return (
     <div className="step-container">
@@ -143,7 +162,6 @@ export default function Step2SelectPoints({ points = [], onApply }) {
         <label style={{ marginRight: 8 }}>Search ID:</label>
         <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="filter by id/name" />
         <button style={{ marginLeft: 8 }} onClick={() => {
-          // convenience: auto-select first 4 visible
           const first4 = visible.slice(0,4).map(v=>v.i);
           setSelectedIdx(first4);
           const t = {};
@@ -165,7 +183,7 @@ export default function Step2SelectPoints({ points = [], onApply }) {
           </thead>
           <tbody>
             {visible.map(({ p, i }) => (
-              <tr key={p.id} style={{ borderBottom: "1px solid #fafafa" }}>
+              <tr key={p.id + "-" + i} style={{ borderBottom: "1px solid #fafafa" }}>
                 <td style={{ padding: 6 }}>
                   <input
                     type="checkbox"
@@ -191,6 +209,7 @@ export default function Step2SelectPoints({ points = [], onApply }) {
               <div key={i} style={{ padding: 8, border: "1px solid #eee", borderRadius: 6 }}>
                 <div style={{ fontSize: 13, marginBottom: 6 }}>{points[i].id} — x:{points[i].x}, y:{points[i].y}</div>
                 <input
+                  type="number"
                   value={targets[i] === undefined ? points[i].z : targets[i]}
                   onChange={e => handleTargetChange(i, e.target.value)}
                   style={{ width: "100%", padding: 6 }}
@@ -203,9 +222,19 @@ export default function Step2SelectPoints({ points = [], onApply }) {
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
         <label>Kernel width (eps):</label>
-        <input type="number" value={eps} onChange={e => setEps(Number(e.target.value))} style={{ width: 120, padding: 6 }} />
+        <input
+          type="number"
+          value={eps}
+          onChange={(e) => handleEpsChange(e.target.value)}
+          style={{ width: 120, padding: 6 }}
+        />
         <label>Regularization (lambda):</label>
-        <input type="number" value={lambda} onChange={e => setLambda(Number(e.target.value))} style={{ width: 120, padding: 6 }} />
+        <input
+          type="number"
+          value={lambda}
+          onChange={(e) => handleLambdaChange(e.target.value)}
+          style={{ width: 120, padding: 6 }}
+        />
       </div>
 
       <div style={{ display: "flex", gap: 8 }}>
