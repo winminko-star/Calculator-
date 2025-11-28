@@ -43,9 +43,9 @@ export default function Step2SelectPoints({ points = [], onApply }) {
       alert("All control targets must be numeric"); return;  
     }
 
-    // Compute new points
+    // Compute new points while preserving original properties like id/name
     const newPoints = points.map((p, idx) => {
-      if (selectedIdx.includes(idx)) return { ...targets[idx] }; // control points = exact target
+      if (selectedIdx.includes(idx)) return { ...p, ...targets[idx] }; // preserve other props
       let shift = { x:0, y:0, z:0 };
       let weightSum = 0;
       for (const c of controls) {
@@ -61,6 +61,7 @@ export default function Step2SelectPoints({ points = [], onApply }) {
         shift.z /= weightSum;
       }
       return {
+        ...p, // preserve original properties like id/name
         x: p.x + shift.x,
         y: p.y + shift.y,
         z: p.z + shift.z
