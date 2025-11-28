@@ -31,6 +31,10 @@ import StationFilesJoin from "./pages/StationFilesJoin";
 import StationMerge from "./pages/StationMerge";
 import Videopage from "./pages/Videopage";
 
+// NEW: import your workflow parent component from components folder
+// Make sure you have: src/components/ENHWorkflow.jsx (which composes Step1..Step4)
+import ENHWorkflow from "./components/ENHWorkflow";
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
@@ -127,6 +131,14 @@ export default function App() {
               <Route path="/station-merge" element={<StationMerge />} />
               <Route path="/video" element={<Videopage />} />
 
+              {/* NEW: If you want the workflow shown as a route, add this.
+                  It renders the ENHWorkflow component that composes Step1..Step4.
+                  Keeps it protected (only for authenticated users). */}
+              <Route
+                path="/enh-workflow"
+                element={user ? <ENHWorkflow /> : <Navigate to="/login" replace />}
+              />
+
               {/* Fallback */}
               <Route
                 path="*"
@@ -138,4 +150,4 @@ export default function App() {
       )}
     </BrowserRouter>
   );
-                             }
+}
