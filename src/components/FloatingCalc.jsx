@@ -1,7 +1,7 @@
 // src/components/FloatingCalc.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-
+import FloatingTriangleCalc from "./FloatingTriangleCalc";
 /* ---------- persist keys ---------- */
 const LS_OPEN = "floatingCalc_open";
 const LS_POS  = "floatingCalc_pos";
