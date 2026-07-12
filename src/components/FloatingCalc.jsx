@@ -291,16 +291,16 @@ export default function FloatingCalc(){
   </div>
 
   {mode === "triangle" ? (
-  <div
-    style={{
-      maxHeight: "100vh",
-      overflowY: "auto",
-      WebkitOverflowScrolling: "touch",
-      paddingRight: 4,
-    }}
-  >
-    <FloatingTriangleCalc />
-  </div>
+<div
+  style={{
+    maxHeight: "75vh",
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+    paddingBottom: 30,
+  }}
+>
+  <FloatingTriangleCalc />
+</div>
 ) : (
   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
     {keys.flat().map((k)=>(
