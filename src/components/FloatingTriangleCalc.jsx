@@ -1,4 +1,4 @@
-မှages/RightTriangle.jsx
+// src/pages/RightTriangle.jsx
 import React, { useMemo, useState } from "react";
 
 /* ---------- UI helpers ---------- */
