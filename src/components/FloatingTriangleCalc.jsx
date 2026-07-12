@@ -139,6 +139,12 @@ export default function RightTriangle() {
  <footer className="footer">
         © 2025 WMK Seatrium DC Team
       </footer>
+      <footer className="footer">
+        #Safety First#
+      </footer>
+      <footer className="footer">
+        ***********************
+      </footer>
     </div>
   );
 }
