@@ -70,7 +70,7 @@ if (f !== null && h !== null && n === null) {
   value={facing}
   onChange={(e) => {
     setFacing(e.target.value);
-    setTimeout(calculate, 0);
+    
   }}
 />
 
@@ -80,7 +80,7 @@ if (f !== null && h !== null && n === null) {
   value={nearest}
   onChange={(e) => {
     setNearest(e.target.value);
-    setTimeout(calculate, 0);
+    
   }}
 />
 
