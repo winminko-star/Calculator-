@@ -293,7 +293,7 @@ export default function FloatingCalc(){
   {mode === "triangle" ? (
   <div
     style={{
-      maxHeight: "95vh",
+      maxHeight: "100vh",
       overflowY: "auto",
       WebkitOverflowScrolling: "touch",
       paddingRight: 4,
