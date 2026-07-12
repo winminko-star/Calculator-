@@ -1,4 +1,4 @@
-// src/pages/RightTriangle.jsx
+မှages/RightTriangle.jsx
 import React, { useMemo, useState } from "react";
 
 /* ---------- UI helpers ---------- */
@@ -127,11 +127,11 @@ export default function RightTriangle() {
           <div className="small" style={{ color:"#b91c1c" }}>⚠ {out.err}</div>
         ) : (
           <div className="small">
-            a/မှ = {dfix(out.a)} <br/>
-            b = {dfix(out.b)} <br/>
-            h = {dfix(out.h)} <br/>
-            ∠A = {dfix(out.A,2)}° <br/>
-            ∠B = {dfix(out.B,2)}° <br/>
+            a/မျက်နှာချင်းဆိုင်အနား = {dfix(out.a)} <br/>
+            b/နီးစပ်အနား = {dfix(out.b)} <br/>
+            h/ထောင့်မှန်ခံအနား = {dfix(out.h)} <br/>
+            ∠A/ပေးထားသည့်*ရှာရမည့်ထောင့် = {dfix(out.A,2)}° <br/>
+            ∠B/နီးစပ်အနား၏မျက်နှာချင်းဆိုင်ထောင့် = {dfix(out.B,2)}° <br/>
             ∠C = 90°
           </div>
         )}
