@@ -96,7 +96,15 @@ export default function RightTriangle() {
   const out = useMemo(() => solve(nums), [nums]);
 
   return (
-    <div className="container grid" style={{ gap: 16 }}>
+    <div
+  className="container grid"
+  style={{
+    gap: 16,
+    overflowY: "auto",
+    height: "100vh",
+    paddingBottom: 20
+  }}
+>
       <div className="card">
         <div className="page-title">📐 Right Triangle Calculator</div>
         <Diagram />
