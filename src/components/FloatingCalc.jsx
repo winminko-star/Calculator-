@@ -50,6 +50,7 @@ export default function FloatingCalc(){
   const [expr, setExpr] = useState(() => localStorage.getItem(LS_EXPR) || "");
   const [flash, setFlash] = useState("");
   const [mode, setMode] = useState("simple");
+  const [photos, setPhotos] = useState([]);
 
   const panelRef = useRef(null);  // ✅ measure expanded panel
   const start = useRef({x:0,y:0, px:0, py:0});
@@ -273,6 +274,20 @@ export default function FloatingCalc(){
     >
       Simple
     </button>
+    <button
+  onClick={() => setMode("photo")}
+  style={{
+    flex: 1,
+    padding: 8,
+    border: "none",
+    borderRadius: 8,
+    background: mode === "photo" ? "#0ea5e9" : "#e5e7eb",
+    color: mode === "photo" ? "#fff" : "#000",
+    fontWeight: "bold",
+  }}
+>
+  📷 Photo
+</button>
 
     <button
       onClick={() => setMode("triangle")}
