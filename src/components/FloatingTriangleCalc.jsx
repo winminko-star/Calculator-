@@ -37,6 +37,24 @@ const round = (value) => {
     setFacingDegree(round(fd).toString());
     setNearestDegree(round(nd).toString());
   }
+  const h = toNumber(hypotenuse);
+
+// Facing + Hypotenuse
+if (f !== null && h !== null && n === null) {
+
+  if (h <= f) return;
+
+  const newNearest = Math.sqrt(h * h - f * f);
+
+  setNearest(round(newNearest).toString());
+
+  const fd = Math.atan(f / newNearest) * 180 / Math.PI;
+
+  setFacingDegree(round(fd).toString());
+  setNearestDegree(round(90 - fd).toString());
+
+  return;
+}
 };
 
   return (
