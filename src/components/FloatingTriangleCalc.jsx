@@ -127,7 +127,7 @@ export default function RightTriangle() {
           <div className="small" style={{ color:"#b91c1c" }}>⚠ {out.err}</div>
         ) : (
           <div className="small">
-            a = {dfix(out.a/မျက်နှာချင်းဆိုင်အနား)} <br/>
+            a/မှ = {dfix(out.a)} <br/>
             b = {dfix(out.b)} <br/>
             h = {dfix(out.h)} <br/>
             ∠A = {dfix(out.A,2)}° <br/>
