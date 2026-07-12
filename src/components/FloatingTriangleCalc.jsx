@@ -111,11 +111,11 @@ export default function RightTriangle() {
       </div>
 
       <div className="card grid" style={{ gap: 12 }}>
-        <Field label="a (vertical)" value={ta} onChange={(e)=>setTa(e.target.value)} placeholder="side a" />
-        <Field label="b (base)"    value={tb} onChange={(e)=>setTb(e.target.value)} placeholder="side b" />
-        <Field label="h (hypotenuse)" value={th} onChange={(e)=>setTh(e.target.value)} placeholder="side h" />
-        <Field label="∠A (deg)" value={tA} onChange={(e)=>setTA(e.target.value)} placeholder="angle A" />
-        <Field label="∠B (deg)" value={tB} onChange={(e)=>setTB(e.target.value)} placeholder="angle B" />
+        <Field label="a (Facing/မျက်နှာချင်းဆိုင်အနား)" value={ta} onChange={(e)=>setTa(e.target.value)} placeholder="side a" />
+        <Field label="b (Nearest/နီးစပ်အနား)"    value={tb} onChange={(e)=>setTb(e.target.value)} placeholder="side b" />
+        <Field label="h (hypotenuse/ထောင့်မှန်ခံအနား)" value={th} onChange={(e)=>setTh(e.target.value)} placeholder="side h" />
+        <Field label="∠A (Facing Deg/ပေးထားသည့်*ရှာရမည့်ထောင့်)" value={tA} onChange={(e)=>setTA(e.target.value)} placeholder="angle A" />
+        <Field label="∠B (Nearest Deg/နီးစပ်အနား၏မျက်နှာချင်းဆိုင်ထောင့်)" value={tB} onChange={(e)=>setTB(e.target.value)} placeholder="angle B" />
         <div className="small" style={{ color:"#334155" }}>
           Enter <b>any two</b> independent values. ∠C is fixed at 90°.
         </div>
