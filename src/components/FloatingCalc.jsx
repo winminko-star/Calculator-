@@ -306,22 +306,60 @@ export default function FloatingCalc(){
   </div>
 
   {mode === "triangle" ? (
-<div
-  style={{
-    maxHeight: "75vh",
-    overflowY: "auto",
-    WebkitOverflowScrolling: "touch",
-    paddingBottom: 30,
-  }}
->
-  <FloatingTriangleCalc />
-</div>
+  <div
+    style={{
+      maxHeight: "75vh",
+      overflowY: "auto",
+      WebkitOverflowScrolling: "touch",
+      paddingBottom: 30,
+    }}
+  >
+    <FloatingTriangleCalc />
+  </div>
+
+) : mode === "photo" ? (
+
+  <div>
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      onChange={(e)=>{
+        const files = Array.from(e.target.files);
+        const imgs = files.map(file => URL.createObjectURL(file));
+        setPhotos(imgs);
+      }}
+    />
+
+    <div
+      style={{
+        display:"grid",
+        gridTemplateColumns:"repeat(2,1fr)",
+        gap:10,
+        marginTop:10
+      }}
+    >
+      {photos.map((p,i)=>(
+        <img
+          key={i}
+          src={p}
+          style={{
+            width:"100%",
+            borderRadius:10
+          }}
+        />
+      ))}
+    </div>
+  </div>
+
 ) : (
+
   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
     {keys.flat().map((k)=>(
       <Key key={k} label={k} active={flash===k} onClick={()=>push(k)} />
     ))}
   </div>
+
 )}
 
 </div>
