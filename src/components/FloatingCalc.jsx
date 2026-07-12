@@ -49,6 +49,7 @@ export default function FloatingCalc(){
   });
   const [expr, setExpr] = useState(() => localStorage.getItem(LS_EXPR) || "");
   const [flash, setFlash] = useState("");
+  const [mode, setMode] = useState("simple");
 
   const panelRef = useRef(null);  // ✅ measure expanded panel
   const start = useRef({x:0,y:0, px:0, py:0});
@@ -255,14 +256,51 @@ export default function FloatingCalc(){
           </div>
         </div>
 
-        {/* keypad */}
         <div style={{ background:"#fff", borderTop:"1px solid #e5e7eb", padding:12 }}>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-            {keys.flat().map((k)=>(
-              <Key key={k} label={k} active={flash===k} onClick={()=>push(k)} />
-            ))}
-          </div>
-        </div>
+
+  <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+    <button
+      onClick={() => setMode("simple")}
+      style={{
+        flex: 1,
+        padding: 8,
+        border: "none",
+        borderRadius: 8,
+        background: mode === "simple" ? "#0ea5e9" : "#e5e7eb",
+        color: mode === "simple" ? "#fff" : "#000",
+        fontWeight: "bold",
+      }}
+    >
+      Simple
+    </button>
+
+    <button
+      onClick={() => setMode("triangle")}
+      style={{
+        flex: 1,
+        padding: 8,
+        border: "none",
+        borderRadius: 8,
+        background: mode === "triangle" ? "#0ea5e9" : "#e5e7eb",
+        color: mode === "triangle" ? "#fff" : "#000",
+        fontWeight: "bold",
+      }}
+    >
+      Triangle
+    </button>
+  </div>
+
+  {mode === "triangle" ? (
+    <FloatingTriangleCalc />
+  ) : (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
+      {keys.flat().map((k)=>(
+        <Key key={k} label={k} active={flash===k} onClick={()=>push(k)} />
+      ))}
+    </div>
+  )}
+
+</div>
       </div>
     </div>
   );
