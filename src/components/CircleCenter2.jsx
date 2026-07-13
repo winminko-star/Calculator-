@@ -63,8 +63,23 @@ export default function CircleCenter(){
                 <tr key={i}>
                   <td>{i+1}</td>
                   <td><input value={r.name} onChange={e=>ch(i,"name",e.target.value)}/></td>
-                  <td><input type="number" value={r.E} onChange={e=>ch(i,"E",e.target.value)}/></td>
-                  <td><input type="number" value={r.N} onChange={e=>ch(i,"N",e.target.value)}/></td>
+                  <td>
+  <input
+    type="number"
+    value={r.E}
+    onChange={e=>ch(i,"E",e.target.value)}
+    style={{ width: "90px" }}
+  />
+</td>
+
+<td>
+  <input
+    type="number"
+    value={r.N}
+    onChange={e=>ch(i,"N",e.target.value)}
+    style={{ width: "90px" }}
+  />
+</td>
                 </tr>
               ))}
             </tbody>
