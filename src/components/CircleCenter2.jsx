@@ -62,7 +62,16 @@ export default function CircleCenter(){
               {rows.map((r,i)=>(
                 <tr key={i}>
                   <td>{i+1}</td>
-                  <td><input value={r.name} onChange={e=>ch(i,"name",e.target.value)}/></td>
+                  <td>
+  <input
+    value={r.name}
+    onChange={e=>ch(i,"name",e.target.value)}
+    style={{
+      width: "50px",
+      textAlign: "center"
+    }}
+  />
+</td>
                   <td>
   <input
     type="number"
