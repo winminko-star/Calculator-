@@ -1,5 +1,6 @@
 // src/pages/RightTriangle.jsx
 import React, { useMemo, useState } from "react";
+const LS_RIGHT_TRIANGLE = "rightTriangleData";
 
 /* ---------- UI helpers ---------- */
 function Field({ label, value, onChange, placeholder }) {
@@ -79,12 +80,19 @@ function solve({ a, b, h, A, B }) {
 
 /* ---------- Page ---------- */
 export default function RightTriangle() {
-  const [ta, setTa] = useState("");
-  const [tb, setTb] = useState("");
-  const [th, setTh] = useState("");
-  const [tA, setTA] = useState("");
-  const [tB, setTB] = useState("");
+  const saved = (() => {
+  try {
+    return JSON.parse(localStorage.getItem(LS_RIGHT_TRIANGLE)) || {};
+  } catch {
+    return {};
+  }
+})();
 
+const [ta, setTa] = useState(saved.ta || "");
+const [tb, setTb] = useState(saved.tb || "");
+const [th, setTh] = useState(saved.th || "");
+const [tA, setTA] = useState(saved.tA || "");
+const [tB, setTB] = useState(saved.tB || "");
   const nums = useMemo(() => {
     const p = (s) => {
       const v = parseFloat(String(s).replace(",", "."));
@@ -94,6 +102,28 @@ export default function RightTriangle() {
   }, [ta, tb, th, tA, tB]);
 
   const out = useMemo(() => solve(nums), [nums]);
+  const clearAll = () => {
+  setTa("");
+  setTb("");
+  setTh("");
+  setTA("");
+  setTB("");
+
+  localStorage.removeItem(LS_RIGHT_TRIANGLE);
+};
+  React.useEffect(() => {
+  localStorage.setItem(
+    LS_RIGHT_TRIANGLE,
+    JSON.stringify({
+      ta,
+      tb,
+      th,
+      tA,
+      tB,
+    })
+  );
+}, [ta, tb, th, tA, tB]);
+  
 
   return (
     <div
@@ -122,7 +152,31 @@ export default function RightTriangle() {
       </div>
 
       <div className="card">
-        <div className="page-title">✅ Results</div>
+        <div
+  style={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  }}
+>
+  <div className="page-title">✅ Results</div>
+
+  <button
+    onClick={clearAll}
+    style={{
+      padding: "8px 14px",
+      border: "none",
+      borderRadius: 8,
+      background: "#ef4444",
+      color: "#fff",
+      fontWeight: "bold",
+      cursor: "pointer",
+    }}
+  >
+    Clear
+  </button>
+</div>
         {out.err ? (
           <div className="small" style={{ color:"#b91c1c" }}>⚠ {out.err}</div>
         ) : (
