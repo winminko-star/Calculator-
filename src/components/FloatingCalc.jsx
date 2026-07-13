@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import FloatingTriangleCalc from "./FloatingTriangleCalc";
+import CircleCenter2 from "./CircleCenter2";
 /* ---------- persist keys ---------- */
 const LS_OPEN = "floatingCalc_open";
 const LS_POS  = "floatingCalc_pos";
@@ -288,6 +289,20 @@ export default function FloatingCalc(){
     >
       Triangle
     </button>
+    <button
+  onClick={() => setMode("circle")}
+  style={{
+    flex: 1,
+    padding: 8,
+    border: "none",
+    borderRadius: 8,
+    background: mode === "circle" ? "#0ea5e9" : "#e5e7eb",
+    color: mode === "circle" ? "#fff" : "#000",
+    fontWeight: "bold",
+  }}
+>
+  Circle
+</button>
   </div>
 
   {mode === "triangle" ? (
@@ -300,6 +315,17 @@ export default function FloatingCalc(){
     }}
   >
     <FloatingTriangleCalc />
+  </div>
+) : mode === "circle" ? (
+  <div
+    style={{
+      maxHeight: "75vh",
+      overflowY: "auto",
+      WebkitOverflowScrolling: "touch",
+      paddingRight: 4,
+    }}
+  >
+    <CircleCenter2 />
   </div>
 ) : (
   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
