@@ -1,11 +1,16 @@
 // src/pages/Home.jsx
-import React from "react";
+import React, { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import SingaporeWeatherFloating from "../components/SingaporeWeatherFloating";
 
-
 export default function Home() {
   const navigate = useNavigate();
+
+  const cameraRef = useRef(null);
+
+  const openCamera = () => {
+    cameraRef.current?.click();
+  };
 
   const Btn = ({ icon, label, desc, to }) => (
     <button
@@ -116,10 +121,24 @@ export default function Home() {
 >
   📞 Prasad / WhatsApp
 </button>
+           <button
+  onClick={openCamera}
+  style={{ padding: 12, borderRadius: 8 }}
+>
+  📷 Camera
+</button>
            
           
         </div>  
-      </div>  
-      </div>
-  );
-      }
+      <input
+  ref={cameraRef}
+  type="file"
+  accept="image/*"
+  capture="environment"
+  style={{ display: "none" }}
+/>
+
+</div>
+</div>
+);
+}
