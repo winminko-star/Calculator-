@@ -94,12 +94,29 @@ export default function Home() {
           <h4>Created by Win Min Ko(Seatrium DC Team).</h4>  
 <button
   onClick={() => {
-    window.location.href = "https://wa.me/6582833174";
+    window.location.href = "https://wa.me/6589224808";
   }}
   style={{ padding: 12, borderRadius: 8 }}
 >
-  📞 Call / WhatsApp
+  📞 Danial / WhatsApp
 </button>
+           <button
+  onClick={() => {
+    window.location.href = "https://wa.me/6591022528";
+  }}
+  style={{ padding: 12, borderRadius: 8 }}
+>
+  📞 Liu Peiyi / WhatsApp
+</button>
+                 <button
+  onClick={() => {
+    window.location.href = "https://wa.me/6591209770";
+  }}
+  style={{ padding: 12, borderRadius: 8 }}
+>
+  📞 Prasad / WhatsApp
+</button>
+           
           
         </div>  
       </div>  
