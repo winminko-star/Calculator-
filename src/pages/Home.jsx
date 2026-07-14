@@ -127,7 +127,7 @@ export default function Home() {
     verticalAlign: "middle",
   }}
 >
-  ********************
+  ******************************
 </td>
            <button
   onClick={openCamera}
