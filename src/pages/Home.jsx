@@ -1,16 +1,11 @@
 // src/pages/Home.jsx
-import React, { useRef } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import SingaporeWeatherFloating from "../components/SingaporeWeatherFloating";
 
+
 export default function Home() {
   const navigate = useNavigate();
-
-  const cameraRef = useRef(null);
-
-  const openCamera = () => {
-    cameraRef.current?.click();
-  };
 
   const Btn = ({ icon, label, desc, to }) => (
     <button
@@ -80,15 +75,15 @@ export default function Home() {
       `}</style>
       
 
-      <Btn icon="🧭" label="2D Drawing (E,N)" desc="Points • Lines (length) • Angle" to="/drawing2d" />  
-      <Btn icon="📂" label="2D Review" desc="Saved drawings • dates • auto cleanup" to="/review" />  
-      <Btn icon="📐" label="Right Triangle" desc="Hypotenuse, legs, angles…" to="/righttriangle" />  
-      <Btn icon="⭕" label="Circle Center" desc="Center/Radius from points" to="/circlecenter" />  
-      <Btn icon="📏" label="Levelling" desc="Rise/Fall, RL, misclosure…" to="/levelling" />  
-      <Btn icon="📝" label="Levelling Review" desc="Saved levelling results" to="/levelling-review" />  
-      <Btn icon="🧮" label="Simple Calculator" desc="Big keys • one decimal • clean UI" to="/simple-calc" /> 
-      <Btn icon="✍️" label="Notepad" desc="Notepad for users(No Password)" to="/notepad2" /> 
-      <Btn icon="📹" label="Basic Lesson" desc="List of Lessons" to="/video" />  
+      <Btn icon="ðŸ§­" label="2D Drawing (E,N)" desc="Points â€¢ Lines (length) â€¢ Angle" to="/drawing2d" />  
+      <Btn icon="ðŸ“‚" label="2D Review" desc="Saved drawings â€¢ dates â€¢ auto cleanup" to="/review" />  
+      <Btn icon="ðŸ“" label="Right Triangle" desc="Hypotenuse, legs, anglesâ€¦" to="/righttriangle" />  
+      <Btn icon="â­•" label="Circle Center" desc="Center/Radius from points" to="/circlecenter" />  
+      <Btn icon="ðŸ“" label="Levelling" desc="Rise/Fall, RL, misclosureâ€¦" to="/levelling" />  
+      <Btn icon="ðŸ“" label="Levelling Review" desc="Saved levelling results" to="/levelling-review" />  
+      <Btn icon="ðŸ§®" label="Simple Calculator" desc="Big keys â€¢ one decimal â€¢ clean UI" to="/simple-calc" /> 
+      <Btn icon="âœï¸" label="Notepad" desc="Notepad for users(No Password)" to="/notepad2" /> 
+      <Btn icon="ðŸ“¹" label="Basic Lesson" desc="List of Lessons" to="/video" />  
 
       {/* --- Photo + rainbow message footer --- */}  
       <div className="photoCard">  
@@ -103,7 +98,7 @@ export default function Home() {
   }}
   style={{ padding: 12, borderRadius: 8 }}
 >
-  📞 Danial / WhatsApp
+  ðŸ“ž Danial / WhatsApp
 </button>
            <button
   onClick={() => {
@@ -111,7 +106,7 @@ export default function Home() {
   }}
   style={{ padding: 12, borderRadius: 8 }}
 >
-  📞 Liu Peiyi / WhatsApp
+  ðŸ“ž Liu Peiyi / WhatsApp
 </button>
                  <button
   onClick={() => {
@@ -119,34 +114,12 @@ export default function Home() {
   }}
   style={{ padding: 12, borderRadius: 8 }}
 >
-  📞 Prasad / WhatsApp
-</button>
-           <td
-  style={{
-    textAlign: "center",
-    verticalAlign: "middle",
-  }}
->
-  ******************************👉
-</td>
-           <button
-  onClick={openCamera}
-  style={{ padding: 12, borderRadius: 8 }}
->
-  📷 Camera
+  ðŸ“ž Prasad / WhatsApp
 </button>
            
           
         </div>  
-      <input
-  ref={cameraRef}
-  type="file"
-  accept="image/*"
-  capture="environment"
-  style={{ display: "none" }}
-/>
-
-</div>
-</div>
-);
-}
+      </div>  
+      </div>
+  );
+      }
