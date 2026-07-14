@@ -121,6 +121,14 @@ export default function Home() {
 >
   📞 Prasad / WhatsApp
 </button>
+           <td
+  style={{
+    textAlign: "center",
+    verticalAlign: "middle",
+  }}
+>
+  ********************
+</td>
            <button
   onClick={openCamera}
   style={{ padding: 12, borderRadius: 8 }}
