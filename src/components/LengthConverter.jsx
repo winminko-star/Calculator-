@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 
 function cleanNumber(value, decimalPlaces = 4) {
   const number = Number(value);
@@ -12,133 +12,172 @@ function cleanNumber(value, decimalPlaces = 4) {
     .replace(/\.?0+$/, "");
 }
 
+function parseFraction(value) {
+  const text = String(value).trim();
+
+  if (text === "") {
+    return 0;
+  }
+
+  // Example: 6 1/4
+  const mixed = text.match(
+    /^(\d+)\s+(\d+)\s*\/\s*(\d+)$/
+  );
+
+  if (mixed) {
+    const whole = Number(mixed[1]);
+    const numerator = Number(mixed[2]);
+    const denominator = Number(mixed[3]);
+
+    if (denominator === 0) {
+      return NaN;
+    }
+
+    return whole + numerator / denominator;
+  }
+
+  // Example: 1/4
+  const fraction = text.match(
+    /^(\d+)\s*\/\s*(\d+)$/
+  );
+
+  if (fraction) {
+    const numerator = Number(fraction[1]);
+    const denominator = Number(fraction[2]);
+
+    if (denominator === 0) {
+      return NaN;
+    }
+
+    return numerator / denominator;
+  }
+
+  const number = Number(text);
+
+  return Number.isFinite(number)
+    ? number
+    : NaN;
+}
+
 export default function LengthConverter() {
   const [feet, setFeet] = useState("");
   const [inches, setInches] = useState("");
-  const [mmResult, setMmResult] = useState("");
 
-  const [millimetres, setMillimetres] = useState("");
-  const [feetResult, setFeetResult] = useState("");
-  const [inchesResult, setInchesResult] = useState("");
+  const [millimetres, setMillimetres] =
+    useState("");
+
+  const [mmResult, setMmResult] =
+    useState("");
+
+  const [feetResult, setFeetResult] =
+    useState("");
+
+  const [inchesResult, setInchesResult] =
+    useState("");
 
   function convertFeetInchesToMm() {
-    const feetValue = Number(feet) || 0;
-    const inchesValue = Number(inches) || 0;
+    const ft = parseFraction(feet);
+    const inch = parseFraction(inches);
 
-    if (feetValue < 0 || inchesValue < 0) {
-      setMmResult("Invalid value");
+    if (
+      !Number.isFinite(ft) ||
+      !Number.isFinite(inch)
+    ) {
+      setMmResult("Invalid");
       return;
     }
 
-    const totalMillimetres =
-      feetValue * 304.8 +
-      inchesValue * 25.4;
+    const total =
+      ft * 304.8 +
+      inch * 25.4;
 
-    setMmResult(cleanNumber(totalMillimetres));
+    setMmResult(cleanNumber(total));
   }
 
   function convertMmToFeetInches() {
-    const mmValue = Number(millimetres);
+    const mm = Number(millimetres);
 
-    if (
-      millimetres === "" ||
-      !Number.isFinite(mmValue) ||
-      mmValue < 0
-    ) {
+    if (!Number.isFinite(mm)) {
       setFeetResult("");
       setInchesResult("");
       return;
     }
 
-    const totalInches = mmValue / 25.4;
-    let calculatedFeet = Math.floor(totalInches / 12);
-    let calculatedInches =
-      totalInches - calculatedFeet * 12;
+    const totalInches = mm / 25.4;
 
-    calculatedInches =
-      Math.round(calculatedInches * 10000) / 10000;
+    const ft = Math.floor(totalInches / 12);
 
-    if (calculatedInches >= 12) {
-      calculatedFeet += 1;
-      calculatedInches = 0;
-    }
+    const inch =
+      totalInches - ft * 12;
 
-    setFeetResult(calculatedFeet.toString());
-    setInchesResult(cleanNumber(calculatedInches));
+    setFeetResult(ft.toString());
+
+    setInchesResult(
+      cleanNumber(inch)
+    );
   }
 
   function clearAll() {
     setFeet("");
     setInches("");
-    setMmResult("");
     setMillimetres("");
+
+    setMmResult("");
     setFeetResult("");
     setInchesResult("");
   }
 
   const inputStyle = {
     width: "100%",
-    boxSizing: "border-box",
-    padding: "10px",
-    border: "1px solid #cbd5e1",
+    padding: 10,
     borderRadius: 10,
+    border: "1px solid #cbd5e1",
     fontSize: 16,
-    outline: "none",
+    boxSizing: "border-box",
   };
 
   const labelStyle = {
     display: "block",
     marginBottom: 6,
-    fontSize: 14,
     fontWeight: 700,
-    color: "#334155",
   };
 
   const buttonStyle = {
     width: "100%",
-    padding: "10px",
+    padding: 10,
     border: "none",
     borderRadius: 10,
     background: "#0ea5e9",
     color: "#fff",
-    fontSize: 15,
-    fontWeight: 800,
+    fontWeight: 700,
     cursor: "pointer",
   };
 
-  const resultStyle = {
-    minHeight: 24,
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 10,
-    background: "#f1f5f9",
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: 800,
-    color: "#0f172a",
-  };
-
   return (
-    <div>
-      <div
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+            <div
         style={{
           padding: 12,
           border: "1px solid #e2e8f0",
           borderRadius: 12,
-          background: "#fff",
-          marginBottom: 12,
+          background: "#ffffff",
         }}
       >
-        <div
+        <h3
           style={{
-            marginBottom: 12,
+            margin: "0 0 12px",
             fontSize: 16,
-            fontWeight: 800,
             color: "#0f172a",
           }}
         >
           Feet / Inches to mm
-        </div>
+        </h3>
 
         <div
           style={{
@@ -153,12 +192,10 @@ export default function LengthConverter() {
             </label>
 
             <input
-              type="number"
-              min="0"
-              step="any"
-              inputMode="decimal"
+              type="text"
+              inputMode="text"
               value={feet}
-              placeholder="0"
+              placeholder="Example: 5"
               onChange={(event) =>
                 setFeet(event.target.value)
               }
@@ -172,12 +209,10 @@ export default function LengthConverter() {
             </label>
 
             <input
-              type="number"
-              min="0"
-              step="any"
-              inputMode="decimal"
+              type="text"
+              inputMode="text"
               value={inches}
-              placeholder="0"
+              placeholder="Example: 6 1/4"
               onChange={(event) =>
                 setInches(event.target.value)
               }
@@ -197,7 +232,18 @@ export default function LengthConverter() {
           Convert to mm
         </button>
 
-        <div style={resultStyle}>
+        <div
+          style={{
+            marginTop: 10,
+            padding: 10,
+            borderRadius: 10,
+            background: "#f1f5f9",
+            textAlign: "center",
+            fontSize: 18,
+            fontWeight: 800,
+            color: "#0f172a",
+          }}
+        >
           {mmResult
             ? `${mmResult} mm`
             : "Result"}
@@ -209,20 +255,18 @@ export default function LengthConverter() {
           padding: 12,
           border: "1px solid #e2e8f0",
           borderRadius: 12,
-          background: "#fff",
-          marginBottom: 12,
+          background: "#ffffff",
         }}
       >
-        <div
+        <h3
           style={{
-            marginBottom: 12,
+            margin: "0 0 12px",
             fontSize: 16,
-            fontWeight: 800,
             color: "#0f172a",
           }}
         >
           mm to Feet / Inches
-        </div>
+        </h3>
 
         <div>
           <label style={labelStyle}>
@@ -254,7 +298,18 @@ export default function LengthConverter() {
           Convert to ft / in
         </button>
 
-        <div style={resultStyle}>
+        <div
+          style={{
+            marginTop: 10,
+            padding: 10,
+            borderRadius: 10,
+            background: "#f1f5f9",
+            textAlign: "center",
+            fontSize: 18,
+            fontWeight: 800,
+            color: "#0f172a",
+          }}
+        >
           {feetResult !== "" ||
           inchesResult !== ""
             ? `${feetResult || 0} ft ${
@@ -273,8 +328,7 @@ export default function LengthConverter() {
           border: "none",
           borderRadius: 10,
           background: "#ef4444",
-          color: "#fff",
-          fontSize: 15,
+          color: "#ffffff",
           fontWeight: 800,
           cursor: "pointer",
         }}
