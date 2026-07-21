@@ -74,6 +74,11 @@ export default function LengthConverter() {
 
   const [inchesResult, setInchesResult] =
     useState("");
+  const [decimalResult, setDecimalResult] =
+  useState("");
+
+const [fractionResult, setFractionResult] =
+  useState("");
 
   function convertFeetInchesToMm() {
     const ft = parseFraction(feet);
@@ -95,26 +100,95 @@ export default function LengthConverter() {
   }
 
   function convertMmToFeetInches() {
-    const mm = Number(millimetres);
+  const mm = Number(millimetres);
 
-    if (!Number.isFinite(mm)) {
-      setFeetResult("");
-      setInchesResult("");
-      return;
+  if (!Number.isFinite(mm) || mm < 0) {
+    setFeetResult("");
+    setInchesResult("");
+    setDecimalResult("");
+    setFractionResult("");
+    return;
+  }
+
+  const totalInches = mm / 25.4;
+
+  let feet = Math.floor(totalInches / 12);
+
+  const decimalInches =
+    totalInches - feet * 12;
+
+  let wholeInches =
+    Math.floor(decimalInches);
+
+  let numerator = Math.round(
+    (decimalInches - wholeInches) * 16
+  );
+
+  let denominator = 16;
+
+  if (numerator === 16) {
+    wholeInches += 1;
+    numerator = 0;
+  }
+
+  if (wholeInches === 12) {
+    feet += 1;
+    wholeInches = 0;
+  }
+
+  function gcd(a, b) {
+    let first = a;
+    let second = b;
+
+    while (second !== 0) {
+      const remainder = first % second;
+      first = second;
+      second = remainder;
     }
 
-    const totalInches = mm / 25.4;
+    return first;
+  }
 
-    const ft = Math.floor(totalInches / 12);
+  let fractionInchesText = "";
 
-    const inch =
-      totalInches - ft * 12;
-
-    setFeetResult(ft.toString());
-
-    setInchesResult(
-      cleanNumber(inch)
+  if (numerator === 0) {
+    fractionInchesText =
+      `${wholeInches}`;
+  } else {
+    const commonDivisor = gcd(
+      numerator,
+      denominator
     );
+
+    numerator =
+      numerator / commonDivisor;
+
+    denominator =
+      denominator / commonDivisor;
+
+    if (wholeInches === 0) {
+      fractionInchesText =
+        `${numerator}/${denominator}`;
+    } else {
+      fractionInchesText =
+        `${wholeInches} ${numerator}/${denominator}`;
+    }
+  }
+
+  const decimalText =
+    `${feet} ft ${decimalInches.toFixed(3)} in`;
+
+  const fractionText =
+    `${feet} ft ${fractionInchesText} in`;
+
+  setFeetResult(String(feet));
+
+  setInchesResult(
+    decimalInches.toFixed(3)
+  );
+
+  setDecimalResult(decimalText);
+  setFractionResult(fractionText);
   }
 
   function clearAll() {
@@ -125,6 +199,8 @@ export default function LengthConverter() {
     setMmResult("");
     setFeetResult("");
     setInchesResult("");
+    setDecimalResult("");
+setFractionResult("");
   }
 
   const inputStyle = {
@@ -299,24 +375,70 @@ export default function LengthConverter() {
         </button>
 
         <div
-          style={{
-            marginTop: 10,
-            padding: 10,
-            borderRadius: 10,
-            background: "#f1f5f9",
-            textAlign: "center",
-            fontSize: 18,
-            fontWeight: 800,
-            color: "#0f172a",
-          }}
-        >
-          {feetResult !== "" ||
-          inchesResult !== ""
-            ? `${feetResult || 0} ft ${
-                inchesResult || 0
-              } in`
-            : "Result"}
-        </div>
+  style={{
+    marginTop: 10,
+    display: "grid",
+    gap: 8,
+  }}
+>
+  <div
+    style={{
+      padding: 10,
+      borderRadius: 10,
+      background: "#e0f2fe",
+      textAlign: "center",
+      color: "#0c4a6e",
+    }}
+  >
+    <div
+      style={{
+        marginBottom: 4,
+        fontSize: 12,
+        fontWeight: 700,
+      }}
+    >
+      Decimal
+    </div>
+
+    <div
+      style={{
+        fontSize: 18,
+        fontWeight: 900,
+      }}
+    >
+      {decimalResult || "Result"}
+    </div>
+  </div>
+
+  <div
+    style={{
+      padding: 10,
+      borderRadius: 10,
+      background: "#dcfce7",
+      textAlign: "center",
+      color: "#14532d",
+    }}
+  >
+    <div
+      style={{
+        marginBottom: 4,
+        fontSize: 12,
+        fontWeight: 700,
+      }}
+    >
+      Fraction — nearest 1/16"
+    </div>
+
+    <div
+      style={{
+        fontSize: 18,
+        fontWeight: 900,
+      }}
+    >
+      {fractionResult || "Result"}
+    </div>
+  </div>
+</div>
       </div>
 
       <button
