@@ -66,77 +66,274 @@ function solve3x3(A,b){
   return [detX/det, detY/det, detZ/det];
 }
 
-/* ========== SVG Preview (Triplet center + one circle + radii lines) ========== */
+/* ========== Accurate SVG Preview ========== */
 function Preview({ points, tCenter, radius }) {
-  const xs = [
-    ...points.map(p => p.e),
-    ...(tCenter && Number.isFinite(radius) ? [tCenter.cx - radius, tCenter.cx + radius] : []),
-    ...(tCenter ? [tCenter.cx] : []),
-  ];
-  const ys = [
-    ...points.map(p => p.n),
-    ...(tCenter && Number.isFinite(radius) ? [tCenter.cy - radius, tCenter.cy + radius] : []),
-    ...(tCenter ? [tCenter.cy] : []),
-  ];
+  const width = 360;
+  const height = 300;
+  const padding = 28;
 
-  const minX = xs.length ? Math.min(...xs) : 0;
-  const maxX = xs.length ? Math.max(...xs) : 10;
-  const minY = ys.length ? Math.min(...ys) : 0;
-  const maxY = ys.length ? Math.max(...ys) : 10;
+  const validPoints = points.filter(
+    (point) =>
+      Number.isFinite(point.e) &&
+      Number.isFinite(point.n)
+  );
 
-  const pad = 10, w = 360, h = 260;
-  const spanX = Math.max(maxX - minX, 1e-6);
-  const spanY = Math.max(maxY - minY, 1e-6);
+  const hasCircle =
+    tCenter &&
+    Number.isFinite(tCenter.cx) &&
+    Number.isFinite(tCenter.cy) &&
+    Number.isFinite(radius) &&
+    radius >= 0;
 
-  const innerPadX = 0.06 * spanX;
-  const innerPadY = 0.06 * spanY;
+  const xs = validPoints.map((point) => point.e);
+  const ys = validPoints.map((point) => point.n);
 
-  const sx = (w - 2*pad) / (spanX + 2*innerPadX);
-  const sy = (h - 2*pad) / (spanY + 2*innerPadY);
-  const x0 = minX - innerPadX;
-  const y0 = minY - innerPadY;
+  if (hasCircle) {
+    xs.push(
+      tCenter.cx - radius,
+      tCenter.cx + radius
+    );
 
-  const toSvg = (x,y) => ({ X: pad + (x - x0) * sx, Y: h - pad - (y - y0) * sy });
+    ys.push(
+      tCenter.cy - radius,
+      tCenter.cy + radius
+    );
+  }
 
-  const C = tCenter ? toSvg(tCenter.cx, tCenter.cy) : null;
-  const R = tCenter && Number.isFinite(radius) ? Math.max(radius * ((sx+sy)/2), 0) : null;
+  if (tCenter) {
+    xs.push(tCenter.cx);
+    ys.push(tCenter.cy);
+  }
+
+  let minX = xs.length
+    ? Math.min(...xs)
+    : -10;
+
+  let maxX = xs.length
+    ? Math.max(...xs)
+    : 10;
+
+  let minY = ys.length
+    ? Math.min(...ys)
+    : -10;
+
+  let maxY = ys.length
+    ? Math.max(...ys)
+    : 10;
+
+  if (maxX === minX) {
+    minX -= 1;
+    maxX += 1;
+  }
+
+  if (maxY === minY) {
+    minY -= 1;
+    maxY += 1;
+  }
+
+  const dataWidth = maxX - minX;
+  const dataHeight = maxY - minY;
+
+  const drawableWidth =
+    width - padding * 2;
+
+  const drawableHeight =
+    height - padding * 2;
+
+  /*
+    အရေးကြီးဆုံးနေရာ:
+    E နဲ့ N နှစ်ခုလုံးအတွက် scale တစ်ခုတည်းသုံးတယ်။
+    ဒါကြောင့် circle က oval မဖြစ်တော့ဘူး။
+  */
+  const scale = Math.min(
+    drawableWidth / dataWidth,
+    drawableHeight / dataHeight
+  );
+
+  const usedWidth = dataWidth * scale;
+  const usedHeight = dataHeight * scale;
+
+  const offsetX =
+    padding +
+    (drawableWidth - usedWidth) / 2;
+
+  const offsetY =
+    padding +
+    (drawableHeight - usedHeight) / 2;
+
+  function toSvg(easting, northing) {
+    return {
+      X:
+        offsetX +
+        (easting - minX) * scale,
+
+      Y:
+        height -
+        offsetY -
+        (northing - minY) * scale,
+    };
+  }
+
+  const centerSvg = tCenter
+    ? toSvg(tCenter.cx, tCenter.cy)
+    : null;
+
+  const circleRadius =
+    hasCircle
+      ? radius * scale
+      : null;
+
+  const verticalGridLines = 10;
+  const horizontalGridLines = 8;
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width="100%" style={{ display:"block" }}>
-      <rect x="0" y="0" width={w} height={h} rx="12" fill="#fff" stroke="#e5e7eb" />
-      {/* grid */}
-      <g stroke="#eef2f7" strokeWidth="1">
-        {Array.from({length:10}).map((_,i)=>(
-          <line key={"v"+i} x1={pad+i*((w-2*pad)/10)} y1={pad} x2={pad+i*((w-2*pad)/10)} y2={h-pad}/>
-        ))}
-        {Array.from({length:8}).map((_,i)=>(
-          <line key={"h"+i} x1={pad} y1={pad+i*((h-2*pad)/8)} x2={w-pad} y2={pad+i*((h-2*pad)/8)}/>
-        ))}
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      width="100%"
+      style={{
+        display: "block",
+        background: "#ffffff",
+        borderRadius: 12,
+      }}
+    >
+      <rect
+        x="0"
+        y="0"
+        width={width}
+        height={height}
+        rx="12"
+        fill="#ffffff"
+        stroke="#e5e7eb"
+      />
+
+      {/* Grid */}
+      <g
+        stroke="#eef2f7"
+        strokeWidth="1"
+      >
+        {Array.from({
+          length: verticalGridLines + 1,
+        }).map((_, index) => {
+          const x =
+            padding +
+            index *
+              (drawableWidth /
+                verticalGridLines);
+
+          return (
+            <line
+              key={`vertical-${index}`}
+              x1={x}
+              y1={padding}
+              x2={x}
+              y2={height - padding}
+            />
+          );
+        })}
+
+        {Array.from({
+          length: horizontalGridLines + 1,
+        }).map((_, index) => {
+          const y =
+            padding +
+            index *
+              (drawableHeight /
+                horizontalGridLines);
+
+          return (
+            <line
+              key={`horizontal-${index}`}
+              x1={padding}
+              y1={y}
+              x2={width - padding}
+              y2={y}
+            />
+          );
+        })}
       </g>
 
-      {C && Number.isFinite(R) && (
-        <circle cx={C.X} cy={C.Y} r={R} fill="none" stroke="#0ea5e9" strokeWidth="2" />
-      )}
+      {/* Accurate circle */}
+      {centerSvg &&
+        Number.isFinite(circleRadius) && (
+          <circle
+            cx={centerSvg.X}
+            cy={centerSvg.Y}
+            r={circleRadius}
+            fill="none"
+            stroke="#0ea5e9"
+            strokeWidth="2.5"
+          />
+        )}
 
-      {C && points.map((p)=> {
-        const P = toSvg(p.e, p.n);
-        return <line key={"r"+p.id} x1={C.X} y1={C.Y} x2={P.X} y2={P.Y} stroke="#94a3b8" strokeWidth="1.5" />;
-      })}
+      {/* Radius lines */}
+      {centerSvg &&
+        validPoints.map((point) => {
+          const pointSvg = toSvg(
+            point.e,
+            point.n
+          );
 
-      {points.map((p,i)=>{
-        const P = toSvg(p.e,p.n);
+          return (
+            <line
+              key={`radius-${point.id}`}
+              x1={centerSvg.X}
+              y1={centerSvg.Y}
+              x2={pointSvg.X}
+              y2={pointSvg.Y}
+              stroke="#94a3b8"
+              strokeWidth="1.5"
+            />
+          );
+        })}
+
+      {/* Input points */}
+      {validPoints.map((point, index) => {
+        const pointSvg = toSvg(
+          point.e,
+          point.n
+        );
+
         return (
-          <g key={p.id}>
-            <circle cx={P.X} cy={P.Y} r="5" fill="#ef4444" />
-            <text x={P.X+8} y={P.Y-6} fontSize="12" fill="#0f172a">{i+1}</text>
+          <g key={point.id}>
+            <circle
+              cx={pointSvg.X}
+              cy={pointSvg.Y}
+              r="5"
+              fill="#ef4444"
+            />
+
+            <text
+              x={pointSvg.X + 8}
+              y={pointSvg.Y - 7}
+              fontSize="12"
+              fontWeight="700"
+              fill="#0f172a"
+            >
+              {index + 1}
+            </text>
           </g>
         );
       })}
 
-      {C && (
+      {/* Triplet center */}
+      {centerSvg && (
         <>
-          <circle cx={C.X} cy={C.Y} r="4" fill="#16a34a" />
-          <text x={C.X + 6} y={C.Y - 6} fontSize="12" fill="#16a34a">T</text>
+          <circle
+            cx={centerSvg.X}
+            cy={centerSvg.Y}
+            r="4.5"
+            fill="#16a34a"
+          />
+
+          <text
+            x={centerSvg.X + 7}
+            y={centerSvg.Y - 7}
+            fontSize="12"
+            fontWeight="700"
+            fill="#16a34a"
+          >
+            T
+          </text>
         </>
       )}
     </svg>
