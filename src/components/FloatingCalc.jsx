@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import FloatingTriangleCalc from "./FloatingTriangleCalc";
 import CircleCenter2 from "./CircleCenter2";
+import LengthConverter from "./LengthConverter";
 /* ---------- persist keys ---------- */
 const LS_OPEN = "floatingCalc_open";
 const LS_POS  = "floatingCalc_pos";
@@ -259,51 +260,98 @@ export default function FloatingCalc(){
 
         <div style={{ background:"#fff", borderTop:"1px solid #e5e7eb", padding:12 }}>
 
-  <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-    <button
-      onClick={() => setMode("simple")}
-      style={{
-        flex: 1,
-        padding: 8,
-        border: "none",
-        borderRadius: 8,
-        background: mode === "simple" ? "#0ea5e9" : "#e5e7eb",
-        color: mode === "simple" ? "#fff" : "#000",
-        fontWeight: "bold",
-      }}
-    >
-      Simple
-    </button>
-
-    <button
-      onClick={() => setMode("triangle")}
-      style={{
-        flex: 1,
-        padding: 8,
-        border: "none",
-        borderRadius: 8,
-        background: mode === "triangle" ? "#0ea5e9" : "#e5e7eb",
-        color: mode === "triangle" ? "#fff" : "#000",
-        fontWeight: "bold",
-      }}
-    >
-      Triangle
-    </button>
-    <button
-  onClick={() => setMode("circle")}
+  <div
   style={{
-    flex: 1,
-    padding: 8,
-    border: "none",
-    borderRadius: 8,
-    background: mode === "circle" ? "#0ea5e9" : "#e5e7eb",
-    color: mode === "circle" ? "#fff" : "#000",
-    fontWeight: "bold",
+    display: "grid",
+    gridTemplateColumns: "repeat(2, 1fr)",
+    gap: 8,
+    marginBottom: 12,
   }}
 >
-  Circle
-</button>
-  </div>
+  <button
+    type="button"
+    onClick={() => setMode("simple")}
+    style={{
+      padding: 8,
+      border: "none",
+      borderRadius: 8,
+      background:
+        mode === "simple"
+          ? "#0ea5e9"
+          : "#e5e7eb",
+      color:
+        mode === "simple"
+          ? "#fff"
+          : "#000",
+      fontWeight: "bold",
+    }}
+  >
+    Simple
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setMode("triangle")}
+    style={{
+      padding: 8,
+      border: "none",
+      borderRadius: 8,
+      background:
+        mode === "triangle"
+          ? "#0ea5e9"
+          : "#e5e7eb",
+      color:
+        mode === "triangle"
+          ? "#fff"
+          : "#000",
+      fontWeight: "bold",
+    }}
+  >
+    Triangle
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setMode("circle")}
+    style={{
+      padding: 8,
+      border: "none",
+      borderRadius: 8,
+      background:
+        mode === "circle"
+          ? "#0ea5e9"
+          : "#e5e7eb",
+      color:
+        mode === "circle"
+          ? "#fff"
+          : "#000",
+      fontWeight: "bold",
+    }}
+  >
+    Circle
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setMode("length")}
+    style={{
+      padding: 8,
+      border: "none",
+      borderRadius: 8,
+      background:
+        mode === "length"
+          ? "#0ea5e9"
+          : "#e5e7eb",
+      color:
+        mode === "length"
+          ? "#fff"
+          : "#000",
+      fontWeight: "bold",
+    }}
+  >
+    ft / mm
+  </button>
+</div>
 
   {mode === "triangle" ? (
   <div
@@ -327,10 +375,32 @@ export default function FloatingCalc(){
   >
     <CircleCenter2 />
   </div>
+) : mode === "length" ? (
+  <div
+    style={{
+      maxHeight: "65vh",
+      overflowY: "auto",
+      WebkitOverflowScrolling: "touch",
+      paddingRight: 4,
+    }}
+  >
+    <LengthConverter />
+  </div>
 ) : (
-  <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10 }}>
-    {keys.flat().map((k)=>(
-      <Key key={k} label={k} active={flash===k} onClick={()=>push(k)} />
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(4, 1fr)",
+      gap: 10,
+    }}
+  >
+    {keys.flat().map((k) => (
+      <Key
+        key={k}
+        label={k}
+        active={flash === k}
+        onClick={() => push(k)}
+      />
     ))}
   </div>
 )}
