@@ -1,0 +1,311 @@
+.right-triangle-page {
+  min-height: 100vh;
+  padding: 20px;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(56, 189, 248, 0.18),
+      transparent 34%
+    ),
+    #f5f7fb;
+}
+
+.right-triangle-card {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  padding: 22px;
+  border: 1px solid #dbe3ef;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.1);
+}
+
+.right-triangle-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.right-triangle-header h1 {
+  margin: 0 0 6px;
+  color: #0f172a;
+  font-size: clamp(24px, 5vw, 34px);
+}
+
+.right-triangle-header p {
+  max-width: 500px;
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.triangle-header-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.triangle-header-actions button {
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.triangle-header-actions button:active {
+  transform: scale(0.96);
+}
+
+.triangle-example-button {
+  color: #075985;
+  background: #e0f2fe;
+}
+
+.triangle-clear-button {
+  color: #ffffff;
+  background: #ef4444;
+}
+
+.triangle-canvas-container {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #dce5f0;
+  border-radius: 20px;
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.11) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      rgba(148, 163, 184, 0.11) 1px,
+      transparent 1px
+    ),
+    #f8fbff;
+  background-size: 24px 24px;
+}
+
+.triangle-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 420px;
+  touch-action: none;
+  user-select: none;
+}
+
+.triangle-shape {
+  fill: url("#triangleFill");
+  stroke: none;
+}
+
+.triangle-line,
+.triangle-hypotenuse-line {
+  fill: none;
+  stroke: #0f172a;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.triangle-hypotenuse-line {
+  stroke: #2563eb;
+}
+
+.triangle-point {
+  fill: #ffffff;
+  stroke: #2563eb;
+  stroke-width: 4;
+}
+
+.triangle-point-label {
+  fill: #0f172a;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.right-angle-mark {
+  fill: none;
+  stroke: #ef4444;
+  stroke-width: 3;
+}
+
+.right-angle-label {
+  fill: #ef4444;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.angle-arc {
+  fill: none;
+  stroke: #f59e0b;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.triangle-field {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px;
+  border: 2px solid #cbd5e1;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.12);
+}
+
+.triangle-field-label {
+  display: block;
+  margin-bottom: 3px;
+  color: #475569;
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
+.triangle-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.triangle-field input {
+  width: 100%;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 3px 7px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #0f172a;
+  font-family: Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.triangle-field input::-webkit-outer-spin-button,
+.triangle-field input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.triangle-field-manual {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.triangle-field-calculated {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+
+.triangle-field-calculated input {
+  color: #15803d;
+}
+
+.triangle-input-suffix {
+  position: absolute;
+  right: 7px;
+  color: #475569;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.triangle-status {
+  min-height: 24px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  color: #075985;
+  background: #e0f2fe;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.triangle-status-error {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.triangle-legend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 14px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.triangle-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border: 2px solid;
+  border-radius: 4px;
+}
+
+.legend-manual {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.legend-result {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+
+.triangle-help {
+  margin: 12px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .right-triangle-page {
+    padding: 10px;
+  }
+
+  .right-triangle-card {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .right-triangle-header {
+    flex-direction: column;
+  }
+
+  .triangle-header-actions {
+    width: 100%;
+  }
+
+  .triangle-header-actions button {
+    flex: 1;
+  }
+
+  .triangle-svg {
+    min-height: 360px;
+  }
+
+  .triangle-legend {
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+}
