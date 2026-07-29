@@ -907,7 +907,7 @@ export default function RightTriangle() {
             />
 
             <TriangleInput
-              x={rightX + 18}
+  x={rightX - 55}
               y={
                 (
                   topY +
