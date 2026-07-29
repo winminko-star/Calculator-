@@ -424,8 +424,7 @@ function TriangleInput({
             step="any"
             value={shownValue}
             placeholder="?"
-            onFocus={() =>
-              onFocus={() => {
+             onFocus={() => {
   setIsFocused(true);
   onFocus(field);
 }}
