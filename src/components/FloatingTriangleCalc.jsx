@@ -21,6 +21,10 @@ const ANGLE_FIELDS = [
 ];
 
 const toNumber = (value) => {
+  if (value === "" || value === null || value === undefined) {
+    return null;
+  }
+
   const number = Number(value);
 
   return Number.isFinite(number)
