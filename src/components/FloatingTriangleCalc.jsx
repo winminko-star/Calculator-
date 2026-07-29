@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import "./RightTriangle.css";
+import "./RightTriangle1.css";
 
 const FIELD_NAMES = {
   opposite: "Facing",
