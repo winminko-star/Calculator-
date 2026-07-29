@@ -373,6 +373,7 @@ function TriangleInput({
   onFocus,
   suffix = "",
 }) {
+  const [isFocused, setIsFocused] = useState(false);
   const shownValue =
     manualValue !== ""
       ? manualValue
@@ -399,14 +400,18 @@ function TriangleInput({
       <div
         xmlns="http://www.w3.org/1999/xhtml"
         className={`triangle-field ${
-          isManual
-            ? "triangle-field-manual"
-            : ""
-        } ${
-          isCalculated
-            ? "triangle-field-calculated"
-            : ""
-        }`}
+  isFocused && manualValue === ""
+    ? "triangle-field-focused"
+    : ""
+} ${
+  isManual
+    ? "triangle-field-manual"
+    : ""
+} ${
+  isCalculated
+    ? "triangle-field-calculated"
+    : ""
+}`}
       >
         <span className="triangle-field-label">
           {label}
@@ -420,8 +425,14 @@ function TriangleInput({
             value={shownValue}
             placeholder="?"
             onFocus={() =>
-              onFocus(field)
-            }
+              onFocus={() => {
+  setIsFocused(true);
+  onFocus(field);
+}}
+
+onBlur={() => {
+  setIsFocused(false);
+}}
             onChange={(event) =>
               onChange(
                 field,
