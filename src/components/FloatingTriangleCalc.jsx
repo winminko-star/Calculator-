@@ -396,7 +396,7 @@ function TriangleInput({
       x={x}
       y={y}
       width={width}
-      height="70"
+      height="150"
     >
       <div
         xmlns="http://www.w3.org/1999/xhtml"
