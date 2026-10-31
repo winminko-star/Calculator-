@@ -374,6 +374,7 @@ function TriangleInput({
   suffix = "",
 }) {
   const [isFocused, setIsFocused] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
   const shownValue =
     manualValue !== ""
       ? manualValue
@@ -398,21 +399,21 @@ function TriangleInput({
       height="70"
     >
       <div
-        xmlns="http://www.w3.org/1999/xhtml"
-        className={`triangle-field ${
-  isFocused && manualValue === ""
-    ? "triangle-field-focused"
-    : ""
-} ${
-  isManual
-    ? "triangle-field-manual"
-    : ""
-} ${
-  isCalculated
-    ? "triangle-field-calculated"
-    : ""
-}`}
-      >
+  xmlns="http://www.w3.org/1999/xhtml"
+  onClick={() => setIsZoomed(v => !v)}
+  className={`triangle-field ${
+    isFocused && manualValue === ""
+      ? "triangle-field-focused" : ""
+  } ${
+    isManual
+      ? "triangle-field-manual" : ""
+  } ${
+    isCalculated
+      ? "triangle-field-calculated" : ""
+  } ${
+    isZoomed ? "triangle-field-zoomed" : ""
+  }`}
+>
         <span className="triangle-field-label">
           {label}
         </span>
