@@ -316,3 +316,19 @@
     0 0 0 4px rgba(139, 92, 246, 0.18),
     0 5px 14px rgba(15, 23, 42, 0.12);
 }
+.triangle-field {
+  transition: transform 0.2s ease;
+  transform-origin: center center;
+}
+
+.triangle-field-zoomed {
+  transform: scale(2);
+  font-weight: 900;
+  z-index: 100;
+  position: relative;
+}
+
+.triangle-field-zoomed input {
+  font-size: 22px !important;
+  font-weight: 900 !important;
+}
