@@ -109,7 +109,7 @@ function solveRightTriangle(
     return {
       values: {},
       error:
-        "Angle သည် 0 နှင့် 90 ကြားဖြစ်ရမည်",
+        "Angle သည် 0° နှင့် 90° ကြားဖြစ်ရမည်",
       message: "",
     };
   }
@@ -144,7 +144,7 @@ function solveRightTriangle(
       return {
         values: {},
         error:
-          "Angle A + Angle C သည် 90 ဖြစ်ရမည်",
+          "Angle A + Angle C သည် 90° ဖြစ်ရမည်",
         message: "",
       };
     }
@@ -374,7 +374,6 @@ function TriangleInput({
   suffix = "",
 }) {
   const [isFocused, setIsFocused] = useState(false);
-  const [showZoom, setShowZoom] = useState(false);
   const shownValue =
     manualValue !== ""
       ? manualValue
@@ -396,7 +395,7 @@ function TriangleInput({
       x={x}
       y={y}
       width={width}
-      height="150"
+      height="70"
     >
       <div
         xmlns="http://www.w3.org/1999/xhtml"
@@ -417,18 +416,6 @@ function TriangleInput({
         <span className="triangle-field-label">
           {label}
         </span>
-        {isCalculated && (
-  <button
-    type="button"
-    className="triangle-zoom-button"
-    onClick={(e) => {
-      e.stopPropagation();
-      setShowZoom(v => !v);
-    }}
-  >
-    
-  </button>
-)}
 
         <div className="triangle-input-wrapper">
           <input
@@ -460,14 +447,6 @@ onBlur={() => {
             </span>
           )}
         </div>
-        {showZoom && isCalculated && (
-  <div className="triangle-zoom-preview">
-    <span>{label}</span>
-    <strong>
-      {shownValue}{suffix}
-    </strong>
-  </div>
-)}
       </div>
     </foreignObject>
      );
@@ -838,7 +817,7 @@ export default function RightTriangle() {
               y={bottomY - 38}
               className="right-angle-label"
             >
-              90
+              90°
             </text>
 
             <path
@@ -1000,7 +979,7 @@ export default function RightTriangle() {
               onChange={
                 handleValueChange
               }
-              suffix=""
+              suffix="°"
             />
 
             <TriangleInput
@@ -1021,7 +1000,7 @@ export default function RightTriangle() {
               onChange={
                 handleValueChange
               }
-              suffix=""
+              suffix="°"
             />
           </svg>
         </div>
