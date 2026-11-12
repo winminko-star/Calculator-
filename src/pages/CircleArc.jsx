@@ -177,19 +177,19 @@ export default function CircleArc() {
       {/* Inputs */}
       <div className="card grid" style={{ gap: 10 }}>
         <div className="row" style={{ gap: 8 }}>
-          <label style={{ width: 90 }} className="small">R (mm)</label>
+          <label style={{ width: 90 }} className="small">R/အချင်းဝက် (mm)</label>
           <input className="input" type="number" inputMode="decimal" step="any"
                  placeholder="radius"
                  value={R} onChange={(e)=>setR(e.target.value)} style={{ flex: 1 }}/>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <label style={{ width: 90 }} className="small">B (deg)</label>
+          <label style={{ width: 90 }} className="small">B/ဒီဂရီ (deg)</label>
           <input className="input" type="number" inputMode="decimal" step="any"
                  placeholder="angle"
                  value={B} onChange={(e)=>setB(e.target.value)} style={{ flex: 1 }}/>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <label style={{ width: 90 }} className="small">D (mm)</label>
+          <label style={{ width: 90 }} className="small">D/ဆုံမျဥ်းဖြောင့် (mm)</label>
           <input className="input" type="number" inputMode="decimal" step="any"
                  placeholder="chord"
                  value={D} onChange={(e)=>setD(e.target.value)} style={{ flex: 1 }}/>
