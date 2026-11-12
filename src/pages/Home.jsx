@@ -1,7 +1,7 @@
 // src/pages/Home.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import SingaporeWeatherFloating from "../components/SingaporeWeatherFloating";
+// import SingaporeWeatherFloating from "../components/SingaporeWeatherFloating";
 
 
 export default function Home() {
@@ -88,7 +88,7 @@ export default function Home() {
       {/* --- Photo + rainbow message footer --- */}  
       <div className="photoCard">  
         <img src="/couple.png" alt="Two people smiling outdoors" className="heroImg" />  
-         <SingaporeWeatherFloating /> 
+        {/* <SingaporeWeatherFloating /> */} 
          <div className="rainbowText">  
           Someone who loves you is waiting for you. So work safely.  
           <h4>Created by Win Min Ko(Seatrium DC Team).</h4>  
