@@ -208,11 +208,11 @@ export default function CircleArc() {
         {!solved && <div className="small">Provide any two inputs to see results.</div>}
         {solved && (
           <div className="grid" style={{ gap: 6 }}>
-            <Line label="R (mm)" value={fmt(solved.r)} />
-            <Line label="B (deg)" value={fmt(solved.b)} />
-            <Line label="D (mm)" value={fmt(solved.d)} />
+            <Line label="R/အချင်းဝက် (mm)" value={fmt(solved.r)} />
+            <Line label="B/ဒေါင့်ဒီဂရီ (deg)" value={fmt(solved.b)} />
+            <Line label="D/ဆုံမျဉ်းဖြောင့် (mm)" value={fmt(solved.d)} />
             <hr style={{ border: 0, borderTop: "1px solid #e5e7eb", margin: "6px 0" }} />
-            <Line label="Arc length A (mm)" value={fmt(solved.arc)} />
+            <Line label="Arc length/ဆုံမျဉ်းကွေး A (mm)" value={fmt(solved.arc)} />
             <Line label="Sector area (mm²)" value={fmt(solved.sector)} />
             <Line label="Segment area (mm²)" value={fmt(solved.segment)} />
           </div>
