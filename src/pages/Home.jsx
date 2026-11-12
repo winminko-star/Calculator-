@@ -87,7 +87,7 @@ export default function Home() {
 
       {/* --- Photo + rainbow message footer --- */}  
       <div className="photoCard">  
-        <img src="/couple.jpg" alt="Two people smiling outdoors" className="heroImg" />  
+        <img src="/couple.png" alt="Two people smiling outdoors" className="heroImg" />  
          <SingaporeWeatherFloating /> 
          <div className="rainbowText">  
           Someone who loves you is waiting for you. So work safely.  
