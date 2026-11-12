@@ -9,6 +9,7 @@ import SplashScreen from "./components/SplashScreen";
 import NavBar from "./components/NavBar";
 import Home from "./pages/Home";
 import AuthLogin from "./pages/AuthLogin";
+import AllCalc from "./pages/allCalc";
 import Drawing2D from "./pages/Drawing2D";
 import AllReview from "./pages/AllReview";
 import RightTriangle from "./pages/RightTriangle";
