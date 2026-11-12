@@ -1,0 +1,460 @@
+
+* {
+  box-sizing: border-box;
+}
+
+.allcalc {
+  width: 100%;
+  max-width: 1100px;
+  margin: 25px auto;
+  padding: 20px;
+  color: #1e293b;
+  font-family: Arial, sans-serif;
+  background: #f1f5f9;
+  border-radius: 18px;
+}
+
+.allcalc h2,
+.allcalc h3,
+.allcalc p {
+  margin-top: 0;
+}
+
+.ca-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 22px;
+}
+
+.ca-header small {
+  color: #2563eb;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.ca-header h2 {
+  margin: 8px 0;
+  font-size: 27px;
+  color: #0f172a;
+}
+
+.ca-header p {
+  margin-bottom: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.ca-header button {
+  border: none;
+  padding: 11px 22px;
+  border-radius: 9px;
+  background: #ef4444;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ca-header button:hover {
+  background: #dc2626;
+}
+
+.ca-panel {
+  padding: 22px;
+  margin-bottom: 20px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 15px;
+  box-shadow: 0 3px 12px rgba(0,0,0,.04);
+}
+
+.ca-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 22px;
+}
+
+.ca-heading > b {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 38px;
+  background: #dbeafe;
+  color: #2563eb;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.ca-heading h3 {
+  margin: 0 0 5px;
+  font-size: 18px;
+}
+
+.ca-heading p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.ca-diagram-panel {
+  text-align: center;
+}
+
+.ca-diagram {
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+}
+
+.ca-diagram svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.ca-circle {
+  fill: #eff6ff;
+  stroke: #94a3b8;
+  stroke-width: 2;
+}
+
+.ca-full {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 4;
+  stroke-dasharray: 5 5;
+}
+
+.ca-ha {
+  fill: none;
+  stroke: #f59e0b;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.ca-radius {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 2.5;
+}
+
+.ca-chord {
+  fill: none;
+  stroke: #16a34a;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.ca-angle {
+  fill: none;
+  stroke: #8b5cf6;
+  stroke-width: 2.5;
+}
+
+.ca-center {
+  fill: #0f172a;
+}
+
+.ca-label {
+  fill: #1e293b;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.ca-degree {
+  fill: #7c3aed;
+  font-size: 12px;
+}
+
+.ca-al {
+  fill: #16a34a;
+}
+
+.ca-ha-text {
+  fill: #d97706;
+}
+
+.ca-fa-text {
+  fill: #64748b;
+}
+
+.ca-small {
+  fill: #64748b;
+  font-size: 8px;
+}
+
+.ca-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.ca-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ca-key {
+  width: 18px;
+  height: 4px;
+  display: inline-block;
+  border-radius: 5px;
+}
+
+.ca-key-al {
+  background: #16a34a;
+}
+
+.ca-key-ha {
+  background: #f59e0b;
+}
+
+.ca-key-fa {
+  background: #94a3b8;
+}
+
+.ca-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.ca-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ca-field {
+  display: block;
+}
+
+.ca-field > span {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ca-field > span strong {
+  color: #2563eb;
+}
+
+.ca-field > div {
+  display: flex;
+  align-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  overflow: hidden;
+  background: white;
+}
+
+.ca-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 13px;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  color: #0f172a;
+  background: transparent;
+}
+
+.ca-field input:focus {
+  box-shadow: inset 0 0 0 2px #3b82f6;
+}
+
+.ca-field small {
+  padding: 0 12px;
+  color: #64748b;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.ca-error {
+  margin-top: 16px;
+  padding: 12px;
+  color: #b91c1c;
+  background: #fee2e2;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ca-note {
+  margin: 18px 0 0;
+  padding: 13px;
+  background: #eff6ff;
+  color: #475569;
+  border-left: 4px solid #3b82f6;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ca-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 12px;
+  margin-bottom: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+}
+
+.ca-result span {
+  color: #475569;
+  font-size: 14px;
+}
+
+.ca-result span small {
+  margin-left: 5px;
+  color: #2563eb;
+  font-weight: bold;
+}
+
+.ca-result strong {
+  color: #0f172a;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.ca-al strong {
+  color: #16a34a;
+}
+
+.ca-ha strong {
+  color: #d97706;
+}
+
+.ca-fa strong {
+  color: #2563eb;
+}
+
+.ca-decimals {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 18px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ca-decimals select {
+  padding: 9px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.ca-formulas h3 {
+  margin-bottom: 18px;
+}
+
+.ca-formulas > div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.ca-formulas > div p {
+  padding: 15px;
+  margin: 0;
+  background: #f8fafc;
+  border-radius: 9px;
+}
+
+.ca-formulas p b {
+  display: block;
+  margin-bottom: 12px;
+  color: #2563eb;
+  font-size: 13px;
+}
+
+.ca-formulas code {
+  display: block;
+  color: #334155;
+  font-size: 12px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Tablet */
+@media (max-width: 800px) {
+  .ca-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .ca-formulas > div {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .allcalc {
+    padding: 12px;
+    margin: 10px auto;
+    border-radius: 12px;
+  }
+
+  .ca-header h2 {
+    font-size: 21px;
+  }
+
+  .ca-header p {
+    font-size: 12px;
+  }
+
+  .ca-header button {
+    padding: 9px 13px;
+    font-size: 12px;
+  }
+
+  .ca-panel {
+    padding: 15px;
+    margin-bottom: 14px;
+  }
+
+  .ca-heading h3 {
+    font-size: 16px;
+  }
+
+  .ca-heading p {
+    font-size: 11px;
+  }
+
+  .ca-legend {
+    gap: 9px;
+    font-size: 10px;
+  }
+
+  .ca-result {
+    padding: 12px 9px;
+  }
+
+  .ca-result span {
+    font-size: 12px;
+  }
+
+  .ca-result strong {
+    font-size: 14px;
+  }
+
+  .ca-field input {
+    font-size: 16px;
+  }
+}
