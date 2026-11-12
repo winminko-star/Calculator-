@@ -9,7 +9,6 @@ import SplashScreen from "./components/SplashScreen";
 import NavBar from "./components/NavBar";
 import Home from "./pages/Home";
 import AuthLogin from "./pages/AuthLogin";
-import AllCalc from "./pages/allCalc";
 import Drawing2D from "./pages/Drawing2D";
 import AllReview from "./pages/AllReview";
 import RightTriangle from "./pages/RightTriangle";
@@ -114,7 +113,6 @@ export default function App() {
 
               {/* Public pages */}
               <Route path="/levelling-review" element={<LevellingReview />} />
-              <Route path="/all-calc" element={<AllCalc />} />
               <Route path="/simple-calc" element={<SimpleCalc />} />
               <Route path="/circlearc" element={<CircleArc />} />
               <Route path="/enh-calc" element={<ENHCalc />} />
