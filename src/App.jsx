@@ -119,7 +119,6 @@ export default function App() {
               {/* Public pages */}
               <Route path="/levelling-review" element={<LevellingReview />} />
               <Route path="/simple-calc" element={<SimpleCalc />} />
-              <Route path="/circlearc" element={<CircleArc />} />
               <Route path="/enh-calc" element={<ENHCalc />} />
               <Route path="/notepad" element={<NotePad />} />
               <Route path="/notepad2" element={<Notepad2 />} />
