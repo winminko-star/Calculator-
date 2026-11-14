@@ -91,10 +91,7 @@ export default function App() {
                 path="/"
                 element={user ? <Home /> : <Navigate to="/login" replace />}
               />
-              <Route
-                path="/"
-                element={user ? <CircleArc /> : <Navigate to="/login" replace />}
-              />
+              
               <Route
                 path="/drawing2d"
                 element={user ? <Drawing2D /> : <Navigate to="/login" replace />}
@@ -120,6 +117,7 @@ export default function App() {
               <Route path="/levelling-review" element={<LevellingReview />} />
               <Route path="/simple-calc" element={<SimpleCalc />} />
               <Route path="/enh-calc" element={<ENHCalc />} />
+              <Route path="/circlearc" element={<CircleArc />} />
               <Route path="/notepad" element={<NotePad />} />
               <Route path="/notepad2" element={<Notepad2 />} />
               <Route path="/enh-tie" element={<ENHTie />} />
