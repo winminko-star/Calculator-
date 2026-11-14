@@ -86,13 +86,14 @@ export default function App() {
               />
 
               {/* Protected routes */}
-              <Route
-                path="/"
-                element={user ? <CircleArc /> : <Navigate to="/login" replace />}
-              />
+              
               <Route
                 path="/"
                 element={user ? <Home /> : <Navigate to="/login" replace />}
+              />
+              <Route
+                path="/"
+                element={user ? <CircleArc /> : <Navigate to="/login" replace />}
               />
               <Route
                 path="/drawing2d"
