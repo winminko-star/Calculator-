@@ -7,6 +7,8 @@ export default function NavBar({ user, onLogout }) {
 
   const routes = [
     { to: "/", label: "Home" },
+    { to: "/circlearc", label: "Circle Arc" },
+    { to: "/enh-tie", label: "ENH Tie" },
     { to: "/station-merge", label: "Station Merge" },
     { to: "/chainage-offset-pro", label: "Station Files Join" },
     { to: "/drawing2d", label: "2D Drawing" },
@@ -16,9 +18,7 @@ export default function NavBar({ user, onLogout }) {
     { to: "/levelling", label: "Levelling" },
     { to: "/levelling-review", label: "Levelling Review" },
     { to: "/simple-calc", label: "Simple Calc" },
-    { to: "/circlearc", label: "Circle Arc" },
     { to: "/enh-calc", label: "ENH Changer" },
-    { to: "/enh-tie", label: "ENH Tie" },
     { to: "/enh-canvas", label: "ENH Canvas" },
     { to: "/enh-review", label: "ENH Review" },
     { to: "/pipe-ends-slope", label: "Pipe Ends Slope" },
