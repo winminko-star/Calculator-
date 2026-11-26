@@ -316,4 +316,29 @@
     0 0 0 4px rgba(139, 92, 246, 0.18),
     0 5px 14px rgba(15, 23, 42, 0.12);
 }
+.triangle-result-bottom {
+  margin-top: 15px;
+  padding: 10px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.triangle-result-bottom h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 3px;
+  border-bottom: 1px solid #eee;
+  font-size: 12px;
+}
+
+.result-row strong {
+  color: #15803d;
+}
 
