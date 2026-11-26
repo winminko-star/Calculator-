@@ -1004,6 +1004,20 @@ export default function RightTriangle() {
             />
           </svg>
         </div>
+        <div className="triangle-result-bottom">
+  <h3>တွက်ချက်မှု အဖြေများ</h3>
+
+  {solved.values &&
+    Object.entries(solved.values).map(([key, value]) => (
+      <div className="result-row" key={key}>
+        <span>{FIELD_NAMES[key]}</span>
+        <strong>
+          {formatValue(value)}
+          {key.startsWith("angle") ? "°" : ""}
+        </strong>
+      </div>
+    ))}
+</div>
 
         <div
           className={`triangle-status ${
